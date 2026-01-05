@@ -1,0 +1,166 @@
+{
+  "id": "S1-03",
+  "name": "Git History Credential Leak",
+  "category": "API Keys & Secrets",
+  "version": "1.0",
+  "description": "Extract credentials from Git commit history even after they were 'removed'",
+  "difficulty": "Medium",
+  "real_world_relevance": "Twitter API keys in Git history, countless GitHub secret exposures",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Collection"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1213", "name": "Data from Information Repositories"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["vulnerable-app"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers exposed .git directory and extracts secrets from commit history",
+    "diagram": [
+      "1. Attacker discovers .git directory is accessible",
+      "2. Attacker downloads Git repository or accesses objects",
+      "3. Attacker searches commit history for secrets",
+      "4. Attacker finds credentials that were 'removed' in later commits",
+      "5. Attacker uses recovered credentials"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Git Directory Discovery",
+      "description": "Check if .git directory is exposed",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/.git/config",
+          "method": "GET",
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "Repository Enumeration",
+      "description": "Access Git objects and refs",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/.git/HEAD",
+          "method": "GET",
+          "expected_response_contains": ["ref: refs/heads/"]
+        },
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/.git/logs/HEAD",
+          "method": "GET",
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "History Search",
+      "description": "Search Git history for removed secrets",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/git-history",
+          "method": "GET",
+          "expected_response_contains": ["removed_secret", "old_api_key"]
+        }
+      ]
+    },
+    {
+      "name": "Secret Extraction",
+      "description": "Extract credentials from historical commits",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "git log -p --all -S 'API_KEY' -- '*.py' '*.env' '*.json'",
+          "description": "Search all history for API_KEY string"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Web Access",
+      "description": "Access to .git directory via HTTP",
+      "wazuh_rule": "100605"
+    },
+    {
+      "type": "Process",
+      "description": "git log commands searching for secrets",
+      "wazuh_rule": "100606"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100605",
+      "level": 10,
+      "description": "NHI: Git repository access via HTTP - potential secret extraction"
+    },
+    {
+      "rule_id": "100606",
+      "level": 8,
+      "description": "NHI: Git history search for credentials detected"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Block access to .git directories",
+      "Rotate ALL credentials that ever appeared in history",
+      "Consider repository as fully compromised"
+    ],
+    "long_term": [
+      "Use git-filter-repo to rewrite history (if private repo)",
+      "Implement pre-commit hooks with secret scanning",
+      "Use GitHub secret scanning and push protection",
+      "Never commit secrets - use environment variables or vaults"
+    ],
+    "cleanup_commands": [
+      "# Remove .git from web root",
+      "rm -rf /var/www/html/.git",
+      "",
+      "# Or use git-filter-repo to clean history",
+      "git-filter-repo --invert-paths --path secrets.env",
+      "",
+      "# Force push cleaned history (destructive!)",
+      "git push origin --force --all"
+    ]
+  },
+
+  "demo_script": {
+    "container": "vulnerable-app",
+    "commands": [
+      "# Check for exposed .git",
+      "curl -s http://localhost:8888/.git/config",
+      "",
+      "# View simulated git history with secrets",
+      "curl -s http://localhost:8888/git-history"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitLeaks - Secret Scanner",
+      "url": "https://github.com/gitleaks/gitleaks"
+    },
+    {
+      "title": "TruffleHog - Git History Scanner",
+      "url": "https://github.com/trufflesecurity/trufflehog"
+    },
+    {
+      "title": "GitHub Secret Scanning",
+      "url": "https://docs.github.com/en/code-security/secret-scanning"
+    }
+  ]
+}

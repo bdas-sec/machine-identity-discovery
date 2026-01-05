@@ -1,0 +1,19 @@
+# Certificate Generation for Wazuh Stack
+# Usage: docker compose -f generate-certs.yml run --rm generator
+#
+# This generates all required SSL certificates for:
+# - Wazuh Manager
+# - Wazuh Indexer
+# - Wazuh Dashboard
+# - Admin certificates
+
+version: '3.8'
+
+services:
+  generator:
+    image: wazuh/wazuh-certs-generator:0.0.2
+    hostname: wazuh-certs-generator
+    volumes:
+      - ./:/certificates/
+      - ./config.yml:/config/certs.yml:ro
+    command: /bin/bash -c "cat /config/certs.yml && wazuh-certs-generator -A"

