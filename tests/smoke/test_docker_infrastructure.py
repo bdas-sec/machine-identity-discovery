@@ -51,7 +51,7 @@ class TestDockerContainers:
     def test_container_health_status(self):
         """Check container health where applicable."""
         # Containers with health checks
-        health_containers = ["wazuh.manager", "wazuh.indexer"]
+        health_containers = ["wazuh-manager", "wazuh-indexer"]
 
         for container in health_containers:
             status = DockerTestUtils.get_container_status(container)
@@ -60,12 +60,12 @@ class TestDockerContainers:
 
     def test_wazuh_manager_healthy(self):
         """Verify Wazuh manager container is healthy."""
-        status = DockerTestUtils.get_container_status("wazuh.manager")
+        status = DockerTestUtils.get_container_status("wazuh-manager")
         assert status == "running", f"Wazuh manager status: {status}"
 
     def test_wazuh_indexer_healthy(self):
         """Verify Wazuh indexer container is healthy."""
-        status = DockerTestUtils.get_container_status("wazuh.indexer")
+        status = DockerTestUtils.get_container_status("wazuh-indexer")
         assert status == "running", f"Wazuh indexer status: {status}"
 
 

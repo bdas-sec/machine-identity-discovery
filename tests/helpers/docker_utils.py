@@ -1,16 +1,36 @@
 """
-Docker utilities for testing.
+Docker/Podman utilities for testing.
 """
 
+import os
+import shutil
 import subprocess
 from typing import Dict, List, Optional, Tuple, Any
 
 
+def _get_container_runtime() -> str:
+    """Detect available container runtime (podman or docker)."""
+    # Check CONTAINER_RUNTIME env var first
+    runtime = os.environ.get("CONTAINER_RUNTIME", "").lower()
+    if runtime in ("podman", "docker"):
+        return runtime
+    # Auto-detect
+    if shutil.which("podman"):
+        return "podman"
+    if shutil.which("docker"):
+        return "docker"
+    return "docker"  # Default fallback
+
+
+CONTAINER_RUNTIME = _get_container_runtime()
+
+
 class DockerTestUtils:
-    """Utilities for Docker-based testing."""
+    """Utilities for Docker/Podman-based testing."""
 
     def __init__(self, docker_client=None):
         self.docker = docker_client
+        self.runtime = CONTAINER_RUNTIME
 
     @staticmethod
     def exec_in_container(
@@ -26,7 +46,7 @@ class DockerTestUtils:
         """
         try:
             result = subprocess.run(
-                ["docker", "exec", container_name, "sh", "-c", command],
+                [CONTAINER_RUNTIME, "exec", container_name, "sh", "-c", command],
                 capture_output=True,
                 text=True,
                 timeout=timeout
@@ -41,7 +61,7 @@ class DockerTestUtils:
     def container_exists(container_name: str) -> bool:
         """Check if a container exists."""
         result = subprocess.run(
-            ["docker", "ps", "-a", "--filter", f"name=^{container_name}$", "-q"],
+            [CONTAINER_RUNTIME, "ps", "-a", "--filter", f"name=^{container_name}$", "-q"],
             capture_output=True,
             text=True
         )
@@ -51,7 +71,7 @@ class DockerTestUtils:
     def container_running(container_name: str) -> bool:
         """Check if a container is running."""
         result = subprocess.run(
-            ["docker", "ps", "--filter", f"name=^{container_name}$", "-q"],
+            [CONTAINER_RUNTIME, "ps", "--filter", f"name=^{container_name}$", "-q"],
             capture_output=True,
             text=True
         )
@@ -61,7 +81,7 @@ class DockerTestUtils:
     def get_container_status(container_name: str) -> Optional[str]:
         """Get container status."""
         result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Status}}", container_name],
+            [CONTAINER_RUNTIME, "inspect", "-f", "{{.State.Status}}", container_name],
             capture_output=True,
             text=True
         )
@@ -73,7 +93,7 @@ class DockerTestUtils:
     def get_container_health(container_name: str) -> Optional[str]:
         """Get container health status."""
         result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Health.Status}}", container_name],
+            [CONTAINER_RUNTIME, "inspect", "-f", "{{.State.Health.Status}}", container_name],
             capture_output=True,
             text=True
         )
@@ -86,7 +106,7 @@ class DockerTestUtils:
     def get_running_containers() -> List[str]:
         """Get list of running container names."""
         result = subprocess.run(
-            ["docker", "ps", "--format", "{{.Names}}"],
+            [CONTAINER_RUNTIME, "ps", "--format", "{{.Names}}"],
             capture_output=True,
             text=True
         )
@@ -98,7 +118,7 @@ class DockerTestUtils:
     def get_container_networks(container_name: str) -> List[str]:
         """Get networks a container is connected to."""
         result = subprocess.run(
-            ["docker", "inspect", "-f",
+            [CONTAINER_RUNTIME, "inspect", "-f",
              "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}",
              container_name],
             capture_output=True,
@@ -110,9 +130,9 @@ class DockerTestUtils:
 
     @staticmethod
     def network_exists(network_name: str) -> bool:
-        """Check if a Docker network exists."""
+        """Check if a container network exists."""
         result = subprocess.run(
-            ["docker", "network", "ls", "--filter", f"name={network_name}", "-q"],
+            [CONTAINER_RUNTIME, "network", "ls", "--filter", f"name={network_name}", "-q"],
             capture_output=True,
             text=True
         )
@@ -127,7 +147,7 @@ class DockerTestUtils:
             template = "{{.NetworkSettings.IPAddress}}"
 
         result = subprocess.run(
-            ["docker", "inspect", "-f", template, container_name],
+            [CONTAINER_RUNTIME, "inspect", "-f", template, container_name],
             capture_output=True,
             text=True
         )
@@ -143,10 +163,33 @@ class DockerTestUtils:
         target_port: int,
         timeout: int = 5
     ) -> bool:
-        """Test if one container can reach another on a specific port."""
+        """Test if one container can reach another on a specific port.
+
+        Tries multiple methods: nc, curl, bash /dev/tcp (in that order).
+        """
+        # Try netcat first
         exit_code, _, _ = DockerTestUtils.exec_in_container(
             from_container,
             f"nc -z -w{timeout} {target_host} {target_port}",
+            timeout=timeout + 2
+        )
+        if exit_code == 0:
+            return True
+
+        # Try curl (for HTTP/HTTPS ports)
+        exit_code, _, _ = DockerTestUtils.exec_in_container(
+            from_container,
+            f"curl -sk --connect-timeout {timeout} --max-time {timeout} https://{target_host}:{target_port}/ -o /dev/null -w '%{{http_code}}' 2>/dev/null || "
+            f"curl -s --connect-timeout {timeout} --max-time {timeout} http://{target_host}:{target_port}/ -o /dev/null -w '%{{http_code}}' 2>/dev/null",
+            timeout=timeout + 5
+        )
+        if exit_code == 0:
+            return True
+
+        # Try bash /dev/tcp as last resort
+        exit_code, _, _ = DockerTestUtils.exec_in_container(
+            from_container,
+            f"timeout {timeout} bash -c 'echo > /dev/tcp/{target_host}/{target_port}' 2>/dev/null",
             timeout=timeout + 2
         )
         return exit_code == 0
@@ -158,7 +201,7 @@ class DockerTestUtils:
         since: str = None
     ) -> str:
         """Get container logs."""
-        cmd = ["docker", "logs", "--tail", str(lines)]
+        cmd = [CONTAINER_RUNTIME, "logs", "--tail", str(lines)]
         if since:
             cmd.extend(["--since", since])
         cmd.append(container_name)
@@ -170,7 +213,7 @@ class DockerTestUtils:
     def get_container_env(container_name: str) -> Dict[str, str]:
         """Get container environment variables."""
         result = subprocess.run(
-            ["docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}",
+            [CONTAINER_RUNTIME, "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}",
              container_name],
             capture_output=True,
             text=True

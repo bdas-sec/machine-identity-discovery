@@ -216,7 +216,7 @@ services:
     hostname: wazuh.dashboard
     restart: unless-stopped
     ports:
-      - "443:5601"
+      - "8443:5601"  # Changed from 443 for rootless podman compatibility
     environment:
       INDEXER_URL: "https://wazuh.indexer:9200"
       INDEXER_USERNAME: "admin"
@@ -226,10 +226,13 @@ services:
       DASHBOARD_PASSWORD: "${WAZUH_DASHBOARD_PASSWORD:-kibanaserver}"
       API_USERNAME: "${WAZUH_API_USER:-wazuh-wui}"
       API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
+      # OpenSearch connection settings
+      OPENSEARCH_HOSTS: "https://wazuh.indexer:9200"
     volumes:
       - ./wazuh/certs/wazuh.dashboard.pem:/etc/wazuh-dashboard/certs/dashboard.pem:ro
       - ./wazuh/certs/wazuh.dashboard-key.pem:/etc/wazuh-dashboard/certs/dashboard-key.pem:ro
       - ./wazuh/certs/root-ca.pem:/etc/wazuh-dashboard/certs/root-ca.pem:ro
+      - ./wazuh/dashboard-config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
     networks:
       mgmt_net:
         # ipv4_address removed due to podman IPAM issues

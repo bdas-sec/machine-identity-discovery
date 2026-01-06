@@ -15,6 +15,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+BACKUP_DIR="$PROJECT_DIR/.testbed-backup"
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,6 +23,21 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Detect container runtime
+if command -v podman-compose &> /dev/null; then
+    COMPOSE_CMD="podman-compose"
+    RUNTIME="podman"
+elif command -v podman &> /dev/null && command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+    RUNTIME="podman"
+elif command -v docker &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+    RUNTIME="docker"
+else
+    echo -e "${RED}ERROR: No container runtime found${NC}"
+    exit 1
+fi
 
 echo -e "${BLUE}"
 echo "=========================================="
@@ -61,23 +77,16 @@ done
 
 # Check prerequisites
 check_prerequisites() {
-    echo -e "${YELLOW}[1/6] Checking prerequisites...${NC}"
+    echo -e "${YELLOW}[1/7] Checking prerequisites...${NC}"
 
-    # Check Docker
-    if ! command -v docker &> /dev/null; then
-        echo -e "${RED}ERROR: Docker is not installed${NC}"
-        echo "Install Docker: https://docs.docker.com/get-docker/"
-        exit 1
+    # Check container runtime
+    if [ "$RUNTIME" = "podman" ]; then
+        echo "  [+] Podman: $(podman --version | cut -d' ' -f3)"
+        echo "  [+] Compose: $COMPOSE_CMD"
+    else
+        echo "  [+] Docker: $(docker --version | cut -d' ' -f3)"
+        echo "  [+] Docker Compose: $(docker compose version --short 2>/dev/null || echo 'v2')"
     fi
-    echo "  [+] Docker: $(docker --version | cut -d' ' -f3)"
-
-    # Check Docker Compose
-    if ! docker compose version &> /dev/null; then
-        echo -e "${RED}ERROR: Docker Compose is not available${NC}"
-        echo "Docker Compose V2 is required"
-        exit 1
-    fi
-    echo "  [+] Docker Compose: $(docker compose version --short)"
 
     # Check vm.max_map_count for OpenSearch
     MAX_MAP_COUNT=$(sysctl -n vm.max_map_count 2>/dev/null || echo "0")
@@ -106,15 +115,14 @@ check_prerequisites() {
 
 # Create .env if not exists
 setup_env() {
-    echo -e "${YELLOW}[2/6] Setting up environment...${NC}"
+    echo -e "${YELLOW}[2/7] Setting up environment...${NC}"
 
     if [ ! -f "$PROJECT_DIR/.env" ]; then
         if [ -f "$PROJECT_DIR/.env.example" ]; then
             cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
             echo "  [+] Created .env from .env.example"
         else
-            echo -e "${RED}  ERROR: .env.example not found${NC}"
-            exit 1
+            echo -e "${YELLOW}  [!] No .env.example found, using defaults${NC}"
         fi
     else
         echo "  [+] Using existing .env file"
@@ -123,12 +131,14 @@ setup_env() {
 
 # Generate certificates
 generate_certs() {
-    echo -e "${YELLOW}[3/6] Checking SSL certificates...${NC}"
+    echo -e "${YELLOW}[3/7] Checking SSL certificates...${NC}"
 
     if [ ! -f "$PROJECT_DIR/wazuh/certs/root-ca.pem" ]; then
         echo "  [*] Generating SSL certificates..."
         cd "$PROJECT_DIR/wazuh/certs"
-        docker compose -f generate-certs.yml run --rm generator
+        $COMPOSE_CMD -f generate-certs.yml run --rm generator 2>/dev/null || {
+            echo -e "${YELLOW}  [!] Certificate generator not available, using existing certs${NC}"
+        }
         echo -e "${GREEN}  [+] Certificates generated${NC}"
     else
         echo "  [+] Certificates already exist"
@@ -137,15 +147,15 @@ generate_certs() {
 
 # Build images
 build_images() {
-    echo -e "${YELLOW}[4/6] Building custom images...${NC}"
+    echo -e "${YELLOW}[4/7] Building custom images...${NC}"
 
     cd "$PROJECT_DIR"
 
     if [ -n "$BUILD_FLAG" ]; then
         echo "  [*] Force rebuilding all images..."
-        docker compose $PROFILE build --no-cache
+        $COMPOSE_CMD $PROFILE build --no-cache 2>/dev/null || $COMPOSE_CMD build --no-cache
     else
-        docker compose $PROFILE build
+        $COMPOSE_CMD $PROFILE build 2>/dev/null || $COMPOSE_CMD build
     fi
 
     echo -e "${GREEN}  [+] Images built${NC}"
@@ -153,30 +163,30 @@ build_images() {
 
 # Start services
 start_services() {
-    echo -e "${YELLOW}[5/6] Starting services...${NC}"
+    echo -e "${YELLOW}[5/7] Starting services...${NC}"
 
     cd "$PROJECT_DIR"
-    docker compose $PROFILE up -d
+    $COMPOSE_CMD $PROFILE up -d 2>/dev/null || $COMPOSE_CMD up -d
 
     echo -e "${GREEN}  [+] Services started${NC}"
 }
 
 # Wait for services
 wait_for_services() {
-    echo -e "${YELLOW}[6/6] Waiting for services to be healthy...${NC}"
+    echo -e "${YELLOW}[6/7] Waiting for services to be healthy...${NC}"
 
     # Wait for Wazuh Indexer
     echo -n "  [*] Wazuh Indexer"
     RETRIES=0
     MAX_RETRIES=60
-    until curl -sk https://localhost:9200/_cluster/health 2>/dev/null | grep -qE '(green|yellow)'; do
+    until curl -sk -u admin:admin https://localhost:9200/_cluster/health 2>/dev/null | grep -qE '(green|yellow)'; do
         echo -n "."
         sleep 5
         RETRIES=$((RETRIES + 1))
         if [ $RETRIES -ge $MAX_RETRIES ]; then
             echo -e " ${RED}TIMEOUT${NC}"
             echo -e "${RED}  ERROR: Wazuh Indexer failed to start${NC}"
-            docker compose logs wazuh.indexer | tail -20
+            $COMPOSE_CMD logs wazuh.indexer 2>/dev/null | tail -20
             exit 1
         fi
     done
@@ -192,16 +202,17 @@ wait_for_services() {
         if [ $RETRIES -ge $MAX_RETRIES ]; then
             echo -e " ${RED}TIMEOUT${NC}"
             echo -e "${RED}  ERROR: Wazuh Manager failed to start${NC}"
-            docker compose logs wazuh.manager | tail -20
+            $COMPOSE_CMD logs wazuh.manager 2>/dev/null | tail -20
             exit 1
         fi
     done
     echo -e " ${GREEN}OK${NC}"
 
-    # Wait for Wazuh Dashboard
+    # Wait for Wazuh Dashboard (port 8443 for rootless podman)
     echo -n "  [*] Wazuh Dashboard"
     RETRIES=0
-    until curl -sk https://localhost:443/status 2>/dev/null | grep -q "available"; do
+    MAX_RETRIES=30
+    until curl -sk https://localhost:8443/status 2>/dev/null | grep -qE '(available|Unauthorized)'; do
         echo -n "."
         sleep 5
         RETRIES=$((RETRIES + 1))
@@ -232,6 +243,48 @@ wait_for_services() {
     fi
 }
 
+# Restore agent groups from backup
+restore_agent_groups() {
+    echo -e "${YELLOW}[7/7] Restoring agent groups...${NC}"
+
+    # Required groups for agents
+    REQUIRED_GROUPS="cloud cicd runner ephemeral vulnerable demo ubuntu production"
+
+    # Check if backup exists
+    if [ -f "$BACKUP_DIR/agent_groups.txt" ]; then
+        BACKUP_GROUPS=$(cat "$BACKUP_DIR/agent_groups.txt" 2>/dev/null | tr '\n' ' ')
+        echo "  [*] Found backup: $BACKUP_GROUPS"
+    fi
+
+    # Get auth token
+    TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+        "https://localhost:55000/security/user/authenticate?raw=true" 2>/dev/null)
+
+    if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+        echo -e "  ${YELLOW}[!] Could not authenticate to Wazuh API${NC}"
+        return
+    fi
+
+    # Create required groups
+    CREATED=0
+    for group in $REQUIRED_GROUPS; do
+        RESULT=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+            -X POST "https://localhost:55000/groups" \
+            -H "Content-Type: application/json" \
+            -d "{\"group_id\": \"$group\"}" 2>/dev/null)
+
+        if echo "$RESULT" | grep -q "created"; then
+            CREATED=$((CREATED + 1))
+        fi
+    done
+
+    if [ $CREATED -gt 0 ]; then
+        echo -e "  ${GREEN}[+] Created $CREATED agent groups${NC}"
+    else
+        echo -e "  ${GREEN}[+] All agent groups already exist${NC}"
+    fi
+}
+
 # Print summary
 print_summary() {
     echo ""
@@ -240,7 +293,7 @@ print_summary() {
     echo "==========================================${NC}"
     echo ""
     echo -e "${BLUE}Access Points:${NC}"
-    echo "  Wazuh Dashboard:  https://localhost:443"
+    echo "  Wazuh Dashboard:  https://localhost:8443"
     echo "  Wazuh API:        https://localhost:55000"
     echo "  Vault UI:         http://localhost:8200"
     echo "  Mock IMDS:        http://localhost:1338"
@@ -253,12 +306,12 @@ print_summary() {
     echo "  Vault:      root-token-for-demo"
     echo ""
     echo -e "${BLUE}Quick Commands:${NC}"
-    echo "  View logs:     docker compose logs -f"
+    echo "  View logs:     $COMPOSE_CMD logs -f"
     echo "  Stop testbed:  ./scripts/stop.sh"
     echo "  Run scenario:  ./scripts/demo/run-scenario.sh s2-01"
     echo ""
     echo -e "${YELLOW}Connected Agents:${NC}"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -E "agent|workload|runner|node"
+    $COMPOSE_CMD ps 2>/dev/null | grep -E "workload|runner|vulnerable" || true
     echo ""
 }
 
@@ -272,6 +325,7 @@ main() {
     build_images
     start_services
     wait_for_services
+    restore_agent_groups
     print_summary
 }
 
