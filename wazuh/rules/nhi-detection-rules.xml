@@ -14,7 +14,7 @@
 
   Copyright (C) 2026, RUDRA Cybersecurity
 -->
-
+<ruleset>
 <!-- ================================================= -->
 <!-- GROUP 1: CREDENTIAL DISCOVERY & EXPOSURE          -->
 <!-- Rule IDs: 100600-100649                           -->
@@ -617,3 +617,4 @@
   </rule>
 
 </group>
+</ruleset>

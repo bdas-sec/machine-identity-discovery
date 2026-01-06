@@ -82,6 +82,8 @@ volumes:
   filebeat_etc:
   filebeat_var:
   wazuh_indexer_data:
+  wazuh_indexer_certs:
+    external: true
 
 # ============================================
 # Services
@@ -97,22 +99,23 @@ services:
     container_name: wazuh-manager
     hostname: wazuh.manager
     restart: unless-stopped
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 655360
-        hard: 655360
+    # ulimits removed for rootless podman compatibility
+    # ulimits:
+    #   memlock:
+    #     soft: -1
+    #     hard: -1
+    #   nofile:
+    #     soft: 655360
+    #     hard: 655360
     ports:
       - "1514:1514"      # Agent communication
       - "1515:1515"      # Agent enrollment
-      - "514:514/udp"    # Syslog collection
+      - "5514:514/udp"   # Syslog collection (mapped to non-privileged port)
       - "55000:55000"    # Wazuh API
     environment:
       INDEXER_URL: "https://wazuh.indexer:9200"
       INDEXER_USERNAME: "admin"
-      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-SecretPassword}"
+      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-admin}"
       FILEBEAT_SSL_VERIFICATION_MODE: "full"
       SSL_CERTIFICATE_AUTHORITIES: "/etc/ssl/root-ca.pem"
       SSL_CERTIFICATE: "/etc/ssl/filebeat.pem"
@@ -121,7 +124,6 @@ services:
       API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
     volumes:
       - wazuh_api_configuration:/var/ossec/api/configuration
-      - wazuh_etc:/var/ossec/etc
       - wazuh_logs:/var/ossec/logs
       - wazuh_queue:/var/ossec/queue
       - wazuh_var_multigroups:/var/ossec/var/multigroups
@@ -131,9 +133,7 @@ services:
       - wazuh_wodles:/var/ossec/wodles
       - filebeat_etc:/etc/filebeat
       - filebeat_var:/var/lib/filebeat
-      # Custom NHI detection rules
-      - ./wazuh/rules/nhi-detection-rules.xml:/var/ossec/etc/rules/nhi-detection-rules.xml:ro
-      - ./wazuh/decoders/nhi-decoders.xml:/var/ossec/etc/decoders/nhi-decoders.xml:ro
+      # Note: Custom NHI rules can be added after initial setup via API or by copying to container
       # SSL certificates
       - ./wazuh/certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
       - ./wazuh/certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
@@ -164,13 +164,14 @@ services:
     container_name: wazuh-indexer
     hostname: wazuh.indexer
     restart: unless-stopped
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
+    # ulimits removed for rootless podman compatibility
+    # ulimits:
+    #   memlock:
+    #     soft: -1
+    #     hard: -1
+    #   nofile:
+    #     soft: 65536
+    #     hard: 65536
     ports:
       - "9200:9200"
     environment:
@@ -178,12 +179,12 @@ services:
       bootstrap.memory_lock: "true"
       discovery.type: "single-node"
       plugins.security.ssl.http.enabled: "true"
-      plugins.security.ssl.http.pemcert_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem"
-      plugins.security.ssl.http.pemkey_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem"
-      plugins.security.ssl.http.pemtrustedcas_filepath: "/usr/share/wazuh-indexer/certs/root-ca.pem"
-      plugins.security.ssl.transport.pemcert_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem"
-      plugins.security.ssl.transport.pemkey_filepath: "/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem"
-      plugins.security.ssl.transport.pemtrustedcas_filepath: "/usr/share/wazuh-indexer/certs/root-ca.pem"
+      plugins.security.ssl.http.pemcert_filepath: "certs/indexer.pem"
+      plugins.security.ssl.http.pemkey_filepath: "certs/indexer-key.pem"
+      plugins.security.ssl.http.pemtrustedcas_filepath: "certs/root-ca.pem"
+      plugins.security.ssl.transport.pemcert_filepath: "certs/indexer.pem"
+      plugins.security.ssl.transport.pemkey_filepath: "certs/indexer-key.pem"
+      plugins.security.ssl.transport.pemtrustedcas_filepath: "certs/root-ca.pem"
       plugins.security.ssl.transport.enforce_hostname_verification: "false"
       plugins.security.authcz.admin_dn: "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
       plugins.security.check_snapshot_restore_write_privileges: "true"
@@ -194,11 +195,8 @@ services:
       compatibility.override_main_response_version: "true"
     volumes:
       - wazuh_indexer_data:/var/lib/wazuh-indexer
-      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
-      - ./wazuh/certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem:ro
-      - ./wazuh/certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem:ro
-      - ./wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
-      - ./wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - wazuh_indexer_certs:/usr/share/wazuh-indexer/certs
+      - ./wazuh/indexer-config/opensearch.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
     networks:
       mgmt_net:
         ipv4_address: 172.40.0.12
@@ -206,7 +204,7 @@ services:
       - "nhi.service=wazuh-indexer"
       - "nhi.role=storage"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sk https://localhost:9200/_cluster/health | grep -qE '(green|yellow)' || exit 1"]
+      test: ["CMD-SHELL", "curl -sk -u admin:admin https://localhost:9200/_cluster/health | grep -qE '(green|yellow)' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -220,20 +218,21 @@ services:
     ports:
       - "443:5601"
     environment:
+      INDEXER_URL: "https://wazuh.indexer:9200"
       INDEXER_USERNAME: "admin"
-      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-SecretPassword}"
+      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-admin}"
       WAZUH_API_URL: "https://wazuh.manager"
       DASHBOARD_USERNAME: "${WAZUH_DASHBOARD_USER:-kibanaserver}"
       DASHBOARD_PASSWORD: "${WAZUH_DASHBOARD_PASSWORD:-kibanaserver}"
       API_USERNAME: "${WAZUH_API_USER:-wazuh-wui}"
       API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
     volumes:
-      - ./wazuh/certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
-      - ./wazuh/certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
-      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+      - ./wazuh/certs/wazuh.dashboard.pem:/etc/wazuh-dashboard/certs/dashboard.pem:ro
+      - ./wazuh/certs/wazuh.dashboard-key.pem:/etc/wazuh-dashboard/certs/dashboard-key.pem:ro
+      - ./wazuh/certs/root-ca.pem:/etc/wazuh-dashboard/certs/root-ca.pem:ro
     networks:
       mgmt_net:
-        ipv4_address: 172.40.0.10
+        # ipv4_address removed due to podman IPAM issues
     depends_on:
       wazuh.indexer:
         condition: service_healthy

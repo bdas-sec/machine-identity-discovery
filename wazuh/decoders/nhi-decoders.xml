@@ -6,7 +6,7 @@
 
   Copyright (C) 2026, RUDRA Cybersecurity
 -->
-
+<decoder_group>
 <!-- ================================================= -->
 <!-- IMDS Access Log Decoder                           -->
 <!-- ================================================= -->
@@ -117,3 +117,4 @@
   <regex>\[(ATTACK|CRITICAL ATTACK)\] (.+) from (\S+)</regex>
   <order>severity,description,srcip</order>
 </decoder>
+</decoder_group>

@@ -1,0 +1,26 @@
+# NHI Security Testbed - Test Dependencies
+
+# Core testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-html>=4.1.0
+pytest-timeout>=2.2.0
+pytest-xdist>=3.5.0
+
+# Docker interaction
+docker>=6.1.0
+
+# HTTP testing
+requests>=2.31.0
+urllib3>=2.0.0
+
+# XML parsing for rule validation
+lxml>=4.9.0
+
+# Data validation
+jsonschema>=4.20.0
+
+# Utilities
+python-dotenv>=1.0.0
+tenacity>=8.2.0
+pyyaml>=6.0.0
