@@ -17,17 +17,20 @@ cd machine-identity-discovery
 
 ### 2. Verify Everything is Running
 ```bash
+# Run health check
+python .claude/skills/nhi-assistant/scripts/health_check.py
+
 # Check containers
-docker compose ps
+podman ps  # or: docker compose ps
 
 # Verify agents
-docker exec wazuh-manager /var/ossec/bin/agent_control -l
+podman exec wazuh-manager /var/ossec/bin/agent_control -l
 
 # Test IMDS mock
 curl http://localhost:1338/latest/meta-data/
 
 # Test dashboard (open in browser)
-# https://localhost:443
+# https://localhost:8443
 # Login: admin / SecretPassword
 ```
 
@@ -124,18 +127,24 @@ curl http://localhost:1338/latest/meta-data/iam/security-credentials/demo-ec2-in
 
 ```bash
 # Execute from inside the container
-docker exec -it cloud-workload bash
+podman exec -it cloud-workload bash
 
 # Inside container - simulate SSRF attack
 echo "Simulating SSRF to IMDS..."
-curl http://169.254.169.254/latest/meta-data/
+curl http://mock-imds:1338/latest/meta-data/
+```
+
+**Alternative: Run automated demo**
+```bash
+# Run Level 2 scenarios (credential theft)
+python .claude/skills/nhi-assistant/scripts/run_demo.py --level 2 --verbose
 ```
 
 [PAUSE]
 
 ```bash
 # Enumerate roles
-curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+curl http://mock-imds:1338/latest/meta-data/iam/security-credentials/
 ```
 
 [Switch to Wazuh - first alert should appear]
@@ -146,7 +155,7 @@ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
 
 ```bash
 # The critical theft
-curl http://169.254.169.254/latest/meta-data/iam/security-credentials/demo-ec2-instance-role
+curl http://mock-imds:1338/latest/meta-data/iam/security-credentials/demo-ec2-role
 ```
 
 [Switch to Wazuh - high-level alert should appear]
@@ -210,14 +219,14 @@ curl -X POST http://localhost:8000/chat \
 
 ### Reset Agent Connection
 ```bash
-docker restart cloud-workload
+podman restart cloud-workload
 sleep 10
-docker exec wazuh-manager /var/ossec/bin/agent_control -l
+podman exec wazuh-manager /var/ossec/bin/agent_control -l
 ```
 
 ### Restart IMDS Mock
 ```bash
-docker restart mock-imds
+podman restart mock-imds
 curl http://localhost:1338/
 ```
 
@@ -226,6 +235,21 @@ curl http://localhost:1338/
 ./scripts/stop.sh
 ./scripts/start.sh
 # Wait 3 minutes
+
+# Run health check
+python .claude/skills/nhi-assistant/scripts/health_check.py --fix
+```
+
+### Use Automated Demo Runner
+```bash
+# List all scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --list
+
+# Run specific scenario
+python .claude/skills/nhi-assistant/scripts/run_demo.py --scenario s2-01 --verbose
+
+# Run full demo
+python .claude/skills/nhi-assistant/scripts/run_demo.py --all --delay 3.0
 ```
 
 ---

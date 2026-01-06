@@ -25,7 +25,7 @@ sudo sysctl -w vm.max_map_count=262144
 ./scripts/start.sh
 
 # Access Wazuh Dashboard
-# URL: https://localhost:443
+# URL: https://localhost:8443
 # User: admin
 # Password: SecretPassword
 ```
@@ -38,7 +38,7 @@ sudo sysctl -w vm.max_map_count=262144
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────────────── WAZUH STACK ───────────────────────┐         │
-│  │  Manager (:55000)  │  Indexer (:9200)  │  Dashboard (:443) │         │
+│  │  Manager (:55000)  │  Indexer (:9200)  │  Dashboard (:8443)│         │
 │  └────────────────────────────────────────────────────────────┘         │
 │                              │                                          │
 │  ┌──────────┬───────────────┼───────────────┬──────────────┐           │
@@ -60,7 +60,7 @@ sudo sysctl -w vm.max_map_count=262144
 
 | Component | Port | Description |
 |-----------|------|-------------|
-| Wazuh Dashboard | 443 | SIEM visualization and alerts |
+| Wazuh Dashboard | 8443 | SIEM visualization and alerts |
 | Wazuh API | 55000 | Management API |
 | Wazuh Indexer | 9200 | OpenSearch data storage |
 | Mock IMDS | 1338 | AWS/Azure metadata simulation |
@@ -122,16 +122,22 @@ Custom rules for NHI detection (Rule IDs 100600-100999):
 ./scripts/start.sh --all
 ```
 
-### Run IMDS attack demonstration
+### Run demo scenarios
 
 ```bash
-# From cloud-workload container
-docker exec -it cloud-workload /opt/nhi-demo/scripts/simulate-imds-attack.sh
+# Using the NHI Assistant skill
+python .claude/skills/nhi-assistant/scripts/run_demo.py --list    # List scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --all     # Run all scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --level 2 # Run Level 2 only
+python .claude/skills/nhi-assistant/scripts/run_demo.py --scenario s2-01  # Specific scenario
+
+# Or manually execute attacks
+podman exec -it cloud-workload curl http://mock-imds:1338/latest/meta-data/iam/security-credentials/
 ```
 
 ### View alerts in Wazuh Dashboard
 
-1. Navigate to https://localhost:443
+1. Navigate to https://localhost:8443
 2. Go to Security Events
 3. Filter by rule.groups: "nhi"
 
@@ -144,11 +150,13 @@ docker exec -it cloud-workload /opt/nhi-demo/scripts/simulate-imds-attack.sh
 
 ## Requirements
 
-- Docker 24+
-- Docker Compose V2
-- 8GB RAM (minimum 6GB)
-- 20GB disk space
-- Linux host (vm.max_map_count must be >= 262144)
+- **Container Runtime**: Podman 4.0+ (recommended) or Docker 24+
+- **Compose**: podman-compose or Docker Compose V2
+- **RAM**: 8GB (minimum 6GB)
+- **Disk**: 20GB disk space
+- **OS**: Linux host (vm.max_map_count must be >= 262144)
+
+**Note**: The testbed auto-detects Podman or Docker. For rootless Podman, port 8443 is used instead of 443.
 
 ## Directory Structure
 
@@ -183,6 +191,24 @@ See [docs/handbook/](docs/handbook/) for comprehensive documentation:
 - [02-installation.md](docs/handbook/02-installation.md) - Setup guide
 - [03-wazuh-rules-reference.md](docs/handbook/03-wazuh-rules-reference.md) - Rule documentation
 - [04-scenario-catalog.md](docs/handbook/04-scenario-catalog.md) - All attack scenarios
+- [08-troubleshooting.md](docs/handbook/08-troubleshooting.md) - Troubleshooting guide
+
+## NHI Assistant Skill
+
+A Claude skill is included for testbed management:
+
+```
+.claude/skills/nhi-assistant/
+├── SKILL.md                    # Skill definition
+├── scripts/
+│   ├── run_demo.py            # Demo scenario runner
+│   └── health_check.py        # Health verification
+└── references/
+    ├── architecture.md        # Network topology
+    ├── scenarios.md           # 24 attack scenarios
+    ├── troubleshooting.md     # Issue solutions
+    └── wazuh-rules.md         # Detection rules
+```
 
 ## License
 
