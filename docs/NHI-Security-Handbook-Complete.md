@@ -111,7 +111,7 @@ After completing this training, you will be able to:
 **NDC Security 2026**
 "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
 
-*Presented by Bodhisattva Das, RUDRA Cybersecurity*
+*Presented by Bodhisattva Das*
 # Chapter 1: Architecture
 
 ## System Overview
@@ -386,7 +386,7 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/RUDRA-Cybersecurity/machine-identity-discovery.git
+git clone https://github.com/bdas-sec/machine-identity-discovery.git
 cd machine-identity-discovery
 ```
 
@@ -2795,7 +2795,7 @@ docker network inspect machine-identity-discovery_cloud_net
 ### Resources
 
 - **Wazuh Documentation**: https://documentation.wazuh.com/
-- **GitHub Issues**: https://github.com/RUDRA-Cybersecurity/machine-identity-discovery/issues
+- **GitHub Issues**: https://github.com/bdas-sec/machine-identity-discovery/issues
 - **Wazuh Slack**: https://wazuh.com/community/join-us-on-slack/
 
 ### Reporting Issues

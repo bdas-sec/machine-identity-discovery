@@ -181,7 +181,7 @@ curl -sk -H "Authorization: Bearer $TOKEN" \
 
 ## Adding Custom Rules
 
-Rules are stored in: `/home/bodhi/RUDRA/machine-identity-discovery/wazuh/rules/`
+Rules are stored in: `wazuh/rules/`
 
 After modifying rules:
 ```bash

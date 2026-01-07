@@ -4,7 +4,7 @@
 
 FROM python:3.11-slim
 
-LABEL maintainer="RUDRA Cybersecurity"
+LABEL maintainer="Bodhisattva Das"
 LABEL description="Mock Instance Metadata Service for NHI security testing"
 LABEL version="1.0"
 

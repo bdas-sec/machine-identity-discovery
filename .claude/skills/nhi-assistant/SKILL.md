@@ -9,7 +9,7 @@ description: NHI (Non-Human Identity) Security Testbed assistant for the NDC Sec
 
 The **Machine Identity Security Testbed** is a comprehensive environment for demonstrating and detecting Non-Human Identity (NHI) security threats. It uses Wazuh SIEM to monitor cloud workloads, CI/CD runners, and vulnerable applications for credential theft, privilege escalation, and identity abuse.
 
-**Project Location:** `/home/bodhi/RUDRA/machine-identity-discovery`
+**Project Location:** `machine-identity-discovery/` (cloned repository)
 
 ### Key Components
 
@@ -37,7 +37,7 @@ The **Machine Identity Security Testbed** is a comprehensive environment for dem
 ### Starting the Testbed
 
 ```bash
-cd /home/bodhi/RUDRA/machine-identity-discovery
+cd machine-identity-discovery
 ./scripts/start.sh
 ```
 

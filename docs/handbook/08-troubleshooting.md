@@ -486,7 +486,7 @@ podman network inspect nhi_cloud_net
 ### Resources
 
 - **Wazuh Documentation**: https://documentation.wazuh.com/
-- **GitHub Issues**: https://github.com/RUDRA-Cybersecurity/machine-identity-discovery/issues
+- **GitHub Issues**: https://github.com/bdas-sec/machine-identity-discovery/issues
 - **Wazuh Slack**: https://wazuh.com/community/join-us-on-slack/
 - **NHI Assistant Skill**: `.claude/skills/nhi-assistant/`
 
