@@ -1,0 +1,55 @@
+Non-Commercial Use License
+
+Copyright (c) 2026 RUDRA Cybersecurity
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, and distribute the Software for non-commercial purposes
+only, subject to the following conditions:
+
+1. NON-COMMERCIAL USE ONLY
+   This Software may be used for personal, educational, research, or other
+   non-commercial purposes. "Non-commercial" means not primarily intended for
+   or directed towards commercial advantage or monetary compensation.
+
+   Permitted uses include:
+   - Personal learning and experimentation
+   - Academic research and education
+   - Security training and workshops (free or paid)
+   - Conference demonstrations and talks
+   - Contributing to open source projects
+   - Internal security testing within organizations
+
+   Prohibited uses include:
+   - Selling the Software or derivative works
+   - Offering the Software as a paid service
+   - Using the Software as part of a commercial product or service
+   - Using the Software to generate revenue directly
+
+2. ATTRIBUTION
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+3. MODIFICATIONS
+   You may modify the Software and distribute modified versions, provided that:
+   - You clearly mark the modifications as your own work
+   - You include the original copyright notice
+   - You distribute under the same non-commercial terms
+
+4. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+5. COMMERCIAL LICENSING
+   For commercial use, please contact RUDRA Cybersecurity to obtain a
+   commercial license.
+
+---
+
+RUDRA Cybersecurity
+https://github.com/bdas-sec/machine-identity-discovery
