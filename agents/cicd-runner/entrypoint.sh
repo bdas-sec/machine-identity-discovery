@@ -22,6 +22,10 @@ sed -i "s/WAZUH_MANAGER_IP/$WAZUH_MANAGER/g" /var/ossec/etc/ossec.conf
 sed -i "s/WAZUH_AGENT_NAME/$WAZUH_AGENT_NAME/g" /var/ossec/etc/ossec.conf
 sed -i "s/WAZUH_AGENT_GROUP/$WAZUH_AGENT_GROUP/g" /var/ossec/etc/ossec.conf
 
+# Fix permissions after config modification (required for wazuh user to read)
+chown root:wazuh /var/ossec/etc/ossec.conf
+chmod 640 /var/ossec/etc/ossec.conf
+
 # Create marker file
 touch /tmp/.cred_marker
 

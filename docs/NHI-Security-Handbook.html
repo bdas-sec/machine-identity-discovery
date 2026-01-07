@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NHI Security Handbook - NDC Security 2026</title>
+    <style>
+        :root {
+            --primary: #1a365d;
+            --secondary: #2c5282;
+            --accent: #3182ce;
+            --text: #2d3748;
+            --bg: #ffffff;
+            --code-bg: #f7fafc;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.7;
+            color: var(--text);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: var(--bg);
+        }
+
+        h1 {
+            color: var(--primary);
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 15px;
+            margin-top: 60px;
+            page-break-before: always;
+        }
+
+        h1:first-of-type {
+            page-break-before: auto;
+        }
+
+        h2 {
+            color: var(--secondary);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+
+        h3 {
+            color: var(--accent);
+            margin-top: 30px;
+        }
+
+        code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: var(--code-bg);
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        blockquote {
+            border-left: 4px solid var(--accent);
+            margin: 20px 0;
+            padding: 10px 20px;
+            background: var(--code-bg);
+            font-style: italic;
+        }
+
+        .toc {
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+
+        .toc h2 {
+            margin-top: 0;
+            border: none;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            padding: 8px 0;
+            border-bottom: 1px dotted var(--border);
+        }
+
+        .toc a {
+            color: var(--secondary);
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            color: var(--accent);
+        }
+
+        .cover {
+            text-align: center;
+            padding: 100px 0;
+            page-break-after: always;
+        }
+
+        .cover h1 {
+            font-size: 2.5em;
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .cover .subtitle {
+            font-size: 1.3em;
+            color: var(--secondary);
+            margin-bottom: 40px;
+        }
+
+        .cover .meta {
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+        }
+
+        @media print {
+            body {
+                max-width: none;
+                padding: 0;
+            }
+
+            h1 {
+                page-break-before: always;
+            }
+
+            pre, table {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="cover">
+    <h1>NHI Security Handbook</h1>
+    <div class="subtitle">Non-Human Identity Security Testing with Wazuh</div>
+    <div class="meta">
+        <p>NDC Security Oslo 2026</p>
+        <p>"Who Gave the Agent Admin Rights?!"</p>
+        <p>Version 1.0 | January 2026</p>
+    </div>
+</div>
+
+<div class="toc">
+    <h2>Table of Contents</h2>
+    <ul>
+        <li><a href="#chapter-0">Introduction</a></li>
+        <li><a href="#chapter-1">Chapter 1: Architecture</a></li>
+        <li><a href="#chapter-2">Chapter 2: Installation Guide</a></li>
+        <li><a href="#chapter-3">Chapter 3: Wazuh Rules Reference</a></li>
+        <li><a href="#chapter-4">Chapter 4: Scenario Catalog</a></li>
+        <li><a href="#chapter-5">Chapter 5: Detection Playbook</a></li>
+        <li><a href="#chapter-6">Chapter 6: Remediation Guide</a></li>
+        <li><a href="#chapter-7">Chapter 7: Extending the Testbed</a></li>
+        <li><a href="#chapter-8">Chapter 8: Troubleshooting</a></li>
+    </ul>
+</div>
+
+<h1 id="chapter-0">Introduction</h1>
+
+<h2>Machine Identity Security Testbed</h2>
+
+<p>Welcome to the <strong>Machine Identity Discovery Testbed</strong> - a comprehensive security training platform for detecting and responding to Non-Human Identity (NHI) threats.</p>
+
+<h3>What is This Project?</h3>
+
+<p>This testbed provides a safe, containerized environment to:</p>
+<ul>
+    <li><strong>Learn</strong> about NHI security threats through hands-on scenarios</li>
+    <li><strong>Detect</strong> attacks using Wazuh SIEM with custom detection rules</li>
+    <li><strong>Respond</strong> to incidents with guided remediation playbooks</li>
+    <li><strong>Practice</strong> incident response in a realistic but safe environment</li>
+</ul>
+
+<h3>Who Is This For?</h3>
+<ul>
+    <li><strong>Security Engineers</strong>: Learn to detect NHI-related attacks</li>
+    <li><strong>DevOps/Platform Teams</strong>: Understand credential security risks</li>
+    <li><strong>Cloud Architects</strong>: Design secure service account patterns</li>
+    <li><strong>Incident Responders</strong>: Practice NHI-focused IR scenarios</li>
+    <li><strong>Security Leaders</strong>: Understand the NHI attack surface</li>
+</ul>
+
+<h3>The Five NHI Categories</h3>
+
+<table>
+    <tr>
+        <th>Category</th>
+        <th>Examples</th>
+        <th>Risk Level</th>
+    </tr>
+    <tr>
+        <td>1. API Keys & Secrets</td>
+        <td>AWS keys, GitHub tokens, database passwords</td>
+        <td>High</td>
+    </tr>
+    <tr>
+        <td>2. Cloud Service Accounts</td>
+        <td>IAM roles, GCP service accounts, Azure SPs</td>
+        <td>Critical</td>
+    </tr>
+    <tr>
+        <td>3. CI/CD Pipeline Tokens</td>
+        <td>GitHub Actions, GitLab CI, Jenkins</td>
+        <td>Critical</td>
+    </tr>
+    <tr>
+        <td>4. Kubernetes Identities</td>
+        <td>Service accounts, RBAC, pod security</td>
+        <td>High</td>
+    </tr>
+    <tr>
+        <td>5. AI Agent Credentials</td>
+        <td>LLM API keys, agent tool access</td>
+        <td>Emerging</td>
+    </tr>
+</table>
+
+<div class="alert alert-warning">
+    <strong>Important:</strong> All credentials in this testbed are FAKE and clearly marked as demonstration data. Never use real credentials in training environments.
+</div>
+
+<h1 id="chapter-1">Chapter 1: Architecture</h1>
+
+<h2>System Overview</h2>
+
+<p>The Machine Identity Security Testbed provides a containerized environment for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM.</p>
+
+<h3>Network Topology</h3>
+
+<table>
+    <tr>
+        <th>Network</th>
+        <th>CIDR</th>
+        <th>Purpose</th>
+    </tr>
+    <tr>
+        <td>Management Network</td>
+        <td>172.40.0.0/24</td>
+        <td>Wazuh stack internal communication</td>
+    </tr>
+    <tr>
+        <td>Cloud Network</td>
+        <td>172.41.0.0/24</td>
+        <td>Simulates cloud workload environment</td>
+    </tr>
+    <tr>
+        <td>CI/CD Network</td>
+        <td>172.42.0.0/24</td>
+        <td>Simulates CI/CD pipeline environment</td>
+    </tr>
+    <tr>
+        <td>Kubernetes Network</td>
+        <td>172.43.0.0/24</td>
+        <td>Simulates Kubernetes cluster</td>
+    </tr>
+</table>
+
+<h3>Component Details</h3>
+
+<h4>Wazuh Stack</h4>
+<ul>
+    <li><strong>Wazuh Manager</strong>: Agent management, event processing, alert generation</li>
+    <li><strong>Wazuh Indexer</strong>: OpenSearch-based alert storage and search</li>
+    <li><strong>Wazuh Dashboard</strong>: Web interface for visualization</li>
+</ul>
+
+<h4>Agent Containers</h4>
+<ul>
+    <li><strong>cloud-workload</strong>: AWS CLI, cloud SDK demos</li>
+    <li><strong>vulnerable-app</strong>: Intentionally vulnerable Flask application</li>
+    <li><strong>cicd-runner</strong>: GitHub/GitLab runner simulation</li>
+    <li><strong>k8s-node</strong>: Kubernetes node simulation</li>
+    <li><strong>ai-agent</strong>: AI agent with tools demonstration</li>
+</ul>
+
+<h4>Mock Services</h4>
+<ul>
+    <li><strong>Mock IMDS</strong>: AWS/Azure Instance Metadata Service simulation</li>
+    <li><strong>Mock CI/CD Server</strong>: GitHub Actions / GitLab CI API mock</li>
+</ul>
+
+<h3>Resource Requirements</h3>
+
+<table>
+    <tr>
+        <th>Component</th>
+        <th>vCPU</th>
+        <th>Memory</th>
+        <th>Storage</th>
+    </tr>
+    <tr>
+        <td>Wazuh Manager</td>
+        <td>1</td>
+        <td>1 GB</td>
+        <td>5 GB</td>
+    </tr>
+    <tr>
+        <td>Wazuh Indexer</td>
+        <td>2</td>
+        <td>2 GB</td>
+        <td>10 GB</td>
+    </tr>
+    <tr>
+        <td>Wazuh Dashboard</td>
+        <td>0.5</td>
+        <td>512 MB</td>
+        <td>1 GB</td>
+    </tr>
+    <tr>
+        <td>Agents (each)</td>
+        <td>0.25</td>
+        <td>256 MB</td>
+        <td>500 MB</td>
+    </tr>
+    <tr>
+        <td><strong>Total</strong></td>
+        <td>~5</td>
+        <td>~6 GB</td>
+        <td>~20 GB</td>
+    </tr>
+</table>
+
+<h1 id="chapter-2">Chapter 2: Installation Guide</h1>
+
+<h2>Prerequisites</h2>
+
+<h3>Hardware Requirements</h3>
+<ul>
+    <li><strong>CPU</strong>: 4 cores minimum, 8 recommended</li>
+    <li><strong>RAM</strong>: 6 GB minimum, 8 GB recommended</li>
+    <li><strong>Disk</strong>: 20 GB minimum, 40 GB recommended</li>
+</ul>
+
+<h3>Software Requirements</h3>
+<ul>
+    <li><strong>Operating System</strong>: Linux (Ubuntu 20.04+, Debian 11+, RHEL 8+)</li>
+    <li><strong>Docker</strong>: Version 24.0 or higher</li>
+    <li><strong>Docker Compose</strong>: V2 (bundled with Docker)</li>
+</ul>
+
+<h3>System Configuration</h3>
+<pre><code># Required: Increase virtual memory map count for OpenSearch
+sudo sysctl -w vm.max_map_count=262144
+
+# Make persistent across reboots
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf</code></pre>
+
+<h2>Quick Start</h2>
+<pre><code># Clone the repository
+git clone https://github.com/RUDRA-Cybersecurity/machine-identity-discovery.git
+cd machine-identity-discovery
+
+# Copy environment template
+cp .env.example .env
+
+# Start the testbed
+./scripts/start.sh
+
+# Access Wazuh Dashboard
+# https://localhost:443
+# Username: admin
+# Password: SecretPassword</code></pre>
+
+<h1 id="chapter-3">Chapter 3: Wazuh Rules Reference</h1>
+
+<h2>Rule Organization</h2>
+
+<p>Custom NHI detection rules use IDs in the range <strong>100600-100999</strong>.</p>
+
+<table>
+    <tr>
+        <th>Range</th>
+        <th>Category</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td>100600-100649</td>
+        <td>Credential Discovery</td>
+        <td>File access, credential searches</td>
+    </tr>
+    <tr>
+        <td>100650-100699</td>
+        <td>Cloud Metadata (IMDS)</td>
+        <td>AWS/Azure/GCP metadata abuse</td>
+    </tr>
+    <tr>
+        <td>100700-100749</td>
+        <td>Service Account Misuse</td>
+        <td>IAM operations, role abuse</td>
+    </tr>
+    <tr>
+        <td>100750-100799</td>
+        <td>Kubernetes Security</td>
+        <td>SA tokens, RBAC, container escape</td>
+    </tr>
+    <tr>
+        <td>100800-100849</td>
+        <td>CI/CD Pipeline</td>
+        <td>Runner tokens, pipeline injection</td>
+    </tr>
+    <tr>
+        <td>100850-100899</td>
+        <td>AI Agent Anomalies</td>
+        <td>Prompt injection, tool abuse</td>
+    </tr>
+    <tr>
+        <td>100900-100949</td>
+        <td>Secret Pattern Detection</td>
+        <td>API key patterns in logs</td>
+    </tr>
+</table>
+
+<h3>Key Rules</h3>
+
+<h4>Rule 100651: IMDS Credential Theft (Level 12)</h4>
+<pre><code>&lt;rule id="100651" level="12"&gt;
+  &lt;if_sid&gt;100650&lt;/if_sid&gt;
+  &lt;match&gt;iam/security-credentials&lt;/match&gt;
+  &lt;description&gt;NHI: AWS IMDS IAM credential request - CREDENTIAL THEFT ATTEMPT&lt;/description&gt;
+  &lt;mitre&gt;
+    &lt;id&gt;T1552.005&lt;/id&gt;
+    &lt;id&gt;T1078.004&lt;/id&gt;
+  &lt;/mitre&gt;
+&lt;/rule&gt;</code></pre>
+
+<h4>Rule 100750: Container Escape (Level 14)</h4>
+<pre><code>&lt;rule id="100750" level="14"&gt;
+  &lt;if_sid&gt;5902&lt;/if_sid&gt;
+  &lt;match&gt;nsenter|chroot&lt;/match&gt;
+  &lt;match&gt;--target 1|/mnt/host&lt;/match&gt;
+  &lt;description&gt;NHI: Container escape attempt via nsenter/chroot&lt;/description&gt;
+  &lt;mitre&gt;
+    &lt;id&gt;T1611&lt;/id&gt;
+  &lt;/mitre&gt;
+&lt;/rule&gt;</code></pre>
+
+<h1 id="chapter-4">Chapter 4: Scenario Catalog</h1>
+
+<h2>15 Attack Scenarios</h2>
+
+<h3>Category 1: API Keys & Secrets</h3>
+<ul>
+    <li><strong>S1-01</strong>: Hardcoded Credentials in Source Code</li>
+    <li><strong>S1-02</strong>: Exposed .env File via Web Server</li>
+    <li><strong>S1-03</strong>: Git History Credential Leak</li>
+    <li><strong>S1-04</strong>: Environment Variable Exposure via /proc</li>
+</ul>
+
+<h3>Category 2: Cloud Service Accounts</h3>
+<ul>
+    <li><strong>S2-01</strong>: IMDS Credential Theft (Capital One style)</li>
+    <li><strong>S2-02</strong>: Over-Permissioned IAM Role Exploitation</li>
+    <li><strong>S2-03</strong>: Cross-Account Role Assumption Abuse</li>
+    <li><strong>S2-04</strong>: Service Account Key Exfiltration</li>
+</ul>
+
+<h3>Category 3: CI/CD Pipeline</h3>
+<ul>
+    <li><strong>S3-01</strong>: Stolen GitHub Actions Runner Token</li>
+    <li><strong>S3-02</strong>: Pipeline Injection via Pull Request</li>
+    <li><strong>S3-03</strong>: OIDC Token Abuse for Cloud Access</li>
+</ul>
+
+<h3>Category 4: Kubernetes</h3>
+<ul>
+    <li><strong>S4-01</strong>: Privileged Pod Container Escape</li>
+    <li><strong>S4-02</strong>: Service Account Token Theft</li>
+    <li><strong>S4-03</strong>: RBAC Misconfiguration Exploitation</li>
+    <li><strong>S4-04</strong>: Secrets Mounted in Pod</li>
+</ul>
+
+<h3>Category 5: AI Agents</h3>
+<ul>
+    <li><strong>S5-01</strong>: Prompt Injection → Credential Disclosure</li>
+    <li><strong>S5-02</strong>: AI Agent with Excessive Permissions</li>
+    <li><strong>S5-03</strong>: Tool-Use SSRF Abuse</li>
+    <li><strong>S5-04</strong>: Memory/Context Poisoning</li>
+</ul>
+
+<h3>Running Scenarios</h3>
+<pre><code># List all scenarios
+python src/scenario-runner/runner.py --list
+
+# Run a specific scenario
+python src/scenario-runner/runner.py --run S2-01
+
+# Run all scenarios in a category
+python src/scenario-runner/runner.py --category cloud</code></pre>
+
+<h1 id="chapter-5">Chapter 5: Detection Playbook</h1>
+
+<h2>Alert Response Workflow</h2>
+
+<h3>Critical Alerts (Level 12-15) - Immediate Response</h3>
+
+<h4>IMDS Credential Theft (Rule 100651)</h4>
+
+<p><strong>Initial Triage</strong> (2 minutes):</p>
+<ol>
+    <li>Identify the source process/container</li>
+    <li>Check if this is expected behavior</li>
+    <li>Verify the specific endpoint accessed</li>
+</ol>
+
+<p><strong>Response Actions</strong>:</p>
+<ol>
+    <li><strong>Contain</strong>: Isolate affected container/instance</li>
+    <li><strong>Rotate</strong>: Immediately rotate IAM credentials</li>
+    <li><strong>Review</strong>: Check CloudTrail for credential usage</li>
+    <li><strong>Block</strong>: Implement IMDSv2 requirement</li>
+</ol>
+
+<h4>Container Escape (Rule 100750)</h4>
+
+<p><strong>Response Actions</strong>:</p>
+<ol>
+    <li><strong>Terminate</strong>: Kill the pod immediately</li>
+    <li><strong>Cordon</strong>: Remove node from scheduling</li>
+    <li><strong>Rotate</strong>: Kubelet credentials</li>
+    <li><strong>Review</strong>: All pods on affected node</li>
+</ol>
+
+<h1 id="chapter-6">Chapter 6: Remediation Guide</h1>
+
+<h2>IMDS Security</h2>
+
+<h3>Enforce IMDSv2</h3>
+<pre><code># For existing instances
+aws ec2 modify-instance-metadata-options \
+  --instance-id i-xxx \
+  --http-tokens required \
+  --http-endpoint enabled</code></pre>
+
+<h2>Kubernetes Security</h2>
+
+<h3>Secure Pod Spec</h3>
+<pre><code>apiVersion: v1
+kind: Pod
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: app
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]</code></pre>
+
+<h2>AI Agent Security</h2>
+
+<h3>URL Allowlisting</h3>
+<pre><code>BLOCKED_HOSTS = [
+    '169.254.169.254',
+    'metadata.google.internal',
+    'localhost',
+    '127.0.0.1'
+]
+
+def is_url_allowed(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.hostname in BLOCKED_HOSTS:
+        return False
+    return True</code></pre>
+
+<h1 id="chapter-7">Chapter 7: Extending the Testbed</h1>
+
+<h2>Adding New Scenarios</h2>
+
+<p>Create a new JSON file in the appropriate category folder:</p>
+
+<pre><code>{
+  "id": "S6-01",
+  "name": "Custom Scenario Name",
+  "category": "Custom Category",
+  "difficulty": "Medium",
+  "phases": [...],
+  "expected_wazuh_alerts": [...],
+  "remediation": {...}
+}</code></pre>
+
+<h2>Adding Custom Rules</h2>
+
+<pre><code>&lt;rule id="100XXX" level="Y"&gt;
+  &lt;if_sid&gt;parent_rule_id&lt;/if_sid&gt;
+  &lt;match&gt;pattern_to_match&lt;/match&gt;
+  &lt;description&gt;NHI: Description&lt;/description&gt;
+  &lt;mitre&gt;
+    &lt;id&gt;TXXXX&lt;/id&gt;
+  &lt;/mitre&gt;
+&lt;/rule&gt;</code></pre>
+
+<h1 id="chapter-8">Chapter 8: Troubleshooting</h1>
+
+<h2>Common Issues</h2>
+
+<h3>Containers Won't Start</h3>
+<pre><code># Check vm.max_map_count
+sysctl vm.max_map_count
+# Must be >= 262144
+
+# Fix:
+sudo sysctl -w vm.max_map_count=262144</code></pre>
+
+<h3>Agent Won't Connect</h3>
+<pre><code># Check network connectivity
+docker exec cloud-workload ping wazuh-manager
+
+# Re-register agent
+docker exec cloud-workload /var/ossec/bin/agent-auth -m wazuh-manager</code></pre>
+
+<h3>Rules Not Triggering</h3>
+<pre><code># Test rule manually
+docker exec -it wazuh-manager /var/ossec/bin/wazuh-logtest
+
+# Reload rules
+docker exec wazuh-manager /var/ossec/bin/wazuh-control reload</code></pre>
+
+<hr>
+
+<div style="text-align: center; margin-top: 60px; padding: 40px; background: var(--code-bg); border-radius: 8px;">
+    <h2>Resources</h2>
+    <p><strong>GitHub Repository</strong>: github.com/RUDRA-Cybersecurity/machine-identity-discovery</p>
+    <p><strong>Wazuh Documentation</strong>: documentation.wazuh.com</p>
+    <p><strong>NDC Security Oslo 2026</strong>: ndcsecurity.com</p>
+    <br>
+    <p style="color: #718096;">© 2026 - NHI Security Handbook</p>
+</div>
+
+</body>
+</html>

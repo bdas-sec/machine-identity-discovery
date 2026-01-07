@@ -9,15 +9,19 @@
 ### Issue: Containers Won't Start
 
 **Symptoms**:
-- `docker compose up` fails
+- `podman-compose up` or `docker compose up` fails
 - Containers exit immediately
 
 **Solutions**:
 
-1. **Check Docker resources**:
+1. **Check container runtime resources**:
 ```bash
+# For Podman
+podman info | grep -E "CPUs|MemTotal"
+
+# For Docker
 docker info | grep -E "CPUs|Memory"
-# Ensure at least 6GB RAM allocated to Docker
+# Ensure at least 6GB RAM available
 ```
 
 2. **Check vm.max_map_count**:
@@ -27,19 +31,26 @@ sysctl vm.max_map_count
 
 # Fix:
 sudo sysctl -w vm.max_map_count=262144
+# Make permanent:
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 ```
 
 3. **Check port conflicts**:
 ```bash
-sudo lsof -i :443
+sudo lsof -i :8443
 sudo lsof -i :9200
 sudo lsof -i :55000
 
-# Stop conflicting services or change ports in .env
+# Stop conflicting services or modify ports in docker-compose.yml
 ```
 
 4. **Check container logs**:
 ```bash
+# For Podman
+podman logs wazuh-indexer
+podman logs wazuh-manager
+
+# For Docker
 docker compose logs wazuh-indexer
 docker compose logs wazuh-manager
 ```
@@ -57,21 +68,23 @@ docker compose logs wazuh-manager
 1. **Regenerate certificates**:
 ```bash
 # Remove existing certs
-rm -rf wazuh/certs/wazuh-certificates/
+rm -rf wazuh/certs/*.pem wazuh/certs/*.key
 
-# Regenerate
+# Regenerate (Podman)
+podman-compose -f wazuh/certs/generate-certs.yml run --rm generator
+# Or (Docker)
 docker compose -f wazuh/certs/generate-certs.yml run --rm generator
 ```
 
 2. **Check certificate permissions**:
 ```bash
-ls -la wazuh/certs/wazuh-certificates/
-# Should be readable
+ls -la wazuh/certs/
+# Should be readable by container user
 ```
 
 3. **Verify certificate content**:
 ```bash
-openssl x509 -in wazuh/certs/wazuh-certificates/wazuh.manager.pem -text -noout
+openssl x509 -in wazuh/certs/wazuh.manager.pem -text -noout
 ```
 
 ---
@@ -88,28 +101,82 @@ openssl x509 -in wazuh/certs/wazuh-certificates/wazuh.manager.pem -text -noout
 
 1. **Check network connectivity**:
 ```bash
-docker exec cloud-workload ping wazuh-manager
-docker exec cloud-workload nc -zv wazuh-manager 1514
-docker exec cloud-workload nc -zv wazuh-manager 1515
+podman exec cloud-workload ping wazuh-manager
+podman exec cloud-workload nc -zv wazuh-manager 1514
+podman exec cloud-workload nc -zv wazuh-manager 1515
 ```
 
 2. **Check registration password**:
 ```bash
 # On manager
-docker exec wazuh-manager cat /var/ossec/etc/authd.pass
+podman exec wazuh-manager cat /var/ossec/etc/authd.pass
 
 # Should match AGENT_REGISTRATION_PASSWORD in .env
 ```
 
 3. **Check agent logs**:
 ```bash
-docker exec cloud-workload cat /var/ossec/logs/ossec.log | tail -50
+podman exec cloud-workload cat /var/ossec/logs/ossec.log | tail -50
 ```
 
 4. **Re-register agent**:
 ```bash
-docker exec cloud-workload /var/ossec/bin/agent-auth -m wazuh-manager
-docker exec cloud-workload /var/ossec/bin/wazuh-control restart
+podman exec cloud-workload /var/ossec/bin/agent-auth -m wazuh-manager
+podman exec cloud-workload /var/ossec/bin/wazuh-control restart
+```
+
+### Issue: Invalid Group Error During Enrollment
+
+**Symptoms**:
+- Agent logs show "Invalid group" error
+- Agent fails to enroll with `ERROR: UNABLE TO FIND GROUPS`
+
+**Solutions**:
+
+Agent groups must exist on the Wazuh manager before agents can enroll with those groups.
+
+1. **Create required groups via API**:
+```bash
+# Get API token
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
+# Create all required groups
+for group in cloud cicd runner ephemeral vulnerable demo ubuntu production; do
+  curl -sk -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -X POST "https://localhost:55000/groups" \
+    -d "{\"group_id\": \"$group\"}"
+done
+```
+
+2. **Restart agent containers to re-enroll**:
+```bash
+podman restart cloud-workload vulnerable-app cicd-runner
+```
+
+3. **Use the health check script with fix**:
+```bash
+python .claude/skills/nhi-assistant/scripts/health_check.py --fix
+```
+
+### Issue: ossec.conf Permission Denied
+
+**Symptoms**:
+- Agent logs show permission errors for ossec.conf
+- Agent fails to start
+
+**Solutions**:
+
+1. **Fix file ownership inside container**:
+```bash
+podman exec cloud-workload chown root:wazuh /var/ossec/etc/ossec.conf
+podman exec cloud-workload chmod 640 /var/ossec/etc/ossec.conf
+```
+
+2. **Restart agent**:
+```bash
+podman restart cloud-workload
 ```
 
 ---
@@ -124,22 +191,22 @@ docker exec cloud-workload /var/ossec/bin/wazuh-control restart
 
 1. **Verify ossec.conf log collection**:
 ```bash
-docker exec cloud-workload cat /var/ossec/etc/ossec.conf | grep -A5 localfile
+podman exec cloud-workload cat /var/ossec/etc/ossec.conf | grep -A5 localfile
 ```
 
 2. **Check if log files exist**:
 ```bash
-docker exec cloud-workload ls -la /var/log/
+podman exec cloud-workload ls -la /var/log/
 ```
 
 3. **Generate test event**:
 ```bash
-docker exec cloud-workload logger "TEST: This is a test event"
+podman exec cloud-workload logger "TEST: This is a test event"
 ```
 
 4. **Check agent buffer**:
 ```bash
-docker exec cloud-workload cat /var/ossec/var/run/.agent_info
+podman exec cloud-workload cat /var/ossec/var/run/.agent_info
 ```
 
 ---
@@ -156,7 +223,7 @@ docker exec cloud-workload cat /var/ossec/var/run/.agent_info
 
 1. **Test rule manually**:
 ```bash
-docker exec -it wazuh-manager /var/ossec/bin/wazuh-logtest
+podman exec -it wazuh-manager /var/ossec/bin/wazuh-logtest
 
 # Paste the log that should trigger the rule
 # Example:
@@ -165,19 +232,19 @@ Jan  5 12:00:00 cloud-workload app: ACCESS 169.254.169.254
 
 2. **Check rule syntax**:
 ```bash
-docker exec wazuh-manager /var/ossec/bin/wazuh-control status
+podman exec wazuh-manager /var/ossec/bin/wazuh-control status
 # Look for rule loading errors
 ```
 
 3. **Verify rule is loaded**:
 ```bash
-docker exec wazuh-manager ls -la /var/ossec/ruleset/rules/
-docker exec wazuh-manager grep "100650" /var/ossec/ruleset/rules/*.xml
+podman exec wazuh-manager ls -la /var/ossec/ruleset/rules/
+podman exec wazuh-manager grep "100650" /var/ossec/ruleset/rules/*.xml
 ```
 
 4. **Reload rules**:
 ```bash
-docker exec wazuh-manager /var/ossec/bin/wazuh-control reload
+podman exec wazuh-manager /var/ossec/bin/wazuh-control reload
 ```
 
 ---
@@ -228,7 +295,7 @@ docker exec wazuh-manager /var/ossec/bin/wazuh-control reload
 
 1. **Check container memory**:
 ```bash
-docker stats --no-stream
+podman stats --no-stream  # or: docker stats --no-stream
 ```
 
 2. **Set memory limits in docker-compose.yml**:
@@ -244,8 +311,9 @@ services:
 3. **Reduce indexer memory**:
 ```bash
 # In indexer container
-echo "-Xms512m" > /etc/opensearch/jvm.options.d/memory.options
-echo "-Xmx512m" >> /etc/opensearch/jvm.options.d/memory.options
+podman exec wazuh-indexer bash -c 'echo "-Xms512m" > /etc/opensearch/jvm.options.d/memory.options'
+podman exec wazuh-indexer bash -c 'echo "-Xmx512m" >> /etc/opensearch/jvm.options.d/memory.options'
+podman restart wazuh-indexer
 ```
 
 ---
@@ -260,16 +328,16 @@ echo "-Xmx512m" >> /etc/opensearch/jvm.options.d/memory.options
 
 1. **Check indexer health**:
 ```bash
-curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health?pretty
+curl -k -u admin:admin https://localhost:9200/_cluster/health?pretty
 ```
 
 2. **Clear old indices**:
 ```bash
 # List indices
-curl -k -u admin:SecretPassword https://localhost:9200/_cat/indices
+curl -k -u admin:admin https://localhost:9200/_cat/indices
 
 # Delete old indices
-curl -k -u admin:SecretPassword -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
+curl -k -u admin:admin -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
 ```
 
 3. **Optimize queries**:
@@ -292,21 +360,26 @@ curl -k -u admin:SecretPassword -X DELETE https://localhost:9200/wazuh-alerts-4.
 1. **Check prerequisites**:
 ```bash
 # Verify containers are running
-docker compose ps
+podman ps  # or: docker compose ps
 
 # Check network
-docker exec cloud-workload curl http://mock-imds:1338/
+podman exec cloud-workload curl http://mock-imds:1338/
 ```
 
 2. **Run with verbose output**:
 ```bash
-python src/scenario-runner/runner.py --run S2-01 --verbose
+python .claude/skills/nhi-assistant/scripts/run_demo.py --scenario s2-01 --verbose
 ```
 
 3. **Check action targets**:
 ```bash
 # Verify endpoints are reachable
 curl http://localhost:1338/latest/meta-data/
+```
+
+4. **Run health check first**:
+```bash
+python .claude/skills/nhi-assistant/scripts/health_check.py
 ```
 
 ---
@@ -319,10 +392,9 @@ curl http://localhost:1338/latest/meta-data/
 
 **Solutions**:
 
-1. **Increase wait time**:
-```python
-# In runner.py, increase sleep before validation
-time.sleep(5)  # Was 2
+1. **Increase wait time** (add delay between scenarios):
+```bash
+python .claude/skills/nhi-assistant/scripts/run_demo.py --all --delay 5.0
 ```
 
 2. **Check Wazuh API**:
@@ -330,9 +402,13 @@ time.sleep(5)  # Was 2
 curl -k -u wazuh-wui:MyS3cr3tP@ssw0rd https://localhost:55000/
 ```
 
-3. **Skip validation for testing**:
+3. **Check alerts via API**:
 ```bash
-python src/scenario-runner/runner.py --run S2-01 --no-validate
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
+curl -sk -H "Authorization: Bearer $TOKEN" \
+  "https://localhost:55000/security/events?limit=10&q=rule.groups:nhi"
 ```
 
 ---
@@ -373,27 +449,38 @@ services:
 
 ## Getting Help
 
+### Quick Health Check
+
+```bash
+# Run the automated health check
+python .claude/skills/nhi-assistant/scripts/health_check.py
+
+# Run with auto-fix for common issues
+python .claude/skills/nhi-assistant/scripts/health_check.py --fix
+```
+
 ### Debug Information to Collect
 
 ```bash
 # System info
 uname -a
-docker --version
-docker compose version
+podman --version  # or: docker --version
+podman-compose --version  # or: docker compose version
 
 # Container status
-docker compose ps
-docker compose logs > debug-logs.txt
+podman ps -a
+podman logs wazuh-manager > debug-logs.txt 2>&1
+podman logs wazuh-indexer >> debug-logs.txt 2>&1
 
 # Agent status
-docker exec wazuh-manager /var/ossec/bin/agent_control -l
+podman exec wazuh-manager /var/ossec/bin/agent_control -l
 
 # Rule check
-docker exec wazuh-manager /var/ossec/bin/wazuh-logtest < test.log
+podman exec wazuh-manager /var/ossec/bin/wazuh-logtest < test.log
 
 # Network check
-docker network ls
-docker network inspect machine-identity-discovery_cloud_net
+podman network ls
+podman network inspect nhi_cloud_net
 ```
 
 ### Resources
@@ -401,6 +488,7 @@ docker network inspect machine-identity-discovery_cloud_net
 - **Wazuh Documentation**: https://documentation.wazuh.com/
 - **GitHub Issues**: https://github.com/RUDRA-Cybersecurity/machine-identity-discovery/issues
 - **Wazuh Slack**: https://wazuh.com/community/join-us-on-slack/
+- **NHI Assistant Skill**: `.claude/skills/nhi-assistant/`
 
 ### Reporting Issues
 
@@ -408,4 +496,5 @@ When reporting issues, include:
 1. Steps to reproduce
 2. Expected vs actual behavior
 3. Debug information (above)
-4. Docker and OS versions
+4. Container runtime and OS versions
+5. Health check output

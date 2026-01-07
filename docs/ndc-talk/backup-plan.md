@@ -48,7 +48,9 @@ docker restart wazuh-dashboard
 
 ```bash
 # Show alerts via API (in terminal)
-curl -k -u admin:SecretPassword \
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?limit=5" | jq '.data.affected_items[] | {rule: .rule.id, desc: .rule.description}'
 ```
 
