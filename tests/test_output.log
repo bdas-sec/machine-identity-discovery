@@ -1,0 +1,175 @@
+FFFsss......FFF....F..F...FFFFFFFF.....F....                             [100%]
+=================================== FAILURES ===================================
+__________________ TestAgentEnrollment.test_agents_registered __________________
+tests/smoke/test_agent_enrollment.py:28: in test_agents_registered
+    assert expected in agent_names, \
+E   AssertionError: Agent cloud-workload not registered. Found: []
+E   assert 'cloud-workload' in []
+_________________ TestAgentEnrollment.test_minimum_agent_count _________________
+tests/smoke/test_agent_enrollment.py:35: in test_minimum_agent_count
+    assert len(agents) >= 3, \
+E   AssertionError: Expected at least 3 agents, found 0
+E   assert 0 >= 3
+E    +  where 0 = len([])
+______________________ TestAgentStatus.test_agents_active ______________________
+tests/smoke/test_agent_enrollment.py:48: in test_agents_active
+    assert len(active_agents) >= 1, \
+E   AssertionError: No active agents found
+E   assert 0 >= 1
+E    +  where 0 = len([])
+______________ TestDockerContainers.test_container_health_status _______________
+tests/smoke/test_docker_infrastructure.py:58: in test_container_health_status
+    assert status == "running", \
+E   AssertionError: Container wazuh.manager status is None, expected running
+E   assert None == 'running'
+_______________ TestDockerContainers.test_wazuh_manager_healthy ________________
+tests/smoke/test_docker_infrastructure.py:64: in test_wazuh_manager_healthy
+    assert status == "running", f"Wazuh manager status: {status}"
+E   AssertionError: Wazuh manager status: None
+E   assert None == 'running'
+_______________ TestDockerContainers.test_wazuh_indexer_healthy ________________
+tests/smoke/test_docker_infrastructure.py:69: in test_wazuh_indexer_healthy
+    assert status == "running", f"Wazuh indexer status: {status}"
+E   AssertionError: Wazuh indexer status: None
+E   assert None == 'running'
+____ TestContainerConnectivity.test_cloud_workload_can_reach_vulnerable_app ____
+tests/smoke/test_docker_infrastructure.py:118: in test_cloud_workload_can_reach_vulnerable_app
+    assert can_reach, "cloud-workload cannot reach vulnerable-app:8080"
+E   AssertionError: cloud-workload cannot reach vulnerable-app:8080
+E   assert False
+__________ TestContainerConnectivity.test_wazuh_internal_connectivity __________
+tests/smoke/test_docker_infrastructure.py:139: in test_wazuh_internal_connectivity
+    assert can_reach, "Wazuh manager cannot reach indexer:9200"
+E   AssertionError: Wazuh manager cannot reach indexer:9200
+E   assert False
+__________________ TestWazuhAPIHealth.test_wazuh_api_responds __________________
+tests/smoke/test_service_health.py:21: in test_wazuh_api_responds
+    assert wazuh_client.is_available(), \
+E   AssertionError: Wazuh API is not available
+E   assert False
+E    +  where False = is_available()
+E    +    where is_available = <helpers.wazuh_client.WazuhTestClient object at 0x7fc6f99ffad0>.is_available
+_______________ TestWazuhAPIHealth.test_wazuh_api_authentication _______________
+tests/smoke/test_service_health.py:26: in test_wazuh_api_authentication
+    assert wazuh_client.authenticate(), \
+E   AssertionError: Wazuh API authentication failed
+E   assert False
+E    +  where False = authenticate()
+E    +    where authenticate = <helpers.wazuh_client.WazuhTestClient object at 0x7fc6f99ffad0>.authenticate
+__________________ TestWazuhAPIHealth.test_wazuh_manager_info __________________
+tests/smoke/test_service_health.py:32: in test_wazuh_manager_info
+    assert info is not None, "Could not get Wazuh manager info"
+E   AssertionError: Could not get Wazuh manager info
+E   assert None is not None
+_________________ TestWazuhAPIHealth.test_wazuh_manager_status _________________
+tests/smoke/test_service_health.py:37: in test_wazuh_manager_status
+    assert status, "Could not get manager status"
+E   AssertionError: Could not get manager status
+E   assert {}
+_________________ TestWazuhIndexerHealth.test_indexer_healthy __________________
+tests/smoke/test_service_health.py:46: in test_indexer_healthy
+    assert wazuh_indexer_client.is_healthy(), \
+E   AssertionError: Wazuh Indexer is not healthy
+E   assert False
+E    +  where False = is_healthy()
+E    +    where is_healthy = <helpers.wazuh_client.WazuhIndexerClient object at 0x7fc6f9038a10>.is_healthy
+______________ TestWazuhIndexerHealth.test_indexer_cluster_health ______________
+tests/smoke/test_service_health.py:52: in test_indexer_cluster_health
+    assert health.get("status") in ["green", "yellow"], \
+E   AssertionError: Cluster health is None, expected green or yellow
+E   assert None in ['green', 'yellow']
+E    +  where None = <built-in method get of dict object at 0x7fc6f8144500>('status')
+E    +    where <built-in method get of dict object at 0x7fc6f8144500> = {}.get
+_______________ TestWazuhIndexerHealth.test_indexer_has_indices ________________
+tests/smoke/test_service_health.py:58: in test_indexer_has_indices
+    assert len(indices) > 0, "No indices found in Wazuh Indexer"
+E   AssertionError: No indices found in Wazuh Indexer
+E   assert 0 > 0
+E    +  where 0 = len([])
+_______________ TestWazuhDashboardHealth.test_dashboard_responds _______________
+.venv/lib/python3.11/site-packages/urllib3/connection.py:204: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.11/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.11/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:488: in _make_request
+    raise new_e
+.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:464: in _make_request
+    self._validate_conn(conn)
+.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:1093: in _validate_conn
+    conn.connect()
+.venv/lib/python3.11/site-packages/urllib3/connection.py:759: in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/urllib3/connection.py:219: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: HTTPSConnection(host='localhost', port=443): Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.11/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.11/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='localhost', port=443): Max retries exceeded with url: / (Caused by NewConnectionError("HTTPSConnection(host='localhost', port=443): Failed to establish a new connection: [Errno 111] Connection refused"))
+
+During handling of the above exception, another exception occurred:
+tests/smoke/test_service_health.py:68: in test_dashboard_responds
+    response = requests.get(
+.venv/lib/python3.11/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/requests/adapters.py:677: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPSConnectionPool(host='localhost', port=443): Max retries exceeded with url: / (Caused by NewConnectionError("HTTPSConnection(host='localhost', port=443): Failed to establish a new connection: [Errno 111] Connection refused"))
+
+During handling of the above exception, another exception occurred:
+tests/smoke/test_service_health.py:78: in test_dashboard_responds
+    pytest.fail("Wazuh Dashboard is not responding")
+E   Failed: Wazuh Dashboard is not responding
+__________________ TestVulnerableAppHealth.test_app_responds ___________________
+tests/smoke/test_service_health.py:123: in test_app_responds
+    assert vulnerable_app_client.is_available(), \
+E   AssertionError: Vulnerable App is not available
+E   assert False
+E    +  where False = is_available()
+E    +    where is_available = <helpers.http_client.TestHttpClient object at 0x7fc6f8989e50>.is_available
+=========================== short test summary info ============================
+SKIPPED [1] tests/smoke/test_agent_enrollment.py:59: cloud-workload agent not found
+SKIPPED [1] tests/smoke/test_agent_enrollment.py:69: vulnerable-app agent not found
+SKIPPED [1] tests/smoke/test_agent_enrollment.py:79: cicd-runner agent not found
+FAILED tests/smoke/test_agent_enrollment.py::TestAgentEnrollment::test_agents_registered
+FAILED tests/smoke/test_agent_enrollment.py::TestAgentEnrollment::test_minimum_agent_count
+FAILED tests/smoke/test_agent_enrollment.py::TestAgentStatus::test_agents_active
+FAILED tests/smoke/test_docker_infrastructure.py::TestDockerContainers::test_container_health_status
+FAILED tests/smoke/test_docker_infrastructure.py::TestDockerContainers::test_wazuh_manager_healthy
+FAILED tests/smoke/test_docker_infrastructure.py::TestDockerContainers::test_wazuh_indexer_healthy
+FAILED tests/smoke/test_docker_infrastructure.py::TestContainerConnectivity::test_cloud_workload_can_reach_vulnerable_app
+FAILED tests/smoke/test_docker_infrastructure.py::TestContainerConnectivity::test_wazuh_internal_connectivity
+FAILED tests/smoke/test_service_health.py::TestWazuhAPIHealth::test_wazuh_api_responds
+FAILED tests/smoke/test_service_health.py::TestWazuhAPIHealth::test_wazuh_api_authentication
+FAILED tests/smoke/test_service_health.py::TestWazuhAPIHealth::test_wazuh_manager_info
+FAILED tests/smoke/test_service_health.py::TestWazuhAPIHealth::test_wazuh_manager_status
+FAILED tests/smoke/test_service_health.py::TestWazuhIndexerHealth::test_indexer_healthy
+FAILED tests/smoke/test_service_health.py::TestWazuhIndexerHealth::test_indexer_cluster_health
+FAILED tests/smoke/test_service_health.py::TestWazuhIndexerHealth::test_indexer_has_indices
+FAILED tests/smoke/test_service_health.py::TestWazuhDashboardHealth::test_dashboard_responds
+FAILED tests/smoke/test_service_health.py::TestVulnerableAppHealth::test_app_responds
+17 failed, 24 passed, 3 skipped, 204 deselected in 25.92s

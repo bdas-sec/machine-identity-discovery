@@ -17,7 +17,7 @@ The Machine Identity Security Testbed provides a containerized environment for d
 │  │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │ │ │
 │  │  │  │   Wazuh     │  │   Wazuh     │  │   Wazuh     │              │ │ │
 │  │  │  │   Manager   │  │   Indexer   │  │  Dashboard  │              │ │ │
-│  │  │  │  :55000     │  │   :9200     │  │    :443     │              │ │ │
+│  │  │  │  :55000     │  │   :9200     │  │   :8443     │              │ │ │
 │  │  │  │ 172.40.0.11 │  │ 172.40.0.10 │  │ 172.40.0.12 │              │ │ │
 │  │  │  └──────┬──────┘  └─────────────┘  └─────────────┘              │ │ │
 │  │  │         │                                                        │ │ │
@@ -119,7 +119,7 @@ The Machine Identity Security Testbed provides a containerized environment for d
 
 #### Wazuh Dashboard
 - **Image**: `wazuh/wazuh-dashboard:4.9.2`
-- **Port**: 443/TCP (HTTPS)
+- **Port**: 8443/TCP (HTTPS) - for rootless Podman compatibility
 - **Responsibilities**:
   - Web interface
   - Visualization
@@ -200,7 +200,7 @@ Each agent container includes:
 ## Security Boundaries
 
 ### Isolation
-- Each network is isolated via Docker networks
+- Each network is isolated via container networks (Podman/Docker)
 - Agents cannot directly access Wazuh internals
 - Mock services only accessible within their networks
 

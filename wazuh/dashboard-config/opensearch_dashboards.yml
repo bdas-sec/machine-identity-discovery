@@ -1,0 +1,18 @@
+# Wazuh Dashboard Configuration
+# OpenSearch Dashboards configuration for NHI Security Testbed
+
+server.host: "0.0.0.0"
+server.port: 5601
+server.ssl.enabled: true
+server.ssl.certificate: /etc/wazuh-dashboard/certs/dashboard.pem
+server.ssl.key: /etc/wazuh-dashboard/certs/dashboard-key.pem
+
+# OpenSearch connection - explicitly set to avoid localhost fallback
+opensearch.hosts: ["https://wazuh.indexer:9200"]
+opensearch.ssl.verificationMode: certificate
+opensearch.ssl.certificateAuthorities: ["/etc/wazuh-dashboard/certs/root-ca.pem"]
+opensearch.username: "kibanaserver"
+opensearch.password: "kibanaserver"
+
+# Request timeout
+opensearch.requestTimeout: 30000

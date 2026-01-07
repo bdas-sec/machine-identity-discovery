@@ -5,38 +5,14 @@ nodes:
   # Wazuh indexer nodes
   indexer:
     - name: wazuh.indexer
-      ip:
-        - 172.40.0.12
-        - localhost
-        - 127.0.0.1
-      dns:
-        - wazuh.indexer
-        - wazuh-indexer
-        - localhost
+      ip: 127.0.0.1
 
   # Wazuh server nodes
   server:
     - name: wazuh.manager
-      ip:
-        - 172.40.0.11
-        - 172.41.0.254
-        - 172.42.0.254
-        - 172.43.0.254
-        - localhost
-        - 127.0.0.1
-      dns:
-        - wazuh.manager
-        - wazuh-manager
-        - localhost
+      ip: 127.0.0.1
 
   # Wazuh dashboard nodes
   dashboard:
     - name: wazuh.dashboard
-      ip:
-        - 172.40.0.10
-        - localhost
-        - 127.0.0.1
-      dns:
-        - wazuh.dashboard
-        - wazuh-dashboard
-        - localhost
+      ip: 127.0.0.1

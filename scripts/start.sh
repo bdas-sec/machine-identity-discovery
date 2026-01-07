@@ -15,6 +15,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+BACKUP_DIR="$PROJECT_DIR/.testbed-backup"
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,6 +23,21 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Detect container runtime
+if command -v podman-compose &> /dev/null; then
+    COMPOSE_CMD="podman-compose"
+    RUNTIME="podman"
+elif command -v podman &> /dev/null && command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+    RUNTIME="podman"
+elif command -v docker &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+    RUNTIME="docker"
+else
+    echo -e "${RED}ERROR: No container runtime found${NC}"
+    exit 1
+fi
 
 echo -e "${BLUE}"
 echo "=========================================="
@@ -61,23 +77,16 @@ done
 
 # Check prerequisites
 check_prerequisites() {
-    echo -e "${YELLOW}[1/6] Checking prerequisites...${NC}"
+    echo -e "${YELLOW}[1/9] Checking prerequisites...${NC}"
 
-    # Check Docker
-    if ! command -v docker &> /dev/null; then
-        echo -e "${RED}ERROR: Docker is not installed${NC}"
-        echo "Install Docker: https://docs.docker.com/get-docker/"
-        exit 1
+    # Check container runtime
+    if [ "$RUNTIME" = "podman" ]; then
+        echo "  [+] Podman: $(podman --version | cut -d' ' -f3)"
+        echo "  [+] Compose: $COMPOSE_CMD"
+    else
+        echo "  [+] Docker: $(docker --version | cut -d' ' -f3)"
+        echo "  [+] Docker Compose: $(docker compose version --short 2>/dev/null || echo 'v2')"
     fi
-    echo "  [+] Docker: $(docker --version | cut -d' ' -f3)"
-
-    # Check Docker Compose
-    if ! docker compose version &> /dev/null; then
-        echo -e "${RED}ERROR: Docker Compose is not available${NC}"
-        echo "Docker Compose V2 is required"
-        exit 1
-    fi
-    echo "  [+] Docker Compose: $(docker compose version --short)"
 
     # Check vm.max_map_count for OpenSearch
     MAX_MAP_COUNT=$(sysctl -n vm.max_map_count 2>/dev/null || echo "0")
@@ -106,29 +115,54 @@ check_prerequisites() {
 
 # Create .env if not exists
 setup_env() {
-    echo -e "${YELLOW}[2/6] Setting up environment...${NC}"
+    echo -e "${YELLOW}[2/9] Setting up environment...${NC}"
 
     if [ ! -f "$PROJECT_DIR/.env" ]; then
         if [ -f "$PROJECT_DIR/.env.example" ]; then
             cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
             echo "  [+] Created .env from .env.example"
         else
-            echo -e "${RED}  ERROR: .env.example not found${NC}"
-            exit 1
+            echo -e "${YELLOW}  [!] No .env.example found, using defaults${NC}"
         fi
     else
         echo "  [+] Using existing .env file"
     fi
 }
 
+# Fix certificate permissions (needed for Podman rootless)
+fix_cert_permissions() {
+    echo -e "${YELLOW}[3/9] Fixing certificate permissions...${NC}"
+
+    CERTS_DIR="$PROJECT_DIR/wazuh/certs"
+
+    # Check if certs directory has restricted permissions (from previous podman runs)
+    if [ ! -r "$CERTS_DIR" ] 2>/dev/null; then
+        echo "  [*] Fixing certificate directory permissions..."
+        if [ "$RUNTIME" = "podman" ]; then
+            podman unshare chown -R 0:0 "$CERTS_DIR" 2>/dev/null || true
+        fi
+        chmod -R 755 "$CERTS_DIR" 2>/dev/null || true
+    fi
+
+    # Ensure all cert files are readable
+    if [ -d "$CERTS_DIR" ]; then
+        find "$CERTS_DIR" -name "*.pem" -exec chmod 644 {} \; 2>/dev/null || true
+        find "$CERTS_DIR" -name "*.key" -exec chmod 644 {} \; 2>/dev/null || true
+    fi
+
+    echo -e "${GREEN}  [+] Certificate permissions OK${NC}"
+}
+
 # Generate certificates
 generate_certs() {
-    echo -e "${YELLOW}[3/6] Checking SSL certificates...${NC}"
+    echo -e "${YELLOW}[4/9] Checking SSL certificates...${NC}"
 
     if [ ! -f "$PROJECT_DIR/wazuh/certs/root-ca.pem" ]; then
         echo "  [*] Generating SSL certificates..."
         cd "$PROJECT_DIR/wazuh/certs"
-        docker compose -f generate-certs.yml run --rm generator
+        $COMPOSE_CMD -f generate-certs.yml run --rm generator 2>/dev/null || {
+            echo -e "${YELLOW}  [!] Certificate generator not available, using existing certs${NC}"
+        }
         echo -e "${GREEN}  [+] Certificates generated${NC}"
     else
         echo "  [+] Certificates already exist"
@@ -137,15 +171,15 @@ generate_certs() {
 
 # Build images
 build_images() {
-    echo -e "${YELLOW}[4/6] Building custom images...${NC}"
+    echo -e "${YELLOW}[5/9] Building custom images...${NC}"
 
     cd "$PROJECT_DIR"
 
     if [ -n "$BUILD_FLAG" ]; then
         echo "  [*] Force rebuilding all images..."
-        docker compose $PROFILE build --no-cache
+        $COMPOSE_CMD $PROFILE build --no-cache 2>/dev/null || $COMPOSE_CMD build --no-cache
     else
-        docker compose $PROFILE build
+        $COMPOSE_CMD $PROFILE build 2>/dev/null || $COMPOSE_CMD build
     fi
 
     echo -e "${GREEN}  [+] Images built${NC}"
@@ -153,55 +187,158 @@ build_images() {
 
 # Start services
 start_services() {
-    echo -e "${YELLOW}[5/6] Starting services...${NC}"
+    echo -e "${YELLOW}[6/9] Starting services...${NC}"
 
     cd "$PROJECT_DIR"
-    docker compose $PROFILE up -d
+    $COMPOSE_CMD $PROFILE up -d 2>/dev/null || $COMPOSE_CMD up -d
 
     echo -e "${GREEN}  [+] Services started${NC}"
 }
 
-# Wait for services
+# Initialize Wazuh Indexer security (required on first run)
+initialize_indexer_security() {
+    echo -e "${YELLOW}[7/9] Initializing indexer security...${NC}"
+
+    # Wait for indexer to be ready (but not necessarily healthy - it needs security init first)
+    echo -n "  [*] Waiting for indexer to start"
+    RETRIES=0
+    MAX_RETRIES=30
+    until $RUNTIME exec wazuh-indexer curl -sk https://localhost:9200/ 2>/dev/null | grep -q "OpenSearch"; do
+        echo -n "."
+        sleep 3
+        RETRIES=$((RETRIES + 1))
+        if [ $RETRIES -ge $MAX_RETRIES ]; then
+            echo -e " ${YELLOW}TIMEOUT${NC}"
+            echo -e "  ${YELLOW}[!] Indexer may need manual intervention${NC}"
+            return
+        fi
+    done
+    echo -e " ${GREEN}OK${NC}"
+
+    # Check if security is already initialized
+    if curl -sk -u admin:admin https://localhost:9200/_cluster/health 2>/dev/null | grep -qE '(green|yellow)'; then
+        echo -e "  ${GREEN}[+] Security already initialized${NC}"
+        return
+    fi
+
+    # Initialize security
+    echo "  [*] Running security initialization..."
+    $RUNTIME exec wazuh-indexer bash -c "JAVA_HOME=/usr/share/wazuh-indexer/jdk /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
+        -cd /usr/share/wazuh-indexer/opensearch-security/ \
+        -icl -nhnv \
+        -cacert /usr/share/wazuh-indexer/certs/root-ca.pem \
+        -cert /usr/share/wazuh-indexer/certs/admin.pem \
+        -key /usr/share/wazuh-indexer/certs/admin-key.pem \
+        -h localhost" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        echo -e "  ${GREEN}[+] Security initialized successfully${NC}"
+    else
+        echo -e "  ${YELLOW}[!] Security initialization may have issues${NC}"
+    fi
+}
+
+# Create agent groups (must be done before agents try to enroll)
+create_agent_groups() {
+    echo "  [*] Creating agent groups..."
+
+    # Required groups for agents
+    REQUIRED_GROUPS="cloud cicd runner ephemeral vulnerable demo ubuntu production"
+
+    # Get auth token
+    TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+        "https://localhost:55000/security/user/authenticate?raw=true" 2>/dev/null)
+
+    if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+        echo -e "  ${YELLOW}[!] Could not authenticate to Wazuh API${NC}"
+        return 1
+    fi
+
+    # Create required groups
+    CREATED=0
+    for group in $REQUIRED_GROUPS; do
+        RESULT=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+            -X POST "https://localhost:55000/groups" \
+            -H "Content-Type: application/json" \
+            -d "{\"group_id\": \"$group\"}" 2>/dev/null)
+
+        if echo "$RESULT" | grep -q "created"; then
+            CREATED=$((CREATED + 1))
+        fi
+    done
+
+    if [ $CREATED -gt 0 ]; then
+        echo -e "  ${GREEN}[+] Created $CREATED agent groups${NC}"
+    else
+        echo -e "  ${GREEN}[+] All agent groups already exist${NC}"
+    fi
+
+    return 0
+}
+
+# Restart agent containers to re-enroll with groups
+restart_agents() {
+    echo "  [*] Restarting agents to re-enroll..."
+
+    # Restart all agent containers
+    $RUNTIME restart cloud-workload vulnerable-app cicd-runner 2>/dev/null || true
+
+    # Wait a moment for agents to start enrolling
+    sleep 5
+
+    echo -e "  ${GREEN}[+] Agents restarted${NC}"
+}
+
+# Wait for services to be healthy
 wait_for_services() {
-    echo -e "${YELLOW}[6/6] Waiting for services to be healthy...${NC}"
+    echo -e "${YELLOW}[8/9] Waiting for services to be healthy...${NC}"
 
     # Wait for Wazuh Indexer
     echo -n "  [*] Wazuh Indexer"
     RETRIES=0
     MAX_RETRIES=60
-    until curl -sk https://localhost:9200/_cluster/health 2>/dev/null | grep -qE '(green|yellow)'; do
+    until curl -sk -u admin:admin https://localhost:9200/_cluster/health 2>/dev/null | grep -qE '(green|yellow)'; do
         echo -n "."
         sleep 5
         RETRIES=$((RETRIES + 1))
         if [ $RETRIES -ge $MAX_RETRIES ]; then
             echo -e " ${RED}TIMEOUT${NC}"
             echo -e "${RED}  ERROR: Wazuh Indexer failed to start${NC}"
-            docker compose logs wazuh.indexer | tail -20
+            $COMPOSE_CMD logs wazuh.indexer 2>/dev/null | tail -20
             exit 1
         fi
     done
     echo -e " ${GREEN}OK${NC}"
 
-    # Wait for Wazuh Manager
+    # Wait for Wazuh Manager API
     echo -n "  [*] Wazuh Manager"
     RETRIES=0
-    until curl -sk https://localhost:55000/ 2>/dev/null | grep -q "Wazuh"; do
+    MAX_RETRIES=30  # Reduce timeout for manager check
+    until curl -sk https://localhost:55000/ 2>/dev/null | grep -qE '(Wazuh|Unauthorized|title)'; do
         echo -n "."
-        sleep 5
+        sleep 3
         RETRIES=$((RETRIES + 1))
         if [ $RETRIES -ge $MAX_RETRIES ]; then
             echo -e " ${RED}TIMEOUT${NC}"
-            echo -e "${RED}  ERROR: Wazuh Manager failed to start${NC}"
-            docker compose logs wazuh.manager | tail -20
+            echo -e "${RED}  ERROR: Wazuh Manager API failed to start${NC}"
+            $COMPOSE_CMD logs wazuh.manager 2>/dev/null | tail -20
             exit 1
         fi
     done
     echo -e " ${GREEN}OK${NC}"
 
-    # Wait for Wazuh Dashboard
+    # CRITICAL: Create agent groups IMMEDIATELY after manager is available
+    # Agents are already trying to enroll at this point, so groups must exist
+    create_agent_groups
+
+    # Restart agents to re-enroll now that groups exist
+    restart_agents
+
+    # Wait for Wazuh Dashboard (port 8443 for rootless podman)
     echo -n "  [*] Wazuh Dashboard"
     RETRIES=0
-    until curl -sk https://localhost:443/status 2>/dev/null | grep -q "available"; do
+    MAX_RETRIES=30
+    until curl -sk https://localhost:8443/status 2>/dev/null | grep -qE '(available|Unauthorized)'; do
         echo -n "."
         sleep 5
         RETRIES=$((RETRIES + 1))
@@ -230,7 +367,58 @@ wait_for_services() {
     if [ $RETRIES -lt $MAX_RETRIES ]; then
         echo -e " ${GREEN}OK${NC}"
     fi
+
+    # Wait for agents to connect
+    echo -n "  [*] Waiting for agents to connect"
+    RETRIES=0
+    MAX_RETRIES=30
+    until $RUNTIME exec wazuh-manager /var/ossec/bin/agent_control -l 2>/dev/null | grep -q "Active"; do
+        echo -n "."
+        sleep 3
+        RETRIES=$((RETRIES + 1))
+        if [ $RETRIES -ge $MAX_RETRIES ]; then
+            echo -e " ${YELLOW}TIMEOUT${NC}"
+            echo -e "  ${YELLOW}[!] Agents may need manual restart${NC}"
+            break
+        fi
+    done
+    if [ $RETRIES -lt $MAX_RETRIES ]; then
+        echo -e " ${GREEN}OK${NC}"
+        AGENT_COUNT=$($RUNTIME exec wazuh-manager /var/ossec/bin/agent_control -l 2>/dev/null | grep -c "Active" || echo "0")
+        echo -e "  ${GREEN}[+] $AGENT_COUNT agents connected${NC}"
+    fi
 }
+
+# Install NHI detection rules and decoders
+install_nhi_rules() {
+    echo -e "${YELLOW}[9/9] Installing NHI detection rules...${NC}"
+
+    # Check if rules are staged
+    if ! $RUNTIME exec wazuh-manager test -f /tmp/nhi-rules/nhi-detection-rules.xml 2>/dev/null; then
+        echo -e "  ${YELLOW}[!] NHI rules not staged, skipping${NC}"
+        return
+    fi
+
+    # Copy rules and decoders to Wazuh
+    echo "  [*] Copying rules and decoders..."
+    $RUNTIME exec wazuh-manager bash -c "cp /tmp/nhi-rules/nhi-detection-rules.xml /var/ossec/etc/rules/ 2>/dev/null && \
+        cp /tmp/nhi-rules/nhi-decoders.xml /var/ossec/etc/decoders/ 2>/dev/null && \
+        chown wazuh:wazuh /var/ossec/etc/rules/nhi-detection-rules.xml 2>/dev/null && \
+        chown wazuh:wazuh /var/ossec/etc/decoders/nhi-decoders.xml 2>/dev/null"
+
+    # Reload Wazuh to pick up new rules
+    echo "  [*] Reloading Wazuh rules..."
+    $RUNTIME exec wazuh-manager /var/ossec/bin/wazuh-control reload 2>/dev/null || true
+
+    # Verify rules loaded
+    RULE_COUNT=$($RUNTIME exec wazuh-manager grep -c "rule id=\"100" /var/ossec/etc/rules/nhi-detection-rules.xml 2>/dev/null || echo "0")
+    if [ "$RULE_COUNT" -gt 0 ]; then
+        echo -e "  ${GREEN}[+] Loaded $RULE_COUNT NHI detection rules${NC}"
+    else
+        echo -e "  ${YELLOW}[!] Warning: Could not verify rules loaded${NC}"
+    fi
+}
+
 
 # Print summary
 print_summary() {
@@ -240,7 +428,7 @@ print_summary() {
     echo "==========================================${NC}"
     echo ""
     echo -e "${BLUE}Access Points:${NC}"
-    echo "  Wazuh Dashboard:  https://localhost:443"
+    echo "  Wazuh Dashboard:  https://localhost:8443"
     echo "  Wazuh API:        https://localhost:55000"
     echo "  Vault UI:         http://localhost:8200"
     echo "  Mock IMDS:        http://localhost:1338"
@@ -248,17 +436,17 @@ print_summary() {
     echo "  Vulnerable App:   http://localhost:8888"
     echo ""
     echo -e "${BLUE}Default Credentials:${NC}"
-    echo "  Dashboard:  admin / SecretPassword"
+    echo "  Dashboard:  admin / admin"
     echo "  API:        wazuh-wui / MyS3cr3tP@ssw0rd"
     echo "  Vault:      root-token-for-demo"
     echo ""
     echo -e "${BLUE}Quick Commands:${NC}"
-    echo "  View logs:     docker compose logs -f"
+    echo "  View logs:     $COMPOSE_CMD logs -f"
     echo "  Stop testbed:  ./scripts/stop.sh"
     echo "  Run scenario:  ./scripts/demo/run-scenario.sh s2-01"
     echo ""
     echo -e "${YELLOW}Connected Agents:${NC}"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -E "agent|workload|runner|node"
+    $COMPOSE_CMD ps 2>/dev/null | grep -E "workload|runner|vulnerable" || true
     echo ""
 }
 
@@ -268,10 +456,13 @@ main() {
 
     check_prerequisites
     setup_env
+    fix_cert_permissions
     generate_certs
     build_images
     start_services
-    wait_for_services
+    initialize_indexer_security
+    wait_for_services  # This now includes agent group creation and agent restart
+    install_nhi_rules
     print_summary
 }
 
