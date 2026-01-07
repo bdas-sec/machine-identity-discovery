@@ -82,8 +82,6 @@ volumes:
   filebeat_etc:
   filebeat_var:
   wazuh_indexer_data:
-  wazuh_indexer_certs:
-    external: true
 
 # ============================================
 # Services
@@ -133,7 +131,9 @@ services:
       - wazuh_wodles:/var/ossec/wodles
       - filebeat_etc:/etc/filebeat
       - filebeat_var:/var/lib/filebeat
-      # Note: Custom NHI rules can be added after initial setup via API or by copying to container
+      # Custom NHI rules and decoders - staged for copying at startup
+      - ./wazuh/rules/nhi-detection-rules.xml:/tmp/nhi-rules/nhi-detection-rules.xml:ro
+      - ./wazuh/decoders/nhi-decoders.xml:/tmp/nhi-rules/nhi-decoders.xml:ro
       # SSL certificates
       - ./wazuh/certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
       - ./wazuh/certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
@@ -195,7 +195,12 @@ services:
       compatibility.override_main_response_version: "true"
     volumes:
       - wazuh_indexer_data:/var/lib/wazuh-indexer
-      - wazuh_indexer_certs:/usr/share/wazuh-indexer/certs
+      # Mount certificates directly with expected names
+      - ./wazuh/certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/indexer.pem:ro
+      - ./wazuh/certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/indexer-key.pem:ro
+      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - ./wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - ./wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
       - ./wazuh/indexer-config/opensearch.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
     networks:
       mgmt_net:
