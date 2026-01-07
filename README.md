@@ -212,8 +212,14 @@ A Claude skill is included for testbed management:
 
 ## License
 
-Internal use - RUDRA Cybersecurity
+This project is licensed under a **Non-Commercial Use License**. You are free to use, copy, modify, and distribute this software for personal, educational, research, and security training purposes. Commercial use requires a separate license.
+
+See [LICENSE](LICENSE) for full terms.
 
 ## Author
 
-Bodhisattva Das - NDC Security Oslo 2026
+**Bodhisattva Das**
+- GitHub: [@bdas-sec](https://github.com/bdas-sec)
+- Twitter: [@bodhi_das](https://twitter.com/bodhi_das)
+
+*NDC Security Oslo 2026*
