@@ -220,6 +220,7 @@ See [LICENSE](LICENSE) for full terms.
 
 **Bodhisattva Das**
 - GitHub: [@bdas-sec](https://github.com/bdas-sec)
-- Twitter: [@bodhi_das](https://twitter.com/bodhi_das)
+- LinkedIn: [bdas1201](https://linkedin.com/in/bdas1201)
+- Twitter: [@bdas1201](https://twitter.com/bdas1201)
 
 *NDC Security Oslo 2026*
