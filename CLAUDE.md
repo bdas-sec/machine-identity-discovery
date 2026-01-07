@@ -22,7 +22,7 @@ python .claude/skills/nhi-assistant/scripts/health_check.py
 # Access Wazuh Dashboard
 # URL: https://localhost:8443
 # User: admin
-# Password: SecretPassword
+# Password: admin
 
 # Run demo scenarios
 python .claude/skills/nhi-assistant/scripts/run_demo.py --list    # List all scenarios

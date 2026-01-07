@@ -31,7 +31,7 @@ curl http://localhost:1338/latest/meta-data/
 
 # Test dashboard (open in browser)
 # https://localhost:8443
-# Login: admin / SecretPassword
+# Login: admin / admin
 ```
 
 ### 3. Prepare Browser Tabs
@@ -42,7 +42,7 @@ curl http://localhost:1338/latest/meta-data/
 ### 4. Clear Previous Alerts
 ```bash
 # Optional: Clear old alerts for clean demo
-curl -k -u admin:SecretPassword -X DELETE \
+curl -k -u admin:admin -X DELETE \
   "https://localhost:9200/wazuh-alerts-*"
 ```
 

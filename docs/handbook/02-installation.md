@@ -55,9 +55,9 @@ nano .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WAZUH_VERSION` | 4.9.2 | Wazuh stack version |
-| `INDEXER_PASSWORD` | SecretPassword | OpenSearch admin password |
+| `INDEXER_PASSWORD` | admin | OpenSearch admin password |
 | `API_PASSWORD` | MyS3cr3tP@ssw0rd | Wazuh API password |
-| `DASHBOARD_PASSWORD` | SecretPassword | Dashboard admin password |
+| `DASHBOARD_PASSWORD` | admin | Dashboard admin password |
 
 ### Step 3: Generate Certificates
 
@@ -107,7 +107,7 @@ podman ps  # or: docker compose ps
 2. Accept self-signed certificate warning
 3. Login with:
    - **Username**: admin
-   - **Password**: SecretPassword
+   - **Password**: admin
 
 ## Service Health Checks
 

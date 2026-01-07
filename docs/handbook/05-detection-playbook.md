@@ -30,14 +30,18 @@
 
 **Investigation** (10 minutes):
 ```bash
+# Get auth token for Wazuh API
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
 # View detailed alert
-curl -k -u admin:SecretPassword "https://localhost:55000/alerts?rule_id=100651"
+curl -sk -H "Authorization: Bearer $TOKEN" "https://localhost:55000/alerts?rule_id=100651"
 
 # Check source container logs
-docker logs cloud-workload | grep -i "imds\|169.254"
+podman logs cloud-workload | grep -i "imds\|169.254"
 
 # Review timeline of related events
-curl -k -u admin:SecretPassword "https://localhost:55000/alerts?agent_name=cloud-workload&limit=50"
+curl -sk -H "Authorization: Bearer $TOKEN" "https://localhost:55000/alerts?agent_name=cloud-workload&limit=50"
 ```
 
 **Response Actions**:
@@ -158,8 +162,12 @@ kubectl logs -n kube-system -l component=kube-apiserver | grep "default:default"
 ### Timeline Analysis
 
 ```bash
+# Get auth token (if not already set)
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
 # Get all alerts for an agent in time order
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?agent_name=cloud-workload&sort=-timestamp&limit=100" | \
   jq '.data.affected_items[] | {time: .timestamp, rule: .rule.id, desc: .rule.description}'
 ```
@@ -168,12 +176,12 @@ curl -k -u admin:SecretPassword \
 
 ```bash
 # Find related alerts by source IP
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?srcip=172.41.0.10" | \
   jq '.data.affected_items'
 
 # Find alerts by rule group
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?group=nhi_imds" | \
   jq '.data.affected_items'
 ```

@@ -2,6 +2,8 @@
 
 This guide documents issues encountered during testbed setup and their solutions.
 
+> **Note:** Most of these issues are now handled automatically by the `start.sh` script. This guide is provided for reference if manual intervention is needed.
+
 ## Table of Contents
 
 1. [Agent Enrollment Issues](#agent-enrollment-issues)
@@ -24,7 +26,9 @@ wazuh-authd: ERROR: Invalid group: cloud
 
 **Cause:** Agent groups must exist on the manager before agents can enroll with those groups.
 
-**Solution:**
+**Automatic Fix:** The `start.sh` script now automatically creates all required groups after the Wazuh Manager API becomes available, then restarts agent containers to re-enroll.
+
+**Manual Solution (if needed):**
 ```bash
 # Get auth token
 TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
@@ -321,7 +325,7 @@ podman-compose ps
 podman-compose logs wazuh-manager
 podman-compose logs cloud-workload
 
-# Check indexer health
+# Check indexer health (credentials: admin / admin)
 curl -sk -u admin:admin https://localhost:9200/_cluster/health
 
 # Check API health
@@ -337,4 +341,21 @@ curl -sk -H "Authorization: Bearer $TOKEN" "https://localhost:55000/agents"
 
 # Check agent logs inside container
 podman exec cloud-workload cat /var/ossec/logs/ossec.log | tail -50
+
+# Run health check script
+python .claude/skills/nhi-assistant/scripts/health_check.py
+
+# Run health check with auto-fix
+python .claude/skills/nhi-assistant/scripts/health_check.py --fix
 ```
+
+---
+
+## Credentials Reference
+
+| Service | Username | Password |
+|---------|----------|----------|
+| Dashboard | admin | admin |
+| Indexer | admin | admin |
+| Wazuh API | wazuh-wui | MyS3cr3tP@ssw0rd |
+| Vault | root | root-token-for-demo |

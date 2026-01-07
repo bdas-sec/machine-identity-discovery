@@ -71,11 +71,12 @@ Exposed Ports (localhost):
 #### Wazuh Indexer
 - **Image:** wazuh/wazuh-indexer:4.9.2
 - **Purpose:** OpenSearch-based storage for alerts and events
-- **Credentials:** admin / admin
+- **Credentials:** admin / admin (same as Dashboard)
 
 #### Wazuh Dashboard
 - **Image:** wazuh/wazuh-dashboard:4.9.2
 - **Purpose:** Web UI for viewing alerts, managing agents
+- **Credentials:** admin / admin
 - **Config:** `/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml`
 
 ### Agent Workloads
@@ -193,5 +194,14 @@ Agent Workload                Wazuh Manager              Wazuh Indexer
 
 ### API Authentication
 - JWT-based authentication
-- Default user: wazuh-wui
+- Default user: wazuh-wui / MyS3cr3tP@ssw0rd
 - Token expiry: 900 seconds
+
+### Credentials Summary
+
+| Service | Username | Password | Port |
+|---------|----------|----------|------|
+| Dashboard | admin | admin | 8443 |
+| Indexer | admin | admin | 9200 |
+| Wazuh API | wazuh-wui | MyS3cr3tP@ssw0rd | 55000 |
+| Vault | root | root-token-for-demo | 8200 |

@@ -27,7 +27,8 @@ The **Machine Identity Security Testbed** is a comprehensive environment for dem
 
 ### Credentials
 
-- **Dashboard:** admin / SecretPassword
+- **Dashboard:** admin / admin
+- **Indexer:** admin / admin
 - **API:** wazuh-wui / MyS3cr3tP@ssw0rd
 - **Vault:** root-token-for-demo
 
@@ -40,15 +41,21 @@ cd /home/bodhi/RUDRA/machine-identity-discovery
 ./scripts/start.sh
 ```
 
-The start script:
-1. Checks prerequisites (podman, vm.max_map_count, memory)
+The start script automatically handles:
+1. Checks prerequisites (podman/docker, vm.max_map_count, memory)
 2. Sets up environment from .env.example
-3. Verifies SSL certificates exist
-4. Builds custom agent images
-5. Starts all containers
-6. Waits for services to be healthy
-7. Restores agent groups from backup
-8. Prints access summary
+3. Generates SSL certificates if needed
+4. Fixes certificate permissions for rootless Podman
+5. Initializes OpenSearch security configuration
+6. Builds custom agent images
+7. Starts all containers
+8. Waits for services to be healthy (Manager, Dashboard, IMDS)
+9. **Creates agent groups via API** (cloud, cicd, runner, ephemeral, vulnerable, demo, ubuntu, production)
+10. **Restarts agent containers** so they re-enroll with groups
+11. Waits for agents to connect (verifies all 3 agents are active)
+12. Prints access summary with credentials
+
+**Note**: The start script now handles agent group creation automatically, solving the "Invalid group" enrollment issue.
 
 ### Stopping the Testbed
 

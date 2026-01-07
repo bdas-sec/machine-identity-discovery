@@ -328,16 +328,16 @@ podman restart wazuh-indexer
 
 1. **Check indexer health**:
 ```bash
-curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health?pretty
+curl -k -u admin:admin https://localhost:9200/_cluster/health?pretty
 ```
 
 2. **Clear old indices**:
 ```bash
 # List indices
-curl -k -u admin:SecretPassword https://localhost:9200/_cat/indices
+curl -k -u admin:admin https://localhost:9200/_cat/indices
 
 # Delete old indices
-curl -k -u admin:SecretPassword -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
+curl -k -u admin:admin -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
 ```
 
 3. **Optimize queries**:

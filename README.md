@@ -27,7 +27,7 @@ sudo sysctl -w vm.max_map_count=262144
 # Access Wazuh Dashboard
 # URL: https://localhost:8443
 # User: admin
-# Password: SecretPassword
+# Password: admin
 ```
 
 ## Architecture

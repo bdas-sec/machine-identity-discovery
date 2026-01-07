@@ -25,7 +25,7 @@ env:
   WAZUH_API_PASSWORD: ${{ secrets.WAZUH_API_PASSWORD || 'MyS3cr3tP4ssw0rd*!' }}
   WAZUH_INDEXER_URL: https://localhost:9200
   WAZUH_INDEXER_USER: admin
-  WAZUH_INDEXER_PASSWORD: ${{ secrets.WAZUH_INDEXER_PASSWORD || 'SecretPassword' }}
+  WAZUH_INDEXER_PASSWORD: ${{ secrets.WAZUH_INDEXER_PASSWORD || 'admin' }}
 
 jobs:
   # Unit tests - no Docker required

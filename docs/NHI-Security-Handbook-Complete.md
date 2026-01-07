@@ -233,7 +233,8 @@ The Machine Identity Security Testbed provides a containerized environment for d
 
 #### Wazuh Dashboard
 - **Image**: `wazuh/wazuh-dashboard:4.9.2`
-- **Port**: 443/TCP (HTTPS)
+- **Port**: 8443/TCP (HTTPS) - uses 8443 for rootless container support
+- **Credentials**: admin / admin
 - **Responsibilities**:
   - Web interface
   - Visualization
@@ -404,9 +405,9 @@ nano .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WAZUH_VERSION` | 4.9.2 | Wazuh stack version |
-| `INDEXER_PASSWORD` | SecretPassword | OpenSearch admin password |
+| `INDEXER_PASSWORD` | admin | OpenSearch admin password |
 | `API_PASSWORD` | MyS3cr3tP@ssw0rd | Wazuh API password |
-| `DASHBOARD_PASSWORD` | SecretPassword | Dashboard admin password |
+| `DASHBOARD_PASSWORD` | admin | Dashboard admin password |
 
 ### Step 3: Generate Certificates
 
@@ -447,11 +448,11 @@ docker compose ps
 
 ### Step 6: Access Wazuh Dashboard
 
-1. Open browser: https://localhost:443
+1. Open browser: https://localhost:8443
 2. Accept self-signed certificate warning
 3. Login with:
    - **Username**: admin
-   - **Password**: SecretPassword
+   - **Password**: admin
 
 ## Service Health Checks
 
@@ -1295,14 +1296,18 @@ docker exec -it cloud-workload /opt/nhi-demo/scripts/simulate-imds-attack.sh
 
 **Investigation** (10 minutes):
 ```bash
+# Get auth token for Wazuh API
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
 # View detailed alert
-curl -k -u admin:SecretPassword "https://localhost:55000/alerts?rule_id=100651"
+curl -sk -H "Authorization: Bearer $TOKEN" "https://localhost:55000/alerts?rule_id=100651"
 
 # Check source container logs
-docker logs cloud-workload | grep -i "imds\|169.254"
+podman logs cloud-workload | grep -i "imds\|169.254"
 
 # Review timeline of related events
-curl -k -u admin:SecretPassword "https://localhost:55000/alerts?agent_name=cloud-workload&limit=50"
+curl -sk -H "Authorization: Bearer $TOKEN" "https://localhost:55000/alerts?agent_name=cloud-workload&limit=50"
 ```
 
 **Response Actions**:
@@ -1423,8 +1428,12 @@ kubectl logs -n kube-system -l component=kube-apiserver | grep "default:default"
 ### Timeline Analysis
 
 ```bash
+# Get auth token (if not already set)
+TOKEN=$(curl -sk -u wazuh-wui:MyS3cr3tP@ssw0rd -X POST \
+  "https://localhost:55000/security/user/authenticate?raw=true")
+
 # Get all alerts for an agent in time order
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?agent_name=cloud-workload&sort=-timestamp&limit=100" | \
   jq '.data.affected_items[] | {time: .timestamp, rule: .rule.id, desc: .rule.description}'
 ```
@@ -1433,12 +1442,12 @@ curl -k -u admin:SecretPassword \
 
 ```bash
 # Find related alerts by source IP
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?srcip=172.41.0.10" | \
   jq '.data.affected_items'
 
 # Find alerts by rule group
-curl -k -u admin:SecretPassword \
+curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://localhost:55000/alerts?group=nhi_imds" | \
   jq '.data.affected_items'
 ```
@@ -2647,16 +2656,16 @@ echo "-Xmx512m" >> /etc/opensearch/jvm.options.d/memory.options
 
 1. **Check indexer health**:
 ```bash
-curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health?pretty
+curl -sk -u admin:admin https://localhost:9200/_cluster/health?pretty
 ```
 
 2. **Clear old indices**:
 ```bash
 # List indices
-curl -k -u admin:SecretPassword https://localhost:9200/_cat/indices
+curl -sk -u admin:admin https://localhost:9200/_cat/indices
 
 # Delete old indices
-curl -k -u admin:SecretPassword -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
+curl -sk -u admin:admin -X DELETE https://localhost:9200/wazuh-alerts-4.x-2024.01.*
 ```
 
 3. **Optimize queries**:
