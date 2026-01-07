@@ -1,6 +1,6 @@
 # Machine Identity Security Testbed
 
-**For NDC Security 2026 - "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"**
+"Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"**
 
 A comprehensive testbed for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM.
 
@@ -222,5 +222,3 @@ See [LICENSE](LICENSE) for full terms.
 - GitHub: [@bdas-sec](https://github.com/bdas-sec)
 - LinkedIn: [bdas1201](https://linkedin.com/in/bdas1201)
 - Twitter: [@bdas1201](https://twitter.com/bdas1201)
-
-*For NDC Security Oslo 2026*
