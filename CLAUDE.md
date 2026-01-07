@@ -151,7 +151,7 @@ When working on this project, Claude should:
 3. **Use Podman commands** by default (podman, podman-compose)
 4. **Reference the correct port** (8443 for dashboard)
 5. **Update documentation** when making changes to the testbed
-6. **Follow RUDRA documentation standards** for reports
+6. **Follow project documentation standards** for reports
 
 ---
 

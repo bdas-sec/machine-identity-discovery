@@ -4,7 +4,7 @@
 
 FROM ubuntu:22.04
 
-LABEL maintainer="RUDRA Cybersecurity"
+LABEL maintainer="Bodhisattva Das"
 LABEL description="Cloud workload simulation with Wazuh agent for NHI security testing"
 LABEL version="1.0"
 

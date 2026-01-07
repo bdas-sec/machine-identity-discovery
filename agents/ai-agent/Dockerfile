@@ -10,7 +10,7 @@
 
 FROM python:3.11-slim
 
-LABEL maintainer="RUDRA Cybersecurity"
+LABEL maintainer="Bodhisattva Das"
 LABEL description="Vulnerable AI agent for NHI security testing"
 LABEL version="1.0"
 

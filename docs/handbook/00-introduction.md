@@ -111,4 +111,4 @@ After completing this training, you will be able to:
 **NDC Security 2026**
 "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
 
-*Presented by Bodhisattva Das, RUDRA Cybersecurity*
+*Presented by Bodhisattva Das*

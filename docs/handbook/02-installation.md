@@ -36,7 +36,7 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/RUDRA-Cybersecurity/machine-identity-discovery.git
+git clone https://github.com/bdas-sec/machine-identity-discovery.git
 cd machine-identity-discovery
 ```
 

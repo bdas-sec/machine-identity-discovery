@@ -7,7 +7,7 @@
 
 FROM python:3.11-slim
 
-LABEL maintainer="RUDRA Cybersecurity"
+LABEL maintainer="Bodhisattva Das"
 LABEL description="Intentionally vulnerable app for NHI security testing"
 LABEL version="1.0"
 LABEL warning="CONTAINS INTENTIONAL VULNERABILITIES - DEMO ONLY"
