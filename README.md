@@ -1,6 +1,6 @@
 # Machine Identity Security Testbed
 
-"Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"**
+"Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
 
 A comprehensive testbed for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM.
 
