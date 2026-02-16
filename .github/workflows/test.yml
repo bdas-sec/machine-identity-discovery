@@ -85,7 +85,9 @@ jobs:
           if rules_dir.exists():
               for f in rules_dir.glob('*.xml'):
                   try:
-                      etree.parse(str(f))
+                      content = f.read_text()
+                      wrapped = f'<root>{content}</root>'
+                      etree.fromstring(wrapped.encode())
                       print(f'OK: {f.name}')
                   except Exception as e:
                       print(f'ERROR: {f.name}: {e}')
@@ -101,7 +103,9 @@ jobs:
           if decoders_dir.exists():
               for f in decoders_dir.glob('*.xml'):
                   try:
-                      etree.parse(str(f))
+                      content = f.read_text()
+                      wrapped = f'<root>{content}</root>'
+                      etree.fromstring(wrapped.encode())
                       print(f'OK: {f.name}')
                   except Exception as e:
                       print(f'ERROR: {f.name}: {e}')

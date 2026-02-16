@@ -15,6 +15,13 @@ RULES_DIR = Path(__file__).parent.parent.parent / "wazuh" / "rules"
 DECODERS_DIR = Path(__file__).parent.parent.parent / "wazuh" / "decoders"
 
 
+def _parse_wazuh_xml(file_path):
+    """Parse Wazuh XML files that may have multiple root elements."""
+    content = Path(file_path).read_text()
+    wrapped = f"<root>{content}</root>"
+    return etree.fromstring(wrapped.encode())
+
+
 @pytest.mark.unit
 class TestRuleXMLWellFormed:
     """Tests for XML well-formedness of rule files."""
@@ -33,7 +40,7 @@ class TestRuleXMLWellFormed:
 
         for rule_file in rule_files:
             try:
-                etree.parse(str(rule_file))
+                _parse_wazuh_xml(rule_file)
             except etree.XMLSyntaxError as e:
                 pytest.fail(f"XML syntax error in {rule_file.name}: {e}")
 
@@ -66,8 +73,7 @@ class TestRuleStructure:
 
         for rule_file in RULES_DIR.glob("*.xml"):
             try:
-                tree = etree.parse(str(rule_file))
-                root = tree.getroot()
+                root = _parse_wazuh_xml(rule_file)
                 rules.extend(root.findall(".//rule"))
             except Exception:
                 pass
@@ -132,8 +138,7 @@ class TestNHIRuleIDs:
 
         for rule_file in RULES_DIR.glob("*.xml"):
             try:
-                tree = etree.parse(str(rule_file))
-                root = tree.getroot()
+                root = _parse_wazuh_xml(rule_file)
                 for rule in root.findall(".//rule"):
                     rule_id = rule.get("id")
                     if rule_id:
@@ -189,8 +194,7 @@ class TestMITREMappings:
 
         for rule_file in RULES_DIR.glob("*.xml"):
             try:
-                tree = etree.parse(str(rule_file))
-                root = tree.getroot()
+                root = _parse_wazuh_xml(rule_file)
                 for rule in root.findall(".//rule"):
                     mitre = rule.find("mitre")
                     if mitre is not None:
@@ -247,7 +251,7 @@ class TestDecoderSyntax:
 
         for decoder_file in decoder_files:
             try:
-                etree.parse(str(decoder_file))
+                _parse_wazuh_xml(decoder_file)
             except etree.XMLSyntaxError as e:
                 pytest.fail(f"XML syntax error in {decoder_file.name}: {e}")
 
@@ -258,8 +262,7 @@ class TestDecoderSyntax:
 
         for decoder_file in DECODERS_DIR.glob("*.xml"):
             try:
-                tree = etree.parse(str(decoder_file))
-                root = tree.getroot()
+                root = _parse_wazuh_xml(decoder_file)
                 for decoder in root.findall(".//decoder"):
                     name = decoder.get("name")
                     assert name is not None, \
