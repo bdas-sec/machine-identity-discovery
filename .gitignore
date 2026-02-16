@@ -54,3 +54,11 @@ wazuh/certs/*.key
 # OS files
 .DS_Store
 Thumbs.db
+
+# Private - not for public repo
+docs/phase1/
+docs/phase2/
+slides/
+.claude/agents/
+.claude/plans/
+sigma/output/
