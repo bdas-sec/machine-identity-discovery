@@ -1,0 +1,35 @@
+title: "NHI: Multiple Machine Identity Security Events from Same Source - Complex Attack"
+id: f001260a-6f53-4130-ba0a-6995099fd61c
+related:
+    - id: "100954"
+      type: derived
+name: nhi_corr_complex_attack
+type: correlation
+status: test
+description: |
+    Detects when 5+ NHI security events originate from the same source IP
+    within 600 seconds. This catch-all correlation identifies complex,
+    multi-stage attacks that span multiple NHI rule categories and indicates
+    a sophisticated attacker or automated attack tool.
+    Derived from Wazuh rule 100954 (frequency=5, timeframe=600s, same_source_ip).
+references:
+    - https://attack.mitre.org/techniques/T1078/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1078
+    - nhi.correlation
+rules:
+    - nhi_cred_*
+    - nhi_imds_*
+    - nhi_k8s_*
+    - nhi_cicd_*
+    - nhi_ai_*
+    - nhi_secret_*
+group-by:
+    - SourceIP
+timespan: 10m
+condition:
+    gte: 5
+level: critical

@@ -1,0 +1,33 @@
+title: "NHI: AWS IMDSv2 Token Request"
+id: eb9e72b9-2c4d-4d1c-96dc-9541e4d3d5c1
+related:
+    - id: "100652"
+      type: derived
+status: test
+description: |
+    Detects IMDSv2 token requests to AWS metadata service. IMDSv2 requires a
+    PUT request to /latest/api/token first, which is the more secure method.
+    Low severity as this indicates proper security practices.
+    Derived from Wazuh rule 100652 (child of 100650).
+references:
+    - https://attack.mitre.org/techniques/T1552/005/
+    - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.005
+    - nhi.cloud_imds
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_imds:
+        dst_ip: '169.254.169.254'
+    selection_token:
+        url|contains: '/api/token'
+    condition: selection_imds and selection_token
+falsepositives:
+    - Normal IMDSv2 usage by AWS SDKs and tools
+    - EC2 instance credential refresh
+level: informational

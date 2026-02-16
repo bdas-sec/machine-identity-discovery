@@ -1,0 +1,33 @@
+title: "NHI: AI Agent Rapid Credential File Scanning"
+id: 5bf126ea-8135-478b-8f4a-8a16e6b36d6c
+related:
+    - id: "100854"
+      type: derived
+name: nhi_ai_rapid_cred_scan
+type: correlation
+status: test
+description: |
+    Detects an AI agent performing rapid credential file scanning (20+ accesses
+    within 60 seconds by the same user). Tuned down from original threshold of
+    50 for earlier detection. Groups by user to correlate agent activity.
+    Derived from Wazuh rule 100854 (production-grade, frequency=20, timeframe=60s).
+references:
+    - https://attack.mitre.org/techniques/T1083/
+    - https://attack.mitre.org/techniques/T1552/
+author: Bodhisattva Das
+date: 2026-02-15
+modified: 2026-02-16
+tags:
+    - attack.discovery
+    - attack.credential_access
+    - attack.t1083
+    - attack.t1552
+    - nhi.ai_agent
+rules:
+    - nhi_ai_credential_file_access
+group-by:
+    - User
+timespan: 1m
+condition:
+    gte: 20
+level: high

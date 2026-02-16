@@ -1,0 +1,32 @@
+title: "NHI: AWS Instance Metadata Service (IMDS) Access"
+id: 13a16acb-f234-4105-9e68-dbd452fa49e1
+related:
+    - id: "100650"
+      type: derived
+status: test
+description: |
+    Detects network connections to the AWS Instance Metadata Service endpoint
+    (169.254.169.254). While IMDS access is normal for cloud workloads, it is
+    also the first step in SSRF-based credential theft attacks (Capital One breach, 2019).
+    Derived from Wazuh rule 100650.
+references:
+    - https://attack.mitre.org/techniques/T1552/005/
+    - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.005
+    - nhi.cloud_imds
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        dst_ip: '169.254.169.254'
+    condition: selection
+falsepositives:
+    - EC2 instance bootstrap scripts
+    - Cloud-init configuration
+    - AWS SDK credential chain resolution
+level: medium

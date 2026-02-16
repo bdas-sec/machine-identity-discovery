@@ -1,62 +1,95 @@
-# Machine Identity Security Testbed
+<div align="center">
 
-"Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
+# NHI Security Testbed
 
-A comprehensive testbed for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM.
+**The open-source kill chain for non-human identity threats**
 
-## Overview
+[![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-red.svg)]()
+[![Wazuh 4.9.2](https://img.shields.io/badge/Wazuh-4.9.2-blue.svg)]()
+[![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-Mapped-orange.svg)]()
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)]()
+[![Scenarios](https://img.shields.io/badge/Scenarios-24-green.svg)]()
+[![Detection Rules](https://img.shields.io/badge/Detection%20Rules-48-purple.svg)]()
+[![Sigma Rules](https://img.shields.io/badge/Sigma%20Rules-60%2B-yellow.svg)]()
 
-This testbed provides a local, containerized environment for demonstrating:
-- Cloud credential theft via Instance Metadata Service (IMDS)
-- API key and secret exposure in applications
-- CI/CD pipeline token abuse
-- Kubernetes service account compromise
-- AI agent security vulnerabilities
+*Demonstrate, detect, and defend against the exploitation of service accounts,
+IAM roles, CI/CD tokens, and AI agent credentials.*
 
-All attacks are contained and use fake credentials for safe demonstration.
+[Quick Start](#quick-start) |
+[Kill Chain](#the-kill-chain) |
+[Scenarios](#attack-scenarios) |
+[Detection Rules](#detection-rules) |
+[Architecture](#architecture) |
+[Workshop Guide](#workshop-guide) |
+[Contributing](#contributing)
+
+</div>
+
+---
+
+## The Problem
+
+Non-human identities outnumber humans **50:1** in cloud environments.
+They carry `AdministratorAccess` by default. They never rotate.
+They are never audited. And they are the #1 target for cloud attackers.
+
+**This testbed lets you attack them, detect the attacks, and build the defences.**
+
+---
 
 ## Quick Start
 
 ```bash
-# Prerequisites
+# 1. Set kernel parameter (required for OpenSearch)
 sudo sysctl -w vm.max_map_count=262144
 
-# Start the testbed
+# 2. Start the testbed
 ./scripts/start.sh
 
-# Access Wazuh Dashboard
-# URL: https://localhost:8443
-# User: admin
-# Password: admin
+# 3. Open Wazuh Dashboard
+open https://localhost:8443  # admin / admin
 ```
+
+The testbed deploys in under 3 minutes. All credentials are fake.
+
+---
+
+## The Kill Chain
+
+Five-stage offensive methodology mapped to MITRE ATT&CK:
+
+| Stage | Technique | MITRE ATT&CK | What Happens |
+|-------|-----------|---------------|--------------|
+| 1. Discovery | Endpoint enumeration, SSRF identification | T1190 | Find the machine identities |
+| 2. Credential Theft | SSRF to IMDS, env var harvesting | T1552.005 | Steal the credentials |
+| 3. Privilege Escalation | Over-permissioned IAM roles | T1078.004 | Discover admin access |
+| 4. Lateral Movement | Cloud to CI/CD pivot | T1528 | Compromise the pipeline |
+| 5. Persistence | Cloud-native API abuse | T1078 | Maintain access invisibly |
+
+**Zero malware. Zero exploits. Just default permissions on machine identities.**
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         TESTBED ARCHITECTURE                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌─────────────────────── WAZUH STACK ───────────────────────┐         │
-│  │  Manager (:55000)  │  Indexer (:9200)  │  Dashboard (:8443)│         │
-│  └────────────────────────────────────────────────────────────┘         │
-│                              │                                          │
-│  ┌──────────┬───────────────┼───────────────┬──────────────┐           │
-│  │          │               │               │              │           │
-│  ▼          ▼               ▼               ▼              ▼           │
-│ ┌────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐        │
-│ │Cloud   │ │Vuln    │ │CI/CD     │ │K8s Nodes │ │AI Agent    │        │
-│ │Workload│ │App     │ │Runner    │ │(optional)│ │(optional)  │        │
-│ │Agent   │ │Agent   │ │Agent     │ │          │ │            │        │
-│ └────────┘ └────────┘ └──────────┘ └──────────┘ └────────────┘        │
-│                                                                         │
-│  ┌─────────────────── MOCK SERVICES ────────────────────────┐          │
-│  │  IMDS (:1338)  │  Vault (:8200)  │  CI/CD Server (:8080) │          │
-│  └──────────────────────────────────────────────────────────┘          │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────── Management Network ───────────────┐
+│  Wazuh Manager  │  Wazuh Indexer  │  Dashboard    │
+└──────────────────────┬───────────────────────────┘
+                       │
+    ┌──────────────────┼──────────────────┐
+    │                  │                  │
+┌───┴─── Cloud ────┐ ┌┴── CI/CD ───┐ ┌──┴── K8s ──┐
+│ Vulnerable App   │ │ CI/CD Runner│ │ K8s Nodes  │
+│ Cloud Workload   │ │ Mock CI/CD  │ │ RBAC Sim   │
+│ Mock IMDS        │ │ Server      │ │            │
+│ Vault            │ └─────────────┘ └────────────┘
+│ AI Agent         │
+└──────────────────┘
 ```
 
-## Components
+Four isolated Docker networks simulate real cloud segmentation.
+48 detection rules fire in real time as you execute attacks.
 
 | Component | Port | Description |
 |-----------|------|-------------|
@@ -68,95 +101,110 @@ sudo sysctl -w vm.max_map_count=262144
 | Mock CI/CD | 8080 | GitHub/GitLab API simulation |
 | Vulnerable App | 8888 | App with exposed secrets |
 
+---
+
 ## Attack Scenarios
 
-### Category 1: API Keys & Secrets
-- S1-01: Hardcoded credentials in source code
-- S1-02: Exposed .env file via web server
-- S1-03: Git history credential leak
-- S1-04: Environment variable exposure via /proc
+24 scenarios across 5 progressive levels:
 
-### Category 2: Cloud Service Accounts
-- S2-01: IMDS credential theft (169.254.169.254)
-- S2-02: Over-permissioned IAM role exploitation
-- S2-03: Cross-account role assumption abuse
-- S2-04: Service account key exfiltration
-
-### Category 3: CI/CD Pipeline
-- S3-01: Stolen GitHub Actions runner token
-- S3-02: Pipeline injection via PR
-- S3-03: OIDC token abuse
-
-### Category 4: Kubernetes
-- S4-01: Privileged pod escape
-- S4-02: Service account token theft
-- S4-03: RBAC misconfiguration exploitation
-- S4-04: Secrets mounted in pod
-
-### Category 5: AI Agents
-- S5-01: Prompt injection leading to credential disclosure
-- S5-02: Agent with excessive API permissions
-- S5-03: Tool-use SSRF abuse
-- S5-04: Memory/context poisoning
-
-## Wazuh Detection Rules
-
-Custom rules for NHI detection (Rule IDs 100600-100999):
-
-| Range | Category |
-|-------|----------|
-| 100600-100649 | Credential Discovery |
-| 100650-100699 | Cloud Metadata (IMDS) |
-| 100700-100749 | Service Account Misuse |
-| 100750-100799 | Kubernetes Security |
-| 100800-100849 | CI/CD Pipeline |
-| 100850-100899 | AI Agent Anomalies |
-| 100900-100949 | Secret Pattern Detection |
-| 100950-100999 | Correlation Rules |
-
-## Usage
-
-### Start with all optional services
+| Level | Focus | Scenarios | Difficulty |
+|-------|-------|-----------|------------|
+| 1 | Credential Discovery | S1-01 to S1-05 | Beginner |
+| 2 | Cloud Credential Theft | S2-01 to S2-05 | Intermediate |
+| 3 | CI/CD Pipeline Attacks | S3-01 to S3-05 | Intermediate |
+| 4 | Kubernetes Security | S4-01 to S4-05 | Advanced |
+| 5 | AI Agent Exploitation | S5-01 to S5-04 | Advanced |
 
 ```bash
-./scripts/start.sh --all
+# Run all scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --all
+
+# Run a specific level
+python .claude/skills/nhi-assistant/scripts/run_demo.py --level 2
+
+# Run a single scenario
+python .claude/skills/nhi-assistant/scripts/run_demo.py --scenario s2-01
+
+# List all available scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --list
 ```
 
-### Run demo scenarios
+---
 
-```bash
-# Using the NHI Assistant skill
-python .claude/skills/nhi-assistant/scripts/run_demo.py --list    # List scenarios
-python .claude/skills/nhi-assistant/scripts/run_demo.py --all     # Run all scenarios
-python .claude/skills/nhi-assistant/scripts/run_demo.py --level 2 # Run Level 2 only
-python .claude/skills/nhi-assistant/scripts/run_demo.py --scenario s2-01  # Specific scenario
+## Detection Rules
 
-# Or manually execute attacks
-podman exec -it cloud-workload curl http://mock-imds:1338/latest/meta-data/iam/security-credentials/
-```
+48 custom Wazuh rules with full MITRE ATT&CK coverage:
 
-### View alerts in Wazuh Dashboard
+| Category | Rule IDs | What It Detects |
+|----------|----------|-----------------|
+| Credential Discovery | 100600-100609 | .env access, AWS creds, SSH keys, credential harvesting |
+| Cloud Metadata (IMDS) | 100650-100658 | AWS/GCP/Azure IMDS abuse, credential theft, burst access |
+| Service Account Misuse | 100700-100749 | Service account anomalies, unusual API patterns |
+| Kubernetes | 100750-100756 | SA token theft, RBAC probing, etcd access, secrets enum |
+| CI/CD Pipeline | 100800-100805 | GitHub/GitLab tokens, runner creds, pipeline tampering |
+| AI Agent | 100850-100854 | Shell execution, SSRF, prompt injection, cred access |
+| Secret Patterns | 100900-100905 | AWS keys, GitHub tokens, OpenAI keys, private keys |
+| Correlation | 100950-100954 | Multi-stage attack chains, supply chain, AI compromise |
 
-1. Navigate to https://localhost:8443
-2. Go to Security Events
-3. Filter by rule.groups: "nhi"
+### Sigma Rules
 
-### Stop the testbed
+60+ rules in [Sigma YAML format](sigma/rules/) for cross-SIEM deployment:
 
-```bash
-./scripts/stop.sh        # Keep data
-./scripts/stop.sh --clean # Remove all data
-```
+- **Splunk** SPL via pySigma
+- **Microsoft Sentinel** KQL
+- **Elastic Security** EQL
+- **Google Chronicle** YARA-L
+
+Same detection logic, any SIEM. See `sigma/rules/` for the full library.
+
+---
+
+## Use Cases
+
+- **Red Team Training**: Practice NHI exploitation techniques in a safe environment
+- **Detection Engineering**: Write and test SIEM rules against realistic NHI attack traffic
+- **Purple Team Exercises**: Run attacks and validate detection coverage simultaneously
+- **Security Awareness**: Demonstrate to developers why `AdministratorAccess` on service accounts is dangerous
+- **Conference Workshops**: Instructor-led hands-on labs with progressive difficulty
+
+---
 
 ## Requirements
 
-- **Container Runtime**: Podman 4.0+ (recommended) or Docker 24+
-- **Compose**: podman-compose or Docker Compose V2
-- **RAM**: 8GB (minimum 6GB)
-- **Disk**: 20GB disk space
-- **OS**: Linux host (vm.max_map_count must be >= 262144)
+- **Container Runtime**: Docker 24+ or Podman 4.0+
+- **Compose**: Docker Compose V2 or podman-compose
+- **RAM**: 8 GB minimum (6 GB allocated to containers)
+- **Disk**: 20 GB free space
+- **OS**: Linux, macOS (via Docker Desktop/Colima), or WSL2
 
-**Note**: The testbed auto-detects Podman or Docker. For rootless Podman, port 8443 is used instead of 443.
+The testbed auto-detects Podman or Docker. For rootless Podman, port 8443 is used instead of 443.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Handbook](docs/handbook/) | Complete setup, architecture, and scenario guides |
+| [Rule Reference](docs/handbook/03-wazuh-rules-reference.md) | Detection rule documentation |
+| [Scenario Catalog](docs/handbook/04-scenario-catalog.md) | All 24 attack scenarios |
+| [Troubleshooting](docs/handbook/08-troubleshooting.md) | Common issues and fixes |
+| [Sigma Rules](sigma/rules/) | 60+ cross-SIEM detection rules |
+
+### NHI Assistant Skill
+
+A Claude Code skill is included for testbed management:
+
+```
+.claude/skills/nhi-assistant/
+├── SKILL.md                    # Skill definition
+├── scripts/
+│   ├── run_demo.py            # Demo scenario runner (24 scenarios)
+│   └── health_check.py        # Health verification with auto-fix
+└── references/                # Architecture, scenarios, troubleshooting
+```
+
+---
 
 ## Directory Structure
 
@@ -164,57 +212,47 @@ podman exec -it cloud-workload curl http://mock-imds:1338/latest/meta-data/iam/s
 machine-identity-discovery/
 ├── docker-compose.yml          # Main orchestration
 ├── agents/                     # Wazuh agent containers
-│   ├── cloud-workload/
-│   ├── vulnerable-app/
-│   ├── cicd-runner/
-│   ├── k8s-node/
-│   └── ai-agent/
+│   ├── cloud-workload/         # Cloud environment simulation
+│   ├── vulnerable-app/         # Intentionally vulnerable Flask app
+│   ├── cicd-runner/            # CI/CD runner simulation
+│   ├── k8s-node/               # Kubernetes simulation
+│   └── ai-agent/               # AI agent simulation
 ├── mock-services/              # Mock cloud services
-│   ├── imds/
-│   └── cicd-server/
+│   └── imds/                   # AWS IMDS simulation
 ├── wazuh/                      # Wazuh configuration
-│   ├── rules/
-│   ├── decoders/
-│   └── certs/
+│   ├── rules/                  # Custom NHI detection rules
+│   ├── decoders/               # Custom decoders
+│   └── certs/                  # TLS certificates
+├── sigma/                      # Sigma detection rules
+│   └── rules/                  # 60+ rules across 7 categories
 ├── scenarios/                  # Attack scenario definitions
-├── scripts/                    # Utility scripts
-└── docs/                       # Documentation
-    └── handbook/
+├── scripts/                    # start.sh, stop.sh utilities
+├── api/                        # FastAPI backend
+├── docs/                       # Documentation
+│   └── handbook/               # Comprehensive setup guide
+└── tests/                      # Smoke and E2E tests
 ```
 
-## Documentation
+---
 
-See [docs/handbook/](docs/handbook/) for comprehensive documentation:
+## Contributing
 
-- [00-introduction.md](docs/handbook/00-introduction.md) - Project overview
-- [01-architecture.md](docs/handbook/01-architecture.md) - System architecture
-- [02-installation.md](docs/handbook/02-installation.md) - Setup guide
-- [03-wazuh-rules-reference.md](docs/handbook/03-wazuh-rules-reference.md) - Rule documentation
-- [04-scenario-catalog.md](docs/handbook/04-scenario-catalog.md) - All attack scenarios
-- [08-troubleshooting.md](docs/handbook/08-troubleshooting.md) - Troubleshooting guide
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## NHI Assistant Skill
+Priority areas:
+- New attack scenarios (especially Levels 4-5)
+- Detection rules for additional NHI patterns
+- Sigma rule translations for cross-SIEM portability
+- Documentation improvements
 
-A Claude skill is included for testbed management:
+---
 
-```
-.claude/skills/nhi-assistant/
-├── SKILL.md                    # Skill definition
-├── scripts/
-│   ├── run_demo.py            # Demo scenario runner
-│   └── health_check.py        # Health verification
-└── references/
-    ├── architecture.md        # Network topology
-    ├── scenarios.md           # 24 attack scenarios
-    ├── troubleshooting.md     # Issue solutions
-    └── wazuh-rules.md         # Detection rules
-```
+## Presented At
 
-## License
+- **CyberWiseCon Europe 2026** — "From Admin by Design to Breach by Default"
+- **NDC Security 2026** — "Who Gave the Agent Admin Rights?!"
 
-This project is licensed under a **Non-Commercial Use License**. You are free to use, copy, modify, and distribute this software for personal, educational, research, and security training purposes. Commercial use requires a separate license.
-
-See [LICENSE](LICENSE) for full terms.
+---
 
 ## Author
 
@@ -222,3 +260,11 @@ See [LICENSE](LICENSE) for full terms.
 - GitHub: [@bdas-sec](https://github.com/bdas-sec)
 - LinkedIn: [bdas1201](https://linkedin.com/in/bdas1201)
 - Twitter: [@bdas1201](https://twitter.com/bdas1201)
+
+---
+
+## License
+
+Non-Commercial Use License. Free for personal, educational, research, and
+security training purposes. Commercial use requires a separate license.
+See [LICENSE](LICENSE) for full terms.

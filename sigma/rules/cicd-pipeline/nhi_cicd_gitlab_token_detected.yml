@@ -1,0 +1,31 @@
+title: "NHI: GitLab CI Job Token Detected"
+id: 8f7d15cc-61c7-4aff-9506-2b875bd3fb8e
+related:
+    - id: "100801"
+      type: derived
+status: test
+description: |
+    Detects the CI_JOB_TOKEN environment variable being exposed in process
+    listings or log output. GitLab CI job tokens provide repository and
+    registry access scoped to the current pipeline job.
+    Derived from Wazuh rule 100801.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://docs.gitlab.com/ee/ci/jobs/ci_job_token.html
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.cicd_pipeline
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'CI_JOB_TOKEN'
+    condition: selection
+falsepositives:
+    - GitLab CI pipeline jobs using built-in token
+    - GitLab Runner debugging
+level: high

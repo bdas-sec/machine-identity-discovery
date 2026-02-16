@@ -1,3 +1,4 @@
 # Scenario Runner Dependencies
-requests>=2.28.0
-urllib3>=1.26.0
+# Source of truth: pyproject.toml [project].dependencies
+requests>=2.31.0
+urllib3>=2.0.0

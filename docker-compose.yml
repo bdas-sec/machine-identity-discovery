@@ -114,7 +114,7 @@ services:
       INDEXER_URL: "https://wazuh.indexer:9200"
       INDEXER_USERNAME: "admin"
       INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-admin}"
-      FILEBEAT_SSL_VERIFICATION_MODE: "full"
+      FILEBEAT_SSL_VERIFICATION_MODE: "none"
       SSL_CERTIFICATE_AUTHORITIES: "/etc/ssl/root-ca.pem"
       SSL_CERTIFICATE: "/etc/ssl/filebeat.pem"
       SSL_KEY: "/etc/ssl/filebeat.key"
@@ -135,7 +135,7 @@ services:
       - ./wazuh/rules/nhi-detection-rules.xml:/tmp/nhi-rules/nhi-detection-rules.xml:ro
       - ./wazuh/decoders/nhi-decoders.xml:/tmp/nhi-rules/nhi-decoders.xml:ro
       # SSL certificates
-      - ./wazuh/certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
+      - ./wazuh/certs/root-ca.pem:/etc/ssl/root-ca.pem:ro
       - ./wazuh/certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
       - ./wazuh/certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
       - ./wazuh/certs/admin.pem:/etc/ssl/admin.pem:ro
@@ -498,6 +498,46 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  # NHI Testbed API (FastAPI)
+  nhi-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: nhi-testbed/api:latest
+    container_name: nhi-api
+    hostname: nhi-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      NHI_WAZUH_API_URL: "https://wazuh.manager:55000"
+      NHI_WAZUH_API_USER: "${WAZUH_API_USER:-wazuh-wui}"
+      NHI_WAZUH_API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
+      NHI_CONTAINER_RUNTIME: "docker"
+      NHI_SCENARIOS_DIR: "/app/scenarios"
+      NHI_RULES_FILE: "/app/wazuh/rules/nhi-detection-rules.xml"
+      NHI_DECODERS_FILE: "/app/wazuh/decoders/nhi-decoders.xml"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./scenarios:/app/scenarios:ro
+      - ./wazuh/rules:/app/wazuh/rules:ro
+      - ./wazuh/decoders:/app/wazuh/decoders:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.20
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.service=api"
+      - "nhi.role=management"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # Mock CI/CD Server
   mock-cicd:

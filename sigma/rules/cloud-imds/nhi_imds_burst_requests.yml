@@ -1,0 +1,34 @@
+title: "NHI: Burst of Cloud Metadata Requests - Credential Exfiltration"
+id: 07218491-474b-4735-8605-09ec8bf33c78
+related:
+    - id: "100657"
+      type: derived
+name: nhi_imds_burst
+type: correlation
+status: test
+description: |
+    Detects a burst of cloud metadata service requests (10+ within 60 seconds),
+    indicating automated credential exfiltration from IMDS endpoints. Legitimate
+    applications rarely make this many metadata requests in rapid succession.
+    Derived from Wazuh rule 100657 (frequency=10, timeframe=60s).
+references:
+    - https://attack.mitre.org/techniques/T1552/005/
+    - https://attack.mitre.org/techniques/T1041/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.exfiltration
+    - attack.t1552.005
+    - attack.t1041
+    - nhi.cloud_imds
+rules:
+    - nhi_imds_aws_access
+    - nhi_imds_gcp_metadata_access
+    - nhi_imds_azure_managed_identity
+group-by:
+    - SourceIP
+timespan: 1m
+condition:
+    gte: 10
+level: critical

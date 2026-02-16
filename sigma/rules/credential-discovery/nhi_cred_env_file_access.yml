@@ -1,0 +1,36 @@
+title: "NHI: Environment Configuration File Access"
+id: a25dc0a3-eeef-42ca-a954-b286c845f799
+related:
+    - id: "100600"
+      type: derived
+status: test
+description: |
+    Detects access to .env configuration files that commonly contain API keys,
+    database credentials, and other secrets. Attackers target these files during
+    initial reconnaissance of compromised systems.
+    Derived from Wazuh rule 100600.
+references:
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://owasp.org/www-project-web-security-testing-guide/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.001
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|endswith:
+            - '.env'
+            - '.env.local'
+            - '.env.production'
+            - '.env.development'
+    condition: selection
+falsepositives:
+    - Legitimate application deployment reading configuration
+    - Configuration management tools (Ansible, Chef, Puppet)
+    - Container orchestration startup sequences
+level: high

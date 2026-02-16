@@ -1,0 +1,31 @@
+title: "NHI: Docker Config File Access"
+id: c722dec2-dc7e-46a6-bc44-8ec96d11d11a
+related:
+    - id: "100604"
+      type: derived
+status: test
+description: |
+    Detects access to Docker configuration file (~/.docker/config.json) which may
+    contain registry authentication tokens. Stolen registry credentials enable
+    supply chain attacks via malicious image injection.
+    Derived from Wazuh rule 100604.
+references:
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://docs.docker.com/engine/reference/commandline/login/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.001
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|endswith: '.docker/config.json'
+    condition: selection
+falsepositives:
+    - Docker CLI operations (pull, push, login)
+    - Container build processes
+level: high

@@ -15,9 +15,23 @@ Vulnerabilities demonstrated:
 
 import os
 import subprocess
+import logging
+from datetime import datetime
 from flask import Flask, jsonify, request, send_file
 
 app = Flask(__name__)
+
+# Security event logger for Wazuh detection
+_security_log_path = "/var/log/flask/security.log"
+os.makedirs(os.path.dirname(_security_log_path), exist_ok=True)
+_sec_handler = logging.FileHandler(_security_log_path)
+_sec_handler.setFormatter(logging.Formatter(
+    "%(asctime)s vulnerable-app NHI_ALERT: %(message)s",
+    datefmt="%b %e %H:%M:%S"
+))
+security_log = logging.getLogger("nhi_security")
+security_log.addHandler(_sec_handler)
+security_log.setLevel(logging.INFO)
 
 # ============================================================
 # VULNERABILITY V2: Hardcoded credentials in source code
@@ -53,7 +67,8 @@ def index():
             "/.env": "VULNERABLE: Exposed .env file",
             "/debug": "VULNERABLE: Debug info with env vars",
             "/config": "VULNERABLE: Exposed configuration",
-            "/git-history": "VULNERABLE: Git commit history"
+            "/git-history": "VULNERABLE: Git commit history",
+            "/fetch?url=<url>": "VULNERABLE: SSRF - server-side request forgery"
         }
     })
 
@@ -77,6 +92,7 @@ def expose_env_file():
     This simulates a misconfigured web server that doesn't
     block access to dotfiles.
     """
+    security_log.info("ENV_FILE accessed from %s - .env file served", request.remote_addr)
     env_file = "/app/.env"
     if os.path.exists(env_file):
         return send_file(env_file, mimetype="text/plain")
@@ -92,6 +108,7 @@ def debug_info():
     VULNERABLE: Exposes all environment variables
     This is a common misconfiguration in debug endpoints.
     """
+    security_log.info("DEBUG_ENDPOINT accessed from %s - environment variables leaked", request.remote_addr)
     # Filter to show interesting env vars (simulated attack success)
     interesting_vars = {}
     for key, value in os.environ.items():
@@ -133,6 +150,54 @@ def expose_config():
             "database_url": Config.DATABASE_URL
         }
     })
+
+
+# ============================================================
+# VULNERABILITY V5: Server-Side Request Forgery (SSRF)
+# This simulates a webhook/proxy feature that doesn't validate URLs
+# Real-world: Capital One breach (2019) used this exact vector
+# ============================================================
+@app.route("/fetch")
+def ssrf_fetch():
+    """
+    VULNERABLE: Server-side request to arbitrary URLs.
+    This is the Capital One attack vector - SSRF to IMDS.
+
+    Usage: GET /fetch?url=http://mock-imds:1338/latest/meta-data/
+    """
+    import requests as req
+
+    target_url = request.args.get("url", "")
+
+    if not target_url:
+        return jsonify({
+            "error": "Missing 'url' parameter",
+            "hint": "Try: /fetch?url=http://example.com",
+            "warning": "VULNERABLE: This endpoint performs server-side requests"
+        }), 400
+
+    security_log.info("SSRF request to %s from %s", target_url.replace("http://", ""), request.remote_addr)
+    try:
+        resp = req.get(target_url, timeout=5)
+        try:
+            data = resp.json()
+            return jsonify({
+                "url": target_url,
+                "status_code": resp.status_code,
+                "response": data
+            })
+        except Exception:
+            return jsonify({
+                "url": target_url,
+                "status_code": resp.status_code,
+                "response": resp.text[:5000]
+            })
+    except req.exceptions.ConnectionError:
+        return jsonify({"error": f"Could not connect to {target_url}"}), 502
+    except req.exceptions.Timeout:
+        return jsonify({"error": f"Request to {target_url} timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ============================================================

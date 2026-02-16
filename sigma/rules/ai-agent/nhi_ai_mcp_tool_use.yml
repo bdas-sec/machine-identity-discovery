@@ -1,0 +1,52 @@
+title: "NHI: AI Agent MCP/Tool-Use Activity Detected"
+id: 218bff98-b486-4ccc-9cda-c6ab72124315
+related:
+    - id: "100858"
+      type: derived
+status: test
+description: |
+    Detects AI agent processes invoking MCP (Model Context Protocol) tools or
+    function-call mechanisms. MCP tool-use enables AI agents to interact with
+    external services and systems, which can be abused for unauthorized
+    resource access if agent permissions are misconfigured.
+    Derived from Wazuh rule 100858.
+references:
+    - https://attack.mitre.org/techniques/T1059/
+    - https://modelcontextprotocol.io/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.execution
+    - attack.t1059
+    - nhi.ai_agent
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_process:
+        ParentImage|endswith:
+            - '/python'
+            - '/python3'
+            - '/node'
+        ParentImage|contains:
+            - 'langchain'
+            - 'autogen'
+            - 'crewai'
+            - 'agent'
+    selection_mcp:
+        CommandLine|contains:
+            - 'mcp-server'
+            - 'mcp_server'
+            - 'mcp-tool'
+            - 'mcp_tool'
+            - 'mcp-client'
+            - 'mcp_client'
+            - 'tool-use'
+            - 'tool_use'
+            - 'function-call'
+            - 'function_call'
+    condition: 1 of selection_process and selection_mcp
+falsepositives:
+    - Legitimate MCP server operations
+    - AI development and testing environments
+level: high

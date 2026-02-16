@@ -1,0 +1,30 @@
+title: "NHI: GitHub Actions Runtime Token Detected"
+id: 1bdf9d29-e956-45fb-ac90-52aa122471e1
+related:
+    - id: "100805"
+      type: derived
+status: test
+description: |
+    Detects the ACTIONS_RUNTIME_TOKEN environment variable being exposed. This
+    token provides access to GitHub Actions internal services and artifact storage,
+    and can be abused for privilege escalation within workflow runs.
+    Derived from Wazuh rule 100805.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.cicd_pipeline
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'ACTIONS_RUNTIME_TOKEN'
+    condition: selection
+falsepositives:
+    - GitHub Actions internal service communication
+level: high

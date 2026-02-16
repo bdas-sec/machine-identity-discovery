@@ -1,0 +1,32 @@
+title: "NHI: Prompt Injection Targeting Credential Extraction - CRITICAL"
+id: f30d2701-9136-4b08-841b-86f420cce76c
+related:
+    - id: "100856"
+      type: derived
+status: test
+description: |
+    Detects prompt injection attempts specifically targeting credential
+    extraction. These are escalated prompt injection attacks where the injected
+    content explicitly requests the AI agent to read, display, or exfiltrate
+    credential files, environment variables, or secrets.
+    Derived from Wazuh rule 100856 (child of 100852).
+references:
+    - https://attack.mitre.org/techniques/T1059/
+    - https://attack.mitre.org/techniques/T1552/001/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.execution
+    - attack.credential_access
+    - attack.t1059
+    - attack.t1552.001
+    - nhi.ai_agent
+logsource:
+    category: webserver
+detection:
+    selection_action:
+        cs-uri-query|re: '(?i)(fetch|read|cat|access|show|print|display).{0,30}(credential|password|secret|token|key|\.env|/etc/passwd|/etc/shadow|aws.*key|api.*key)'
+    condition: selection_action
+falsepositives:
+    - Security testing targeting AI endpoints
+level: critical

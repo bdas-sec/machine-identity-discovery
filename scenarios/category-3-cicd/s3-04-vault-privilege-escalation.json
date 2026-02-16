@@ -1,0 +1,119 @@
+{
+  "id": "S3-04",
+  "name": "Vault Privilege Escalation",
+  "category": "CI/CD & Supply Chain",
+  "version": "1.0",
+  "description": "Use a stolen Vault token to escalate privileges by accessing production secrets beyond the token's intended scope",
+  "difficulty": "Hard",
+  "real_world_relevance": "Vault policy misconfigurations are common; overly broad policies allow lateral movement to production secrets from development contexts",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Credential Access"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1078", "name": "Valid Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload"],
+    "network": "cloud_net",
+    "services": ["vault"]
+  },
+
+  "attack_flow": {
+    "description": "Attacker uses a stolen Vault token to access production secrets",
+    "diagram": [
+      "1. Attacker steals a Vault token (from s2-05)",
+      "2. Attacker checks token capabilities and policies",
+      "3. Attacker discovers overly permissive policy",
+      "4. Attacker accesses production secrets at /v1/secret/data/production",
+      "5. Attacker extracts database credentials, API keys, etc."
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Token Retrieval",
+      "description": "Retrieve the previously stolen Vault token",
+      "actions": [
+        {
+          "type": "command",
+          "command": "TOKEN=$(cat ~/.vault-token 2>/dev/null); echo \"Token: ${TOKEN:0:10}...\"",
+          "description": "Load the cached Vault token"
+        }
+      ]
+    },
+    {
+      "name": "Production Secret Access",
+      "description": "Use the token to access production secrets",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "TOKEN=$(cat ~/.vault-token 2>/dev/null); curl -s -H \"X-Vault-Token: $TOKEN\" http://vault:8200/v1/secret/data/production 2>/dev/null || echo 'Vault access failed'",
+          "expected_output_contains": ["data", "password"],
+          "description": "Attempt to read production secrets using stolen token"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Access to Vault token file followed by API call",
+      "wazuh_rule": "100606"
+    },
+    {
+      "type": "Network",
+      "description": "Vault API call to production secret path",
+      "wazuh_rule": "100606"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100606",
+      "level": 10,
+      "description": "NHI: HashiCorp Vault token file access"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke the compromised token",
+      "Rotate all production secrets accessed via the token",
+      "Review Vault audit logs for full scope of access"
+    ],
+    "long_term": [
+      "Implement least-privilege Vault policies",
+      "Separate development and production secret paths",
+      "Use Vault Sentinel policies for fine-grained access control",
+      "Enable MFA for production secret access",
+      "Implement Vault namespaces for multi-tenancy"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Retrieve stolen token",
+      "TOKEN=$(cat ~/.vault-token 2>/dev/null)",
+      "",
+      "# Access production secrets",
+      "curl -s -H \"X-Vault-Token: $TOKEN\" http://vault:8200/v1/secret/data/production 2>/dev/null || echo 'Vault access failed'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "HashiCorp Vault Policies",
+      "url": "https://developer.hashicorp.com/vault/docs/concepts/policies"
+    },
+    {
+      "title": "MITRE ATT&CK T1078 - Valid Accounts",
+      "url": "https://attack.mitre.org/techniques/T1078/"
+    }
+  ]
+}

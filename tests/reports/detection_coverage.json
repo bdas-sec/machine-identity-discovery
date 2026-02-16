@@ -1,0 +1,808 @@
+{
+  "summary": {
+    "total_scenarios": 24,
+    "scenarios_with_tests": 23,
+    "scenarios_without_tests": 1,
+    "total_expected_rules": 65,
+    "total_test_methods": 133,
+    "correlation_rules_tested": 5,
+    "coverage_pct": 95.8
+  },
+  "scenarios": [
+    {
+      "id": "S1-01",
+      "name": "Hardcoded Credentials in Source Code",
+      "category": "API Keys & Secrets",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100600",
+        "100601",
+        "100900"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS101HardcodedCredentials",
+      "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
+      "test_method_count": 3,
+      "rule_details": [
+        {
+          "rule_id": "100600",
+          "level": 10,
+          "description": "NHI: Environment configuration file access detected - $(file)"
+        },
+        {
+          "rule_id": "100601",
+          "level": 12,
+          "description": "NHI: AWS credentials file access detected"
+        },
+        {
+          "rule_id": "100900",
+          "level": 12,
+          "description": "NHI: AWS Access Key ID pattern detected"
+        }
+      ]
+    },
+    {
+      "id": "S1-02",
+      "name": "Exposed .env File via Web Server",
+      "category": "API Keys & Secrets",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100603",
+        "100604"
+      ],
+      "expected_rule_count": 2,
+      "has_e2e_test": true,
+      "test_class": "TestS102ExposedEnvFiles",
+      "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
+      "test_method_count": 3,
+      "rule_details": [
+        {
+          "rule_id": "100603",
+          "level": 10,
+          "description": "NHI: Git credential file access detected"
+        },
+        {
+          "rule_id": "100604",
+          "level": 10,
+          "description": "NHI: Docker config file access (may contain registry tokens)"
+        }
+      ]
+    },
+    {
+      "id": "S1-03",
+      "name": "Git History Credential Leak",
+      "category": "API Keys & Secrets",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100605",
+        "100606"
+      ],
+      "expected_rule_count": 2,
+      "has_e2e_test": true,
+      "test_class": "TestS103GitHistoryLeak",
+      "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
+      "test_method_count": 3,
+      "rule_details": [
+        {
+          "rule_id": "100605",
+          "level": 10,
+          "description": "NHI: Kubernetes config file access detected"
+        },
+        {
+          "rule_id": "100606",
+          "level": 10,
+          "description": "NHI: HashiCorp Vault token file access"
+        }
+      ]
+    },
+    {
+      "id": "S1-04",
+      "name": "Environment Variable Exposure via /proc",
+      "category": "API Keys & Secrets",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100607",
+        "100608",
+        "100609"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS104ProcEnviron",
+      "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
+      "test_method_count": 3,
+      "rule_details": [
+        {
+          "rule_id": "100607",
+          "level": 10,
+          "description": "NHI: Process environment variable enumeration via /proc"
+        },
+        {
+          "rule_id": "100608",
+          "level": 10,
+          "description": "NHI: NPM configuration file access (may contain auth tokens)"
+        },
+        {
+          "rule_id": "100609",
+          "level": 14,
+          "description": "NHI: Multiple credential file accesses by same user - credential harvesting"
+        }
+      ]
+    },
+    {
+      "id": "S1-05",
+      "name": "Kubernetes Config Discovery",
+      "category": "API Keys & Secrets",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100605"
+      ],
+      "expected_rule_count": 1,
+      "has_e2e_test": false,
+      "test_class": "",
+      "test_file": "",
+      "test_method_count": 0,
+      "rule_details": [
+        {
+          "rule_id": "100605",
+          "level": 10,
+          "description": "NHI: Kubernetes config file access detected"
+        }
+      ]
+    },
+    {
+      "id": "S2-01",
+      "name": "IMDS Credential Theft",
+      "category": "Cloud Service Accounts",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100650",
+        "100651"
+      ],
+      "expected_rule_count": 2,
+      "has_e2e_test": true,
+      "test_class": "TestS201IMDSCredentialTheft",
+      "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
+      "test_method_count": 8,
+      "rule_details": [
+        {
+          "rule_id": "100650",
+          "level": 8,
+          "description": "NHI: AWS Instance Metadata Service (IMDS) access detected"
+        },
+        {
+          "rule_id": "100651",
+          "level": 12,
+          "description": "NHI: AWS IMDS IAM credential request - CREDENTIAL THEFT ATTEMPT"
+        }
+      ]
+    },
+    {
+      "id": "S2-02",
+      "name": "Over-Permissioned IAM Role Exploitation",
+      "category": "Cloud Service Accounts",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100700",
+        "100701",
+        "100702"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS202OverPermissionedIAM",
+      "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
+      "test_method_count": 5,
+      "rule_details": [
+        {
+          "rule_id": "100700",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100701",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100702",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S2-03",
+      "name": "Cross-Account Role Assumption Abuse",
+      "category": "Cloud Service Accounts",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100703",
+        "100704",
+        "100705"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS203CrossAccountRole",
+      "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100703",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100704",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100705",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S2-04",
+      "name": "Service Account Key Exfiltration",
+      "category": "Cloud Service Accounts",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100706",
+        "100707",
+        "100708"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS204ServiceAccountExfil",
+      "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100706",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100707",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100708",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S2-05",
+      "name": "HashiCorp Vault Token Theft",
+      "category": "Cloud Service Accounts",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100606"
+      ],
+      "expected_rule_count": 1,
+      "has_e2e_test": true,
+      "test_class": "TestS205VaultTokenTheft",
+      "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
+      "test_method_count": 5,
+      "rule_details": [
+        {
+          "rule_id": "100606",
+          "level": 10,
+          "description": "NHI: HashiCorp Vault token file access"
+        }
+      ]
+    },
+    {
+      "id": "S3-01",
+      "name": "Stolen GitHub Actions Runner Token",
+      "category": "CI/CD Pipeline",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100800",
+        "100801",
+        "100802"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS301StolenRunnerToken",
+      "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
+      "test_method_count": 8,
+      "rule_details": [
+        {
+          "rule_id": "100800",
+          "level": 10,
+          "description": "NHI: GitHub token detected in environment/process"
+        },
+        {
+          "rule_id": "100801",
+          "level": 10,
+          "description": "NHI: GitLab CI job token detected"
+        },
+        {
+          "rule_id": "100802",
+          "level": 10,
+          "description": "NHI: CI/CD runner credential file access"
+        }
+      ]
+    },
+    {
+      "id": "S3-02",
+      "name": "Pipeline Injection via Pull Request",
+      "category": "CI/CD Pipeline",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100803",
+        "100804",
+        "100805"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS302PipelineInjection",
+      "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100803",
+          "level": 12,
+          "description": "NHI: CI/CD pipeline configuration modified - $(file)"
+        },
+        {
+          "rule_id": "100804",
+          "level": 10,
+          "description": "NHI: NPM authentication token detected"
+        },
+        {
+          "rule_id": "100805",
+          "level": 10,
+          "description": "NHI: GitHub Actions runtime token detected"
+        }
+      ]
+    },
+    {
+      "id": "S3-03",
+      "name": "OIDC Token Abuse for Cloud Access",
+      "category": "CI/CD Pipeline",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100806",
+        "100807",
+        "100808"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS303OIDCTokenAbuse",
+      "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100806",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100807",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100808",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S3-04",
+      "name": "Vault Privilege Escalation",
+      "category": "CI/CD & Supply Chain",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100606"
+      ],
+      "expected_rule_count": 1,
+      "has_e2e_test": true,
+      "test_class": "TestS304VaultPrivilegeEscalation",
+      "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
+      "test_method_count": 5,
+      "rule_details": [
+        {
+          "rule_id": "100606",
+          "level": 10,
+          "description": "NHI: HashiCorp Vault token file access"
+        }
+      ]
+    },
+    {
+      "id": "S3-05",
+      "name": "Multiple Credential Harvest",
+      "category": "CI/CD & Supply Chain",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100601",
+        "100602",
+        "100603",
+        "100606",
+        "100600",
+        "100609"
+      ],
+      "expected_rule_count": 6,
+      "has_e2e_test": true,
+      "test_class": "TestS305MultipleCredentialHarvest",
+      "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
+      "test_method_count": 5,
+      "rule_details": [
+        {
+          "rule_id": "100601",
+          "level": 12,
+          "description": "NHI: AWS credentials file access detected"
+        },
+        {
+          "rule_id": "100602",
+          "level": 10,
+          "description": "NHI: SSH private key access detected - $(file)"
+        },
+        {
+          "rule_id": "100603",
+          "level": 10,
+          "description": "NHI: Git credential file access detected"
+        },
+        {
+          "rule_id": "100606",
+          "level": 10,
+          "description": "NHI: HashiCorp Vault token file access"
+        },
+        {
+          "rule_id": "100600",
+          "level": 10,
+          "description": "NHI: Environment configuration file access detected - $(file)"
+        },
+        {
+          "rule_id": "100609",
+          "level": 14,
+          "description": "NHI: Multiple credential file accesses by same user - credential harvesting"
+        }
+      ]
+    },
+    {
+      "id": "S4-01",
+      "name": "Privileged Pod Container Escape",
+      "category": "Kubernetes",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100750",
+        "100751",
+        "100752"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS401PrivilegedPodEscape",
+      "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100750",
+          "level": 8,
+          "description": "NHI: Kubernetes ServiceAccount token access"
+        },
+        {
+          "rule_id": "100751",
+          "level": 8,
+          "description": "NHI: Kubernetes secrets volume access"
+        },
+        {
+          "rule_id": "100752",
+          "level": 8,
+          "description": "NHI: Kubernetes RBAC probing - kubectl auth can-i"
+        }
+      ]
+    },
+    {
+      "id": "S4-02",
+      "name": "Kubernetes Service Account Token Theft",
+      "category": "Kubernetes",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100753",
+        "100754",
+        "100755"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS402ServiceAccountTokenTheft",
+      "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100753",
+          "level": 10,
+          "description": "NHI: Kubernetes secrets enumeration via kubectl"
+        },
+        {
+          "rule_id": "100754",
+          "level": 8,
+          "description": "NHI: Kubernetes service account enumeration"
+        },
+        {
+          "rule_id": "100755",
+          "level": 12,
+          "description": "NHI: Extensive Kubernetes RBAC enumeration - permission discovery"
+        }
+      ]
+    },
+    {
+      "id": "S4-03",
+      "name": "RBAC Misconfiguration Exploitation",
+      "category": "Kubernetes",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100756",
+        "100757",
+        "100758"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS403RBACMisconfiguration",
+      "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100756",
+          "level": 14,
+          "description": "NHI: Direct etcd datastore access - CRITICAL"
+        },
+        {
+          "rule_id": "100757",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100758",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S4-04",
+      "name": "Secrets Mounted in Pod",
+      "category": "Kubernetes",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100759",
+        "100760",
+        "100761"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS404MountedSecrets",
+      "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100759",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100760",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100761",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "S4-05",
+      "name": "API Key Abuse via Environment Extraction",
+      "category": "Kubernetes & Container Security",
+      "difficulty": "Easy",
+      "expected_rules": [
+        "100900",
+        "100901"
+      ],
+      "expected_rule_count": 2,
+      "has_e2e_test": true,
+      "test_class": "TestS405APIKeyAbuse",
+      "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100900",
+          "level": 12,
+          "description": "NHI: AWS Access Key ID pattern detected"
+        },
+        {
+          "rule_id": "100901",
+          "level": 12,
+          "description": "NHI: GitHub token pattern detected"
+        }
+      ]
+    },
+    {
+      "id": "S5-01",
+      "name": "Prompt Injection Leading to Credential Disclosure",
+      "category": "AI Agents",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100850",
+        "100851",
+        "100852"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS501PromptInjection",
+      "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100850",
+          "level": 10,
+          "description": "NHI: AI agent framework spawning shell subprocess - $(process_name) executing $(command)"
+        },
+        {
+          "rule_id": "100851",
+          "level": 12,
+          "description": "NHI: AI agent accessing credential/config file - $(file)"
+        },
+        {
+          "rule_id": "100852",
+          "level": 10,
+          "description": "NHI: Prompt injection attempt detected in web request"
+        }
+      ]
+    },
+    {
+      "id": "S5-02",
+      "name": "AI Agent with Excessive Permissions",
+      "category": "AI Agents",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100853",
+        "100854",
+        "100855"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS502ExcessivePermissions",
+      "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100853",
+          "level": 12,
+          "description": "NHI: AI agent SSRF - cloud metadata access from $(process_name)"
+        },
+        {
+          "rule_id": "100854",
+          "level": 12,
+          "description": "NHI: AI agent rapid credential scanning - $(srcuser) accessed 20+ credential files in 60s"
+        },
+        {
+          "rule_id": "100855",
+          "level": 12,
+          "description": "NHI: AI agent shell executing network/exfiltration command"
+        }
+      ]
+    },
+    {
+      "id": "S5-03",
+      "name": "AI Agent Tool-Use SSRF Abuse",
+      "category": "AI Agents",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100856",
+        "100857",
+        "100858"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS503ToolUseSSRF",
+      "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
+      "test_method_count": 6,
+      "rule_details": [
+        {
+          "rule_id": "100856",
+          "level": 14,
+          "description": "NHI: Prompt injection targeting credential extraction - CRITICAL"
+        },
+        {
+          "rule_id": "100857",
+          "level": 14,
+          "description": "NHI: AI agent SSRF escalated to credential theft endpoint - CRITICAL"
+        },
+        {
+          "rule_id": "100858",
+          "level": 10,
+          "description": "NHI: AI agent MCP/tool-use activity detected"
+        }
+      ]
+    },
+    {
+      "id": "S5-04",
+      "name": "AI Agent Memory/Context Poisoning",
+      "category": "AI Agents",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100859",
+        "100860",
+        "100861"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS504ContextPoisoning",
+      "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
+      "test_method_count": 7,
+      "rule_details": [
+        {
+          "rule_id": "100859",
+          "level": 10,
+          "description": "NHI: AI agent making external network request"
+        },
+        {
+          "rule_id": "100860",
+          "level": "?",
+          "description": "Unknown"
+        },
+        {
+          "rule_id": "100861",
+          "level": "?",
+          "description": "Unknown"
+        }
+      ]
+    }
+  ],
+  "correlation_rules": [
+    {
+      "rule_id": "100950",
+      "level": 14,
+      "description": "NHI: Credential harvesting combined with IMDS access - multi-vector attack",
+      "has_test": true,
+      "test_class": "TestCorrelationRule100950",
+      "test_method_count": 3
+    },
+    {
+      "rule_id": "100951",
+      "level": 14,
+      "description": "NHI: K8s token theft followed by secrets enumeration - container attack",
+      "has_test": true,
+      "test_class": "TestCorrelationRule100951",
+      "test_method_count": 3
+    },
+    {
+      "rule_id": "100952",
+      "level": 14,
+      "description": "NHI: CI/CD token + git credential access - supply chain attack",
+      "has_test": true,
+      "test_class": "TestCorrelationRule100952",
+      "test_method_count": 3
+    },
+    {
+      "rule_id": "100953",
+      "level": 15,
+      "description": "NHI: AI agent SSRF with credential access - agent compromise",
+      "has_test": true,
+      "test_class": "TestCorrelationRule100953",
+      "test_method_count": 3
+    },
+    {
+      "rule_id": "100954",
+      "level": 15,
+      "description": "NHI: Multiple machine identity security events from same source - complex attack",
+      "has_test": true,
+      "test_class": "TestCorrelationRule100954",
+      "test_method_count": 2
+    }
+  ],
+  "untested_scenarios": [
+    "S1-05"
+  ]
+}

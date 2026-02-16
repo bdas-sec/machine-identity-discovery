@@ -1,0 +1,31 @@
+title: "NHI: NPM Authentication Token Detected"
+id: d3f222a1-a841-43b1-8f7f-1d47f7554d1b
+related:
+    - id: "100804"
+      type: derived
+status: test
+description: |
+    Detects the NPM_TOKEN environment variable being exposed in process listings
+    or log output. NPM tokens enable publishing to npm registries and can be
+    used for supply chain attacks via malicious package versions.
+    Derived from Wazuh rule 100804.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://docs.npmjs.com/using-private-packages-in-a-ci-cd-workflow
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.cicd_pipeline
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'NPM_TOKEN'
+    condition: selection
+falsepositives:
+    - CI/CD pipelines configuring npm authentication
+    - npm publish scripts
+level: high

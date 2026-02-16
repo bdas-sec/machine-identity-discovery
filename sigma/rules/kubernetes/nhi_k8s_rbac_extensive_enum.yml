@@ -1,0 +1,29 @@
+title: "NHI: Extensive Kubernetes RBAC Enumeration - Permission Discovery"
+id: 90b3abba-bc91-4842-92f9-a608a7254c9a
+related:
+    - id: "100755"
+      type: derived
+name: nhi_k8s_rbac_enum
+type: correlation
+status: test
+description: |
+    Detects extensive RBAC permission probing (10+ kubectl auth can-i commands
+    within 60 seconds). This pattern indicates systematic permission discovery
+    using automated tooling or scripts, not manual exploration.
+    Derived from Wazuh rule 100755 (frequency=10, timeframe=60s).
+references:
+    - https://attack.mitre.org/techniques/T1069/003/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.discovery
+    - attack.t1069.003
+    - nhi.kubernetes
+rules:
+    - nhi_k8s_rbac_probing
+group-by:
+    - User
+timespan: 1m
+condition:
+    gte: 10
+level: high

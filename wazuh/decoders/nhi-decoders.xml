@@ -7,6 +7,18 @@
   Copyright (C) 2026, Bodhisattva Das
 -->
 
+<!-- NHI Security Alert Decoder (Flask app security log) -->
+<decoder name="nhi_alert">
+  <program_name>NHI_ALERT</program_name>
+</decoder>
+
+<!-- NHI SSRF URL extractor -->
+<decoder name="nhi_alert_url">
+  <parent>nhi_alert</parent>
+  <regex type="pcre2">SSRF request to (.+?)(?:\s+from|$)</regex>
+  <order>url</order>
+</decoder>
+
 <!-- IMDS Access Log Decoder -->
 <decoder name="nhi-imds-access">
   <prematch>IMDS-ACCESS:|169.254.169.254|mock-imds</prematch>

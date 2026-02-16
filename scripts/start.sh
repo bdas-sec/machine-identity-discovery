@@ -89,21 +89,41 @@ check_prerequisites() {
     fi
 
     # Check vm.max_map_count for OpenSearch
-    MAX_MAP_COUNT=$(sysctl -n vm.max_map_count 2>/dev/null || echo "0")
-    if [ "$MAX_MAP_COUNT" -lt 262144 ]; then
-        echo -e "${YELLOW}  [!] WARNING: vm.max_map_count is $MAX_MAP_COUNT (recommended: 262144)${NC}"
-        echo "      Run: sudo sysctl -w vm.max_map_count=262144"
-        read -p "      Continue anyway? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS: check inside Colima/Docker VM instead of host
+        VM_MAP_COUNT=$(colima ssh -- sysctl -n vm.max_map_count 2>/dev/null || docker run --rm --privileged alpine sysctl -n vm.max_map_count 2>/dev/null || echo "0")
+        if [ "$VM_MAP_COUNT" -ge 262144 ]; then
+            echo "  [+] vm.max_map_count: $VM_MAP_COUNT (inside VM)"
+        else
+            echo -e "${YELLOW}  [!] WARNING: vm.max_map_count is $VM_MAP_COUNT in Docker VM${NC}"
+            echo "      Run: colima ssh -- sudo sysctl -w vm.max_map_count=262144"
+            read -p "      Continue anyway? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
         fi
     else
-        echo "  [+] vm.max_map_count: $MAX_MAP_COUNT"
+        MAX_MAP_COUNT=$(sysctl -n vm.max_map_count 2>/dev/null || echo "0")
+        if [ "$MAX_MAP_COUNT" -lt 262144 ]; then
+            echo -e "${YELLOW}  [!] WARNING: vm.max_map_count is $MAX_MAP_COUNT (recommended: 262144)${NC}"
+            echo "      Run: sudo sysctl -w vm.max_map_count=262144"
+            read -p "      Continue anyway? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+        else
+            echo "  [+] vm.max_map_count: $MAX_MAP_COUNT"
+        fi
     fi
 
     # Check available memory
-    TOTAL_MEM=$(free -g | awk '/^Mem:/{print $2}')
+    if [[ "$(uname)" == "Darwin" ]]; then
+        TOTAL_MEM=$(( $(sysctl -n hw.memsize 2>/dev/null) / 1073741824 ))
+    else
+        TOTAL_MEM=$(free -g | awk '/^Mem:/{print $2}')
+    fi
     if [ "$TOTAL_MEM" -lt 6 ]; then
         echo -e "${YELLOW}  [!] WARNING: Low memory detected (${TOTAL_MEM}GB). Recommended: 8GB+${NC}"
     else
@@ -406,9 +426,99 @@ install_nhi_rules() {
         chown wazuh:wazuh /var/ossec/etc/rules/nhi-detection-rules.xml 2>/dev/null && \
         chown wazuh:wazuh /var/ossec/etc/decoders/nhi-decoders.xml 2>/dev/null"
 
+    # Install local decoder for NHI_ALERT syslog entries
+    echo "  [*] Installing NHI_ALERT decoder and demo rules..."
+    $RUNTIME exec wazuh-manager bash -c 'cat > /var/ossec/etc/decoders/local_decoder.xml << '\''XMLEOF'\''
+<!-- Local Decoders -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<!-- NHI Testbed Decoder - matches Flask app security log entries -->
+<decoder name="nhi_alert">
+    <program_name>NHI_ALERT</program_name>
+</decoder>
+
+<!-- NHI SSRF URL extractor -->
+<decoder name="nhi_alert_url">
+    <parent>nhi_alert</parent>
+    <regex type="pcre2">SSRF request to (.+?)(?:\s+from|$)</regex>
+    <order>url</order>
+</decoder>
+XMLEOF'
+
+    # Install local rules for demo kill chain alerts
+    $RUNTIME exec wazuh-manager bash -c 'cat > /var/ossec/etc/rules/local_rules.xml << '\''XMLEOF'\''
+<!-- Local rules -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<!-- NHI Testbed Demo Rules - Kill Chain Alerts -->
+<group name="nhi,demo,">
+
+  <rule id="100010" level="3">
+    <program_name>NHI_ALERT</program_name>
+    <description>NHI Testbed log entry</description>
+  </rule>
+
+  <rule id="100011" level="10">
+    <if_sid>100010</if_sid>
+    <match type="pcre2">SSRF.*mock-imds</match>
+    <description>NHI: SSRF request targeting cloud metadata service (IMDS)</description>
+    <mitre><id>T1552.005</id></mitre>
+    <group>nhi_imds,attack,</group>
+  </rule>
+
+  <rule id="100012" level="12">
+    <if_sid>100011</if_sid>
+    <match>security-credentials</match>
+    <description>NHI: IMDS IAM credential theft via SSRF - CRITICAL</description>
+    <mitre><id>T1552.005</id><id>T1078.004</id></mitre>
+    <group>nhi_imds_cred,attack,</group>
+  </rule>
+
+  <rule id="100013" level="12">
+    <if_sid>100011</if_sid>
+    <match>iam/info</match>
+    <description>NHI: IMDS IAM role privilege discovery via SSRF</description>
+    <mitre><id>T1078.004</id></mitre>
+    <group>nhi_imds_priv,attack,</group>
+  </rule>
+
+  <rule id="100014" level="8">
+    <if_sid>100010</if_sid>
+    <match>ENV_FILE</match>
+    <description>NHI: Sensitive environment file accessed - credential exposure</description>
+    <mitre><id>T1552.001</id></mitre>
+    <group>nhi_env_access,attack,</group>
+  </rule>
+
+  <rule id="100015" level="8">
+    <if_sid>100010</if_sid>
+    <match>DEBUG_ENDPOINT</match>
+    <description>NHI: Debug endpoint accessed - environment variable leak</description>
+    <mitre><id>T1082</id></mitre>
+    <group>nhi_debug_access,attack,</group>
+  </rule>
+
+  <rule id="100016" level="10">
+    <if_sid>100010</if_sid>
+    <match>CICD_SECRET</match>
+    <description>NHI: CI/CD pipeline secrets accessed - lateral movement</description>
+    <mitre><id>T1528</id></mitre>
+    <group>nhi_cicd,attack,</group>
+  </rule>
+
+</group>
+XMLEOF'
+
+    # Fix Filebeat SSL verification for self-signed certs
+    echo "  [*] Fixing Filebeat TLS configuration..."
+    $RUNTIME exec wazuh-manager bash -c "sed -i \"s/ssl.verification_mode: 'full'/ssl.verification_mode: 'none'/\" /etc/filebeat/filebeat.yml 2>/dev/null" || true
+
     # Reload Wazuh to pick up new rules
     echo "  [*] Reloading Wazuh rules..."
     $RUNTIME exec wazuh-manager /var/ossec/bin/wazuh-control reload 2>/dev/null || true
+
+    # Restart Filebeat to apply TLS fix
+    $RUNTIME exec wazuh-manager bash -c "pkill filebeat; sleep 2; filebeat -c /etc/filebeat/filebeat.yml &" 2>/dev/null || true
 
     # Verify rules loaded
     RULE_COUNT=$($RUNTIME exec wazuh-manager grep -c "rule id=\"100" /var/ossec/etc/rules/nhi-detection-rules.xml 2>/dev/null || echo "0")

@@ -1,0 +1,32 @@
+title: "NHI: Kubernetes Service Account Enumeration"
+id: 8c977bac-e474-4532-99e6-a9033b3799ce
+related:
+    - id: "100754"
+      type: derived
+status: test
+description: |
+    Detects the use of kubectl to enumerate Kubernetes service accounts.
+    Attackers enumerate service accounts to identify high-privilege identities
+    that can be targeted for token theft or impersonation.
+    Derived from Wazuh rule 100754.
+references:
+    - https://attack.mitre.org/techniques/T1087/004/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.discovery
+    - attack.t1087.004
+    - nhi.kubernetes
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains|all:
+            - 'kubectl'
+            - 'serviceaccount'
+    condition: selection
+falsepositives:
+    - Kubernetes administrators managing service accounts
+    - GitOps tools reconciling service account state
+level: medium

@@ -1,0 +1,143 @@
+{
+  "id": "S2-05",
+  "name": "HashiCorp Vault Token Theft",
+  "category": "Cloud Service Accounts",
+  "version": "1.0",
+  "description": "Steal HashiCorp Vault tokens from token files and environment variables to gain access to secrets management infrastructure",
+  "difficulty": "Medium",
+  "real_world_relevance": "HashiCorp Vault is used by 30%+ of Fortune 500 companies; a stolen root or admin token provides access to ALL managed secrets",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload"],
+    "network": "cloud_net",
+    "services": ["vault"]
+  },
+
+  "attack_flow": {
+    "description": "Attacker locates and steals Vault authentication tokens from local files and environment variables",
+    "diagram": [
+      "1. Attacker gains access to a system using Vault",
+      "2. Attacker checks ~/.vault-token file for cached tokens",
+      "3. Attacker enumerates environment variables for VAULT_TOKEN",
+      "4. Attacker validates stolen token against Vault API",
+      "5. Attacker uses token to extract secrets from Vault"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Token File Discovery",
+      "description": "Check for cached Vault token file",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat ~/.vault-token 2>/dev/null || echo 'No vault token'",
+          "expected_output_contains": ["hvs.", "s."]
+        }
+      ]
+    },
+    {
+      "name": "Environment Variable Check",
+      "description": "Check environment for Vault-related variables",
+      "actions": [
+        {
+          "type": "command",
+          "command": "env | grep VAULT || true",
+          "expected_output_contains": ["VAULT_ADDR", "VAULT_TOKEN"]
+        }
+      ]
+    },
+    {
+      "name": "Token Validation",
+      "description": "Validate the stolen token against Vault API",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "target": "http://vault:8200/v1/auth/token/lookup-self",
+          "method": "GET",
+          "headers": {"X-Vault-Token": "${STOLEN_TOKEN}"},
+          "description": "Verify token is valid and check its policies"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Access to ~/.vault-token file",
+      "wazuh_rule": "100606"
+    },
+    {
+      "type": "Process",
+      "description": "Environment variable enumeration for VAULT variables",
+      "wazuh_rule": "100607"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100606",
+      "level": 10,
+      "description": "NHI: HashiCorp Vault token file access"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke the compromised Vault token immediately",
+      "Audit Vault access logs for unauthorized secret reads",
+      "Rotate all secrets that were accessible with the stolen token"
+    ],
+    "long_term": [
+      "Use short-lived Vault tokens with minimal TTL",
+      "Implement Vault Agent for automatic token management",
+      "Use AppRole or Kubernetes auth instead of token files",
+      "Enable Vault audit logging to detect unusual access patterns",
+      "Restrict Vault policies to least privilege"
+    ],
+    "vault_commands": [
+      "# Revoke compromised token",
+      "vault token revoke <stolen-token>",
+      "",
+      "# Enable audit logging",
+      "vault audit enable file file_path=/var/log/vault/audit.log",
+      "",
+      "# Create limited policy",
+      "vault policy write app-readonly - <<EOF",
+      "path \"secret/data/app/*\" { capabilities = [\"read\"] }",
+      "EOF"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Check for cached Vault token",
+      "cat ~/.vault-token 2>/dev/null || echo 'No vault token'",
+      "",
+      "# Check environment for Vault config",
+      "env | grep VAULT || true"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "HashiCorp Vault Token Concepts",
+      "url": "https://developer.hashicorp.com/vault/docs/concepts/tokens"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.001",
+      "url": "https://attack.mitre.org/techniques/T1552/001/"
+    }
+  ]
+}

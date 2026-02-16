@@ -1,0 +1,32 @@
+title: "NHI: CI/CD Token + Git Credential Access - Supply Chain Attack"
+id: f790185d-0ab4-4185-bb54-a481a7b14245
+related:
+    - id: "100952"
+      type: derived
+name: nhi_corr_supply_chain
+type: correlation
+status: test
+description: |
+    Detects when CI/CD token exposure (GitHub/GitLab) is combined with git
+    credential file access within 300 seconds. This attack chain indicates
+    an attacker collecting both CI/CD pipeline tokens and repository credentials
+    to execute a software supply chain attack.
+    Derived from Wazuh rule 100952 (timeframe=300s).
+references:
+    - https://attack.mitre.org/techniques/T1195/002/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.persistence
+    - attack.t1195.002
+    - nhi.correlation
+rules:
+    - nhi_cicd_github_token_detected
+    - nhi_cicd_gitlab_token_detected
+    - nhi_cred_git_credential_access
+group-by:
+    - SourceIP
+timespan: 5m
+condition:
+    gte: 1
+level: critical

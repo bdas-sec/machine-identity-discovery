@@ -416,63 +416,131 @@
 <!-- ================================================= -->
 <!-- GROUP 5: AI AGENT ANOMALIES                       -->
 <!-- Rule IDs: 100850-100899                           -->
+<!-- Upgraded to production-grade: 2026-02-15          -->
 <!-- ================================================= -->
 <group name="nhi,ai_agent,">
 
-  <!-- AI process executing shell -->
+  <!-- AI agent framework spawning shell subprocess -->
   <rule id="100850" level="10">
     <if_sid>80792</if_sid>
-    <field name="process_name" type="pcre2">python|node</field>
-    <field name="command" type="pcre2">bash|sh|cmd|powershell</field>
-    <description>NHI: AI agent executing shell command</description>
+    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
+    <field name="command" type="pcre2">(/bin/)?(bash|sh|zsh|dash|cmd|powershell|pwsh)\s</field>
+    <description>NHI: AI agent framework spawning shell subprocess - $(process_name) executing $(command)</description>
     <mitre>
       <id>T1059</id>
+      <id>T1059.004</id>
     </mitre>
-    <group>nhi_ai_shell,</group>
+    <group>nhi_ai_shell,pci_dss_10.2.7,</group>
   </rule>
 
-  <!-- AI process accessing credentials -->
+  <!-- AI agent shell executing sensitive commands -->
+  <rule id="100855" level="12">
+    <if_sid>100850</if_sid>
+    <match type="pcre2">curl.*169\.254|wget.*169\.254|curl.*metadata|nc\s+-|ncat\s+|ssh\s+|scp\s+|rsync\s+</match>
+    <description>NHI: AI agent shell executing network/exfiltration command</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1041</id>
+    </mitre>
+    <group>nhi_ai_shell_network,</group>
+  </rule>
+
+  <!-- AI process accessing credential files with expanded patterns -->
   <rule id="100851" level="12">
     <if_sid>550,554</if_sid>
-    <field name="process_name" type="pcre2">python|node|agent</field>
-    <field name="file" type="pcre2">\.env|credential|password|secret|token|\.pem|\.key</field>
-    <description>NHI: AI agent accessing credential file - $(file)</description>
+    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
+    <field name="file" type="pcre2">\.env$|\.env\.|credentials$|\.aws/|\.kube/config|\.vault-token|\.npmrc|\.docker/config\.json|\.git-credentials|id_rsa|id_ed25519|\.pem$|\.key$|\.p12$|\.pfx$|service[-_]?account.*\.json|\.mcp/|tool[-_]?config</field>
+    <description>NHI: AI agent accessing credential/config file - $(file)</description>
     <mitre>
       <id>T1552.001</id>
+      <id>T1552.004</id>
     </mitre>
-    <group>nhi_ai_cred_access,</group>
+    <group>nhi_ai_cred_access,pci_dss_8.2.1,</group>
   </rule>
 
-  <!-- Potential prompt injection in web request -->
+  <!-- Prompt injection detection with comprehensive patterns -->
   <rule id="100852" level="10">
     <if_sid>31100,31101</if_sid>
-    <match type="pcre2">ignore.*previous|disregard.*instructions|system.*prompt|jailbreak</match>
-    <description>NHI: Potential prompt injection attempt in web request</description>
+    <match type="pcre2">(?i)ignore\s+(all\s+)?previous|disregard\s+(all\s+)?instructions|system\s*prompt|jailbreak|you\s+are\s+now|act\s+as\s+(a\s+)?root|reveal\s+(your\s+)?(system|secret|hidden)|override\s+(safety|security|filter)|bypass\s+(filter|restriction|guard)|execute\s+(this\s+)?command|&lt;\|system\|&gt;|&lt;!--\s*inject|do\s+not\s+follow\s+(your|the)\s+rules|pretend\s+you\s+are|output\s+(your\s+)?instructions</match>
+    <description>NHI: Prompt injection attempt detected in web request</description>
     <mitre>
       <id>T1059</id>
+      <id>T1190</id>
     </mitre>
     <group>nhi_ai_prompt_injection,</group>
   </rule>
 
-  <!-- AI accessing IMDS -->
+  <!-- Elevated prompt injection - targeting credential extraction -->
+  <rule id="100856" level="14">
+    <if_sid>100852</if_sid>
+    <match type="pcre2">(?i)(fetch|read|cat|access|show|print|display).{0,30}(credential|password|secret|token|key|\.env|/etc/passwd|/etc/shadow|aws.*key|api.*key)</match>
+    <description>NHI: Prompt injection targeting credential extraction - CRITICAL</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_ai_prompt_injection_cred,</group>
+  </rule>
+
+  <!-- AI agent SSRF via cloud metadata with expanded endpoint coverage -->
   <rule id="100853" level="12">
-    <if_sid>100650</if_sid>
-    <field name="process_name" type="pcre2">python|node|agent</field>
-    <description>NHI: AI agent attempting IMDS access - SSRF attack</description>
+    <if_sid>100650,100653,100655</if_sid>
+    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama|uvicorn|gunicorn|flask|fastapi</field>
+    <description>NHI: AI agent SSRF - cloud metadata access from $(process_name)</description>
     <mitre>
       <id>T1552.005</id>
+      <id>T1190</id>
     </mitre>
     <group>nhi_ai_ssrf,</group>
   </rule>
 
-  <!-- Rapid file system operations by AI -->
-  <rule id="100854" level="10" frequency="50" timeframe="60">
+  <!-- AI agent SSRF escalation - credential endpoint reached -->
+  <rule id="100857" level="14">
+    <if_sid>100853</if_sid>
+    <match type="pcre2">iam/security-credentials|service-accounts.*token|oauth2/token</match>
+    <description>NHI: AI agent SSRF escalated to credential theft endpoint - CRITICAL</description>
+    <mitre>
+      <id>T1552.005</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_ai_ssrf_cred,</group>
+  </rule>
+
+  <!-- Rapid credential file scanning by AI agent (tuned threshold) -->
+  <rule id="100854" level="12" frequency="20" timeframe="60">
     <if_matched_group>nhi_ai_cred_access</if_matched_group>
-    <description>NHI: AI agent performing rapid file system operations</description>
+    <same_field>srcuser</same_field>
+    <description>NHI: AI agent rapid credential scanning - $(srcuser) accessed 20+ credential files in 60s</description>
     <mitre>
       <id>T1083</id>
+      <id>T1552</id>
     </mitre>
     <group>nhi_ai_fs_scan,</group>
+  </rule>
+
+  <!-- AI agent MCP tool abuse - unauthorized resource access -->
+  <rule id="100858" level="10">
+    <if_sid>80792</if_sid>
+    <match type="pcre2">mcp[-_]?(server|tool|client)|tool[-_]?use|function[-_]?call</match>
+    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent</field>
+    <description>NHI: AI agent MCP/tool-use activity detected</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_tool_use,</group>
+  </rule>
+
+  <!-- AI agent accessing external URLs (potential data exfiltration) -->
+  <rule id="100859" level="10">
+    <if_sid>80700</if_sid>
+    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
+    <match type="pcre2">https?://(?!localhost|127\.0\.0\.1|::1|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)</match>
+    <description>NHI: AI agent making external network request</description>
+    <mitre>
+      <id>T1071.001</id>
+      <id>T1041</id>
+    </mitre>
+    <group>nhi_ai_external_request,</group>
   </rule>
 
 </group>
@@ -548,6 +616,106 @@
       <id>T1552.001</id>
     </mitre>
     <group>nhi_secret_gcp,</group>
+  </rule>
+
+  <!-- Azure connection string pattern -->
+  <rule id="100906" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[^;]+</match>
+    <description>NHI: Azure Storage connection string detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_azure,</group>
+  </rule>
+
+  <!-- JWT token pattern -->
+  <rule id="100907" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+</match>
+    <description>NHI: JWT token pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_jwt,</group>
+  </rule>
+
+  <!-- Database connection string pattern -->
+  <rule id="100908" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">(postgresql|mysql|mongodb|redis)://[^:]+:[^@]+@</match>
+    <description>NHI: Database connection string with credentials detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_database,</group>
+  </rule>
+
+  <!-- Stripe API key pattern -->
+  <rule id="100909" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">sk_live_[0-9a-zA-Z]{24,}</match>
+    <description>NHI: Stripe live API key pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_stripe,</group>
+  </rule>
+
+  <!-- Twilio auth token pattern -->
+  <rule id="100910" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">SK[0-9a-fA-F]{32}</match>
+    <description>NHI: Twilio API key pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_twilio,</group>
+  </rule>
+
+  <!-- Firebase server key pattern -->
+  <rule id="100911" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}</match>
+    <description>NHI: Firebase Cloud Messaging server key detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_firebase,</group>
+  </rule>
+
+  <!-- Terraform Cloud token pattern -->
+  <rule id="100912" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">atlasv1\.[a-zA-Z0-9_-]{60,}</match>
+    <description>NHI: Terraform Cloud/Enterprise API token detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_terraform,</group>
+  </rule>
+
+  <!-- HashiCorp Vault token pattern -->
+  <rule id="100913" level="12">
+    <if_sid>550,530,531</if_sid>
+    <match type="pcre2">hvs\.[a-zA-Z0-9_-]{24,}</match>
+    <description>NHI: HashiCorp Vault service token detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_vault_token,</group>
+  </rule>
+
+  <!-- Datadog API key pattern -->
+  <rule id="100914" level="10">
+    <if_sid>550,530,531</if_sid>
+    <match>DD_API_KEY</match>
+    <match type="pcre2">[a-f0-9]{32}</match>
+    <description>NHI: Datadog API key pattern detected</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_secret_datadog,</group>
   </rule>
 
 </group>

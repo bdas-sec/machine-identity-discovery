@@ -1,0 +1,118 @@
+{
+  "id": "S4-05",
+  "name": "API Key Abuse via Environment Extraction",
+  "category": "Kubernetes & Container Security",
+  "version": "1.0",
+  "description": "Extract and identify API keys from environment variables in a vulnerable application container for lateral movement and service abuse",
+  "difficulty": "Easy",
+  "real_world_relevance": "CircleCI breach (2023) exposed thousands of customer API keys via environment variables; Heroku/Travis CI incidents exposed similar patterns",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Discovery"],
+    "techniques": [
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"},
+      {"id": "T1082", "name": "System Information Discovery"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["vulnerable-app"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker extracts API keys from application environment variables",
+    "diagram": [
+      "1. Attacker gains access to vulnerable application container",
+      "2. Attacker enumerates environment variables for API/key/token patterns",
+      "3. Attacker identifies service API keys (AWS, Stripe, OpenAI, etc.)",
+      "4. Attacker validates keys against respective service APIs",
+      "5. Attacker uses keys for lateral movement or data theft"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Environment Enumeration",
+      "description": "Extract environment variables containing API keys",
+      "actions": [
+        {
+          "type": "command",
+          "command": "env | grep -iE 'api|key|token' || true",
+          "expected_output_contains": ["API_KEY", "TOKEN"]
+        }
+      ]
+    },
+    {
+      "name": "Key Identification",
+      "description": "Classify discovered keys by service type",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "env | grep -iE 'api|key|token|secret' | sed 's/=.*/=***REDACTED***/'",
+          "description": "List all API key variable names"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Process",
+      "description": "Environment variable enumeration filtering for credential patterns",
+      "wazuh_rule": "100607"
+    },
+    {
+      "type": "Secret Pattern",
+      "description": "Known API key patterns in process output",
+      "wazuh_rule": "100900"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100900",
+      "level": 12,
+      "description": "NHI: AWS Access Key ID pattern detected"
+    },
+    {
+      "rule_id": "100901",
+      "level": 12,
+      "description": "NHI: GitHub token pattern detected"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate all API keys exposed via environment variables",
+      "Audit API key usage logs for unauthorized access",
+      "Remove debug/config endpoints from production"
+    ],
+    "long_term": [
+      "Use secrets management (Vault, AWS Secrets Manager) instead of env vars",
+      "Implement API key rotation policies",
+      "Use scoped, short-lived tokens instead of long-lived API keys",
+      "Enable API key usage monitoring and anomaly detection"
+    ]
+  },
+
+  "demo_script": {
+    "container": "vulnerable-app",
+    "commands": [
+      "# Extract API keys from environment",
+      "env | grep -iE 'api|key|token' || true"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "CircleCI Security Incident (2023)",
+      "url": "https://circleci.com/blog/jan-4-2023-incident-report/"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.007",
+      "url": "https://attack.mitre.org/techniques/T1552/007/"
+    }
+  ]
+}

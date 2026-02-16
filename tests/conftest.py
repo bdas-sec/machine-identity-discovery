@@ -31,6 +31,7 @@ MOCK_IMDS_URL = os.environ.get("MOCK_IMDS_URL", "http://localhost:1338")
 MOCK_CICD_URL = os.environ.get("MOCK_CICD_URL", "http://localhost:8080")
 VULNERABLE_APP_URL = os.environ.get("VULNERABLE_APP_URL", "http://localhost:8888")
 VAULT_URL = os.environ.get("VAULT_URL", "http://localhost:8200")
+AI_AGENT_URL = os.environ.get("AI_AGENT_URL", "http://localhost:8889")
 
 # Wazuh credentials
 WAZUH_API_USER = os.environ.get("WAZUH_API_USER", "wazuh-wui")
@@ -207,6 +208,13 @@ def vulnerable_app_client():
     """HTTP client for Vulnerable App service."""
     from helpers.http_client import TestHttpClient
     return TestHttpClient(base_url=VULNERABLE_APP_URL)
+
+
+@pytest.fixture(scope="session")
+def ai_agent_client():
+    """HTTP client for AI Agent service."""
+    from helpers.http_client import TestHttpClient
+    return TestHttpClient(base_url=AI_AGENT_URL)
 
 
 # ============================================================

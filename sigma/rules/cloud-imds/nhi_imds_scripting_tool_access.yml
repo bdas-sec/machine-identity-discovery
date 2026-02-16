@@ -1,0 +1,43 @@
+title: "NHI: IMDS Access from Scripting Tool"
+id: 1302fcb9-79c6-4d46-9d0e-fafb258ea28e
+related:
+    - id: "100658"
+      type: derived
+status: test
+description: |
+    Detects cloud metadata service access from scripting tools (curl, wget,
+    python, ruby, perl, nc, ncat). These tools are commonly used by attackers
+    for manual SSRF exploitation and credential theft from IMDS endpoints.
+    Derived from Wazuh rule 100658 (child of 100650/100653/100655).
+references:
+    - https://attack.mitre.org/techniques/T1552/005/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.005
+    - nhi.cloud_imds
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_imds:
+        dst_ip:
+            - '169.254.169.254'
+        DestinationHostname:
+            - 'metadata.google.internal'
+    selection_process:
+        Image|endswith:
+            - '/curl'
+            - '/wget'
+            - '/python'
+            - '/python3'
+            - '/ruby'
+            - '/perl'
+            - '/nc'
+            - '/ncat'
+    condition: 1 of selection_imds and selection_process
+falsepositives:
+    - Cloud bootstrapping scripts using curl
+    - Monitoring tools checking IMDS availability
+level: high

@@ -1,0 +1,31 @@
+title: "NHI: NPM Configuration File Access"
+id: 520bf838-94a1-4f89-a585-3ff8c8e7e7fa
+related:
+    - id: "100608"
+      type: derived
+status: test
+description: |
+    Detects access to NPM configuration file (.npmrc) which may contain
+    authentication tokens for private registries. Stolen NPM tokens enable
+    supply chain attacks via malicious package publishing.
+    Derived from Wazuh rule 100608.
+references:
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://docs.npmjs.com/cli/v10/configuring-npm/npmrc
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.001
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|endswith: '.npmrc'
+    condition: selection
+falsepositives:
+    - npm install operations
+    - CI/CD pipeline package installations
+level: high

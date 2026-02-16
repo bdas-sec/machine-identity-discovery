@@ -1,0 +1,131 @@
+{
+  "id": "S1-05",
+  "name": "Kubernetes Config Discovery",
+  "category": "API Keys & Secrets",
+  "version": "1.0",
+  "description": "Discover and access Kubernetes configuration files (kubeconfig) containing cluster authentication credentials",
+  "difficulty": "Easy",
+  "real_world_relevance": "Kubernetes misconfigurations are a top cloud attack vector; kubeconfig files contain cluster admin credentials, client certificates, and bearer tokens",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Discovery"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1083", "name": "File and Directory Discovery"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers kubeconfig files to obtain Kubernetes cluster access credentials",
+    "diagram": [
+      "1. Attacker gains shell access to a cloud workload",
+      "2. Attacker checks default kubeconfig location (~/.kube/config)",
+      "3. Attacker searches filesystem for kubeconfig files",
+      "4. Attacker extracts cluster endpoint, certificates, and tokens",
+      "5. Attacker uses credentials to authenticate to the Kubernetes API"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Default Kubeconfig Check",
+      "description": "Check the default kubeconfig file location",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat ~/.kube/config 2>/dev/null || echo 'No kubeconfig'",
+          "expected_output_contains": ["cluster", "server"]
+        }
+      ]
+    },
+    {
+      "name": "Kubeconfig Search",
+      "description": "Search filesystem for kubeconfig files",
+      "actions": [
+        {
+          "type": "command",
+          "command": "find / -name 'kubeconfig*' 2>/dev/null | head -5 || true",
+          "description": "Find all kubeconfig files on the system"
+        }
+      ]
+    },
+    {
+      "name": "Credential Extraction",
+      "description": "Extract authentication data from kubeconfig",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat ~/.kube/config 2>/dev/null | grep -E '(server|certificate-authority|client-certificate|client-key|token)' || true",
+          "description": "Extract cluster endpoint and authentication credentials"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Access to kubeconfig files (~/.kube/config or kubeconfig*)",
+      "wazuh_rule": "100605"
+    },
+    {
+      "type": "Process",
+      "description": "find command searching for kubeconfig files",
+      "wazuh_rule": "100605"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100605",
+      "level": 10,
+      "description": "NHI: Kubernetes config file access detected"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate cluster credentials and certificates",
+      "Audit Kubernetes API server access logs",
+      "Revoke any compromised bearer tokens"
+    ],
+    "long_term": [
+      "Use short-lived tokens instead of static kubeconfig files",
+      "Implement Kubernetes OIDC authentication",
+      "Restrict file permissions on kubeconfig (chmod 600)",
+      "Use cloud provider IAM for cluster authentication (GKE WIF, EKS IRSA)"
+    ],
+    "tools": [
+      "kubeaudit - Kubernetes security auditing tool",
+      "kube-bench - CIS Kubernetes benchmark checker"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Check default kubeconfig",
+      "cat ~/.kube/config 2>/dev/null || echo 'No kubeconfig'",
+      "",
+      "# Search for kubeconfig files",
+      "find / -name 'kubeconfig*' 2>/dev/null | head -5 || true"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Kubernetes Configuration Best Practices",
+      "url": "https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.001",
+      "url": "https://attack.mitre.org/techniques/T1552/001/"
+    }
+  ]
+}

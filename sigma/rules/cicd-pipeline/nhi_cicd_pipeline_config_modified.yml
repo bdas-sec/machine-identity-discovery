@@ -1,0 +1,33 @@
+title: "NHI: CI/CD Pipeline Configuration Modified"
+id: 347ae636-b265-4d36-a523-1de6292a1924
+related:
+    - id: "100803"
+      type: derived
+status: test
+description: |
+    Detects modification of CI/CD pipeline configuration files (GitHub Actions
+    workflows, .gitlab-ci.yml, Jenkinsfile, CircleCI config). Pipeline poisoning
+    is a supply chain attack vector that enables code execution in trusted contexts.
+    Derived from Wazuh rule 100803.
+references:
+    - https://attack.mitre.org/techniques/T1195/002/
+    - https://www.cidersecurity.io/top-10-cicd-security-risks/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.persistence
+    - attack.t1195.002
+    - nhi.cicd_pipeline
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|re: '\.(github/workflows/|gitlab-ci\.yml|circleci/)'
+    selection_jenkinsfile:
+        TargetFilename|endswith: 'Jenkinsfile'
+    condition: selection or selection_jenkinsfile
+falsepositives:
+    - Developers updating pipeline configurations
+    - Dependabot/Renovate bot PR updates
+level: high

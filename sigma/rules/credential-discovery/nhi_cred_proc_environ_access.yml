@@ -1,0 +1,34 @@
+title: "NHI: Process Environment Variable Enumeration via /proc"
+id: aa40511d-7df8-422b-9ec7-dca75f141b34
+related:
+    - id: "100607"
+      type: derived
+status: test
+description: |
+    Detects access to /proc/*/environ files which expose process environment
+    variables. Attackers use this to extract secrets injected via environment
+    variables (API keys, database passwords, tokens).
+    Derived from Wazuh rule 100607.
+references:
+    - https://attack.mitre.org/techniques/T1082/
+    - https://attack.mitre.org/techniques/T1552/007/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.discovery
+    - attack.t1082
+    - attack.t1552.007
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|contains: '/proc/'
+        TargetFilename|endswith: 'environ'
+    condition: selection
+falsepositives:
+    - Process monitoring tools (htop, ps)
+    - Container runtime health checks
+level: high

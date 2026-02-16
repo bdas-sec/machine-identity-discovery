@@ -1,0 +1,31 @@
+title: "NHI: GCP Metadata Service Access"
+id: f4ab449d-ce49-4db6-8789-c2f6a5b3fe72
+related:
+    - id: "100653"
+      type: derived
+status: test
+description: |
+    Detects network connections to the GCP metadata service endpoint
+    (metadata.google.internal). This is the first step in extracting
+    GCP service account tokens from Compute Engine instances.
+    Derived from Wazuh rule 100653.
+references:
+    - https://attack.mitre.org/techniques/T1552/005/
+    - https://cloud.google.com/compute/docs/metadata/overview
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.005
+    - nhi.cloud_imds
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        DestinationHostname|contains: 'metadata.google.internal'
+    condition: selection
+falsepositives:
+    - GCP Compute Engine instance bootstrap
+    - Google Cloud SDK operations
+level: medium

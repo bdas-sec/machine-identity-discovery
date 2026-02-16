@@ -1,0 +1,33 @@
+title: "NHI: Kubernetes ServiceAccount Token Access"
+id: 32fd80d7-c2c2-4d65-9e4a-3785068ea9b8
+related:
+    - id: "100750"
+      type: derived
+status: test
+description: |
+    Detects access to the Kubernetes ServiceAccount token file at the standard
+    mount path. This token provides API server authentication and is the primary
+    target for container breakout and lateral movement within clusters.
+    Derived from Wazuh rule 100750.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://attack.mitre.org/techniques/T1078/001/
+    - https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.t1078.001
+    - nhi.kubernetes
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|contains: '/var/run/secrets/kubernetes.io/serviceaccount/token'
+    condition: selection
+falsepositives:
+    - Kubernetes client libraries reading mounted token
+    - Service mesh sidecars (Istio, Linkerd)
+level: medium

@@ -1,0 +1,31 @@
+title: "NHI: HashiCorp Vault Token File Access"
+id: 7e6adbd6-3318-4fd2-9059-b7790e977b88
+related:
+    - id: "100606"
+      type: derived
+status: test
+description: |
+    Detects access to HashiCorp Vault token file (~/.vault-token). Vault tokens
+    provide authenticated access to secrets management infrastructure, enabling
+    extraction of all stored secrets.
+    Derived from Wazuh rule 100606.
+references:
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://developer.hashicorp.com/vault/docs/concepts/tokens
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.001
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|endswith: '.vault-token'
+    condition: selection
+falsepositives:
+    - Vault CLI legitimate operations
+    - Applications using Vault agent for secret injection
+level: high

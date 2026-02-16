@@ -1,0 +1,64 @@
+title: "NHI: Prompt Injection Attempt Detected in Web Request"
+id: 138642c5-aff7-4ffc-9615-f007c7067d35
+related:
+    - id: "100852"
+      type: derived
+status: test
+description: |
+    Detects prompt injection patterns in web requests with comprehensive coverage
+    including instruction override, role hijacking, safety bypass, command
+    injection, markup injection, and rule violation attempts. Case-insensitive
+    matching with 15+ distinct attack patterns.
+    Derived from Wazuh rule 100852 (production-grade).
+references:
+    - https://attack.mitre.org/techniques/T1059/
+    - https://attack.mitre.org/techniques/T1190/
+    - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    - https://simonwillison.net/2023/Apr/14/worst-that-can-happen/
+author: Bodhisattva Das
+date: 2026-02-15
+modified: 2026-02-16
+tags:
+    - attack.execution
+    - attack.initial_access
+    - attack.t1059
+    - attack.t1190
+    - nhi.ai_agent
+logsource:
+    category: webserver
+detection:
+    selection_instruction_override:
+        cs-uri-query|contains:
+            - 'ignore previous'
+            - 'ignore all previous'
+            - 'disregard instructions'
+            - 'disregard previous'
+    selection_role_hijack:
+        cs-uri-query|contains:
+            - 'you are now'
+            - 'act as root'
+            - 'pretend you are'
+    selection_safety_bypass:
+        cs-uri-query|contains:
+            - 'system prompt'
+            - 'jailbreak'
+            - 'override safety'
+            - 'override security'
+            - 'bypass filter'
+            - 'bypass restriction'
+    selection_extraction:
+        cs-uri-query|contains:
+            - 'reveal your secret'
+            - 'reveal your system'
+            - 'output your instructions'
+            - 'do not follow your rules'
+    selection_markup:
+        cs-uri-query|contains:
+            - '<|system|>'
+            - '<!-- inject'
+    condition: 1 of selection*
+falsepositives:
+    - Security testing and red team exercises
+    - AI safety research content
+    - Blog posts about prompt injection
+level: high

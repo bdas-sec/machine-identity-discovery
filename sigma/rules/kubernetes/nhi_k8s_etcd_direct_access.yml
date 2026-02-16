@@ -1,0 +1,32 @@
+title: "NHI: Direct etcd Datastore Access - CRITICAL"
+id: a78b199e-b895-4c28-b7d0-4f8fc64a99c6
+related:
+    - id: "100756"
+      type: derived
+status: test
+description: |
+    Detects direct access to the etcd data directory (/var/lib/etcd). etcd is
+    the Kubernetes backing datastore containing ALL cluster secrets, configs,
+    and state. Direct access bypasses all RBAC controls and represents a
+    complete cluster compromise.
+    Derived from Wazuh rule 100756.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.kubernetes
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|contains: '/var/lib/etcd'
+    condition: selection
+falsepositives:
+    - etcd backup procedures
+    - Kubernetes control plane maintenance
+level: critical

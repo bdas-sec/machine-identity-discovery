@@ -9,6 +9,7 @@ Usage:
     python run_demo.py --level 2          # Run all Level 2 scenarios
     python run_demo.py --scenario s2-01   # Run specific scenario
     python run_demo.py --list             # List all scenarios
+    python run_demo.py --all --validate   # Run all + verify Wazuh alerts
 """
 
 import argparse
@@ -16,8 +17,43 @@ import json
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+import urllib3
+from dataclasses import dataclass, field
 from typing import Optional
+
+# Suppress InsecureRequestWarning for self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore[assignment]
+
+# Wazuh API defaults
+WAZUH_API_URL = "https://localhost:55000"
+WAZUH_API_USER = "wazuh-wui"
+WAZUH_API_PASS = "MyS3cr3tP@ssw0rd"
+
+# Alert validation settings
+VALIDATION_POLL_INTERVAL = 3  # seconds between polls
+VALIDATION_MAX_WAIT = 30  # max seconds to wait for alerts
+
+
+@dataclass
+class ValidationResult:
+    scenario_id: str
+    expected_rules: list[str]
+    detected_rules: list[str] = field(default_factory=list)
+    missed_rules: list[str] = field(default_factory=list)
+    extra_rules: list[str] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return len(self.missed_rules) == 0 and len(self.expected_rules) > 0
+
+    @property
+    def skipped(self) -> bool:
+        return len(self.expected_rules) == 0
 
 
 @dataclass
@@ -338,6 +374,113 @@ def get_container_runtime() -> str:
         return "docker"
 
 
+def get_wazuh_token(api_url: str, user: str, password: str) -> Optional[str]:
+    """Authenticate with Wazuh API and return JWT token."""
+    if requests is None:
+        print("  [!] 'requests' library not installed — cannot validate alerts")
+        return None
+    try:
+        resp = requests.post(
+            f"{api_url}/security/user/authenticate",
+            auth=(user, password),
+            verify=False,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("data", {}).get("token")
+        print(f"  [!] Wazuh auth failed (HTTP {resp.status_code}): {resp.text[:200]}")
+    except requests.ConnectionError:
+        print(f"  [!] Cannot connect to Wazuh API at {api_url}")
+    except Exception as e:
+        print(f"  [!] Wazuh auth error: {e}")
+    return None
+
+
+def query_wazuh_alerts(
+    api_url: str, token: str, rule_ids: list[str],
+) -> dict[str, list[dict]]:
+    """Query Wazuh API for recent alerts matching given rule IDs.
+
+    Returns a dict mapping rule_id -> list of matching alert summaries.
+    """
+    found: dict[str, list[dict]] = {rid: [] for rid in rule_ids}
+    if requests is None:
+        return found
+
+    headers = {"Authorization": f"Bearer {token}"}
+    # Search for NHI alerts in the lookback window
+    try:
+        resp = requests.get(
+            f"{api_url}/alerts",
+            headers=headers,
+            params={
+                "limit": 100,
+                "sort": "-timestamp",
+            },
+            verify=False,
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data", {})
+            items = data.get("affected_items", [])
+            for alert in items:
+                rid = str(alert.get("rule", {}).get("id", ""))
+                if rid in found:
+                    found[rid].append(alert)
+        elif resp.status_code == 401:
+            # Token may have expired
+            pass
+    except Exception:
+        pass
+    return found
+
+
+def validate_scenario_alerts(
+    scenario: Scenario,
+    api_url: str,
+    token: str,
+    max_wait: int = VALIDATION_MAX_WAIT,
+    poll_interval: int = VALIDATION_POLL_INTERVAL,
+) -> ValidationResult:
+    """Poll Wazuh API to verify expected detection rules fired for a scenario."""
+    result = ValidationResult(
+        scenario_id=scenario.id,
+        expected_rules=list(scenario.detection_rules),
+    )
+
+    if not scenario.detection_rules:
+        print("  [~] No detection rules expected — skipping validation")
+        return result
+
+    print(f"  [*] Validating alerts for rules: {', '.join(scenario.detection_rules)}")
+    remaining = set(scenario.detection_rules)
+    elapsed = 0
+
+    while remaining and elapsed < max_wait:
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+
+        alerts = query_wazuh_alerts(api_url, token, list(remaining))
+        for rule_id, items in alerts.items():
+            if items:
+                remaining.discard(rule_id)
+                result.detected_rules.append(rule_id)
+                print(f"    [+] Rule {rule_id} detected ({len(items)} alert(s))")
+
+        if remaining:
+            print(f"    [...] Waiting for {len(remaining)} rule(s) — {elapsed}s/{max_wait}s")
+
+    # Final accounting
+    result.missed_rules = list(remaining)
+
+    if result.passed:
+        print(f"  [OK] All {len(result.detected_rules)} expected rules detected")
+    elif result.missed_rules:
+        print(f"  [FAIL] Missing rules: {', '.join(result.missed_rules)}")
+
+    return result
+
+
 def run_command_in_container(runtime: str, container: str, command: str) -> tuple[int, str, str]:
     """Execute command in container."""
     cmd = [runtime, "exec", container, "bash", "-c", command]
@@ -401,6 +544,38 @@ def list_scenarios():
     print("\n" + "="*70)
 
 
+def print_validation_summary(results: list[ValidationResult]):
+    """Print a summary table of all validation results."""
+    print(f"\n{'='*70}")
+    print("ALERT VALIDATION SUMMARY")
+    print(f"{'='*70}")
+
+    passed = [r for r in results if r.passed]
+    failed = [r for r in results if not r.passed and not r.skipped]
+    skipped = [r for r in results if r.skipped]
+
+    for r in results:
+        if r.skipped:
+            status = "SKIP"
+        elif r.passed:
+            status = " OK "
+        else:
+            status = "FAIL"
+        detected = len(r.detected_rules)
+        expected = len(r.expected_rules)
+        missed_str = f" (missed: {', '.join(r.missed_rules)})" if r.missed_rules else ""
+        print(f"  [{status}] {r.scenario_id}: {detected}/{expected} rules{missed_str}")
+
+    print(f"\n  Passed: {len(passed)} | Failed: {len(failed)} | Skipped: {len(skipped)}")
+
+    if failed:
+        print("\n  Failed scenarios:")
+        for r in failed:
+            print(f"    - {r.scenario_id}: missing rules {', '.join(r.missed_rules)}")
+
+    print(f"{'='*70}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="NHI Security Testbed Demo Runner",
@@ -412,6 +587,17 @@ def main():
     parser.add_argument("--list", action="store_true", help="List all scenarios")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show command output")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay between scenarios (seconds)")
+    parser.add_argument(
+        "--validate", action="store_true",
+        help="Validate that expected Wazuh alerts fire after each scenario",
+    )
+    parser.add_argument("--wazuh-url", default=WAZUH_API_URL, help="Wazuh API URL (default: %(default)s)")
+    parser.add_argument("--wazuh-user", default=WAZUH_API_USER, help="Wazuh API user (default: %(default)s)")
+    parser.add_argument("--wazuh-pass", default=WAZUH_API_PASS, help="Wazuh API password")
+    parser.add_argument(
+        "--validation-timeout", type=int, default=VALIDATION_MAX_WAIT,
+        help="Max seconds to wait for alerts per scenario (default: %(default)s)",
+    )
 
     args = parser.parse_args()
 
@@ -425,6 +611,22 @@ def main():
 
     runtime = get_container_runtime()
     print(f"Using container runtime: {runtime}")
+
+    # Initialize Wazuh API token if validating
+    wazuh_token = None
+    if args.validate:
+        if requests is None:
+            print("[!] Alert validation requires 'requests' library: pip install requests")
+            print("[!] Continuing without validation...")
+            args.validate = False
+        else:
+            print(f"[*] Authenticating with Wazuh API at {args.wazuh_url}...")
+            wazuh_token = get_wazuh_token(args.wazuh_url, args.wazuh_user, args.wazuh_pass)
+            if wazuh_token:
+                print("[+] Wazuh API authentication successful")
+            else:
+                print("[!] Wazuh API authentication failed — continuing without validation")
+                args.validate = False
 
     # Collect scenarios to run
     scenarios_to_run = []
@@ -447,12 +649,27 @@ def main():
 
     print(f"\nRunning {len(scenarios_to_run)} scenario(s)...")
     print("Watch Wazuh Dashboard at https://localhost:8443 for alerts")
+    if args.validate:
+        print("Alert validation: ENABLED")
 
     success_count = 0
+    validation_results: list[ValidationResult] = []
+
     for scenario in scenarios_to_run:
         try:
             if run_scenario(scenario, runtime, args.verbose):
                 success_count += 1
+
+            # Validate alerts if enabled
+            if args.validate and wazuh_token:
+                result = validate_scenario_alerts(
+                    scenario,
+                    args.wazuh_url,
+                    wazuh_token,
+                    max_wait=args.validation_timeout,
+                )
+                validation_results.append(result)
+
             time.sleep(args.delay)
         except Exception as e:
             print(f"Error running {scenario.id}: {e}")
@@ -460,6 +677,11 @@ def main():
     print(f"\n{'='*60}")
     print(f"Demo Complete: {success_count}/{len(scenarios_to_run)} scenarios executed")
     print(f"{'='*60}")
+
+    # Print validation summary
+    if args.validate and validation_results:
+        print_validation_summary(validation_results)
+
     print("\nCheck Wazuh Dashboard for generated alerts:")
     print("  URL: https://localhost:8443")
     print("  Filter: rule.groups: nhi")

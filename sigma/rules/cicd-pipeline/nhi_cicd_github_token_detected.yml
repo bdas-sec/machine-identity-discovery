@@ -1,0 +1,31 @@
+title: "NHI: GitHub Token Detected in Environment/Process"
+id: 60246361-ec62-4c37-a58d-2a11b32dcf37
+related:
+    - id: "100800"
+      type: derived
+status: test
+description: |
+    Detects the GITHUB_TOKEN environment variable being exposed in process
+    listings or log output. GitHub tokens provide repository access and can
+    be used for supply chain attacks via code modification.
+    Derived from Wazuh rule 100800.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.cicd_pipeline
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'GITHUB_TOKEN'
+    condition: selection
+falsepositives:
+    - GitHub Actions workflow steps that legitimately use GITHUB_TOKEN
+    - CI/CD debugging output
+level: high

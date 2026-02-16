@@ -1,0 +1,35 @@
+title: "NHI: Kubernetes RBAC Probing - kubectl auth can-i"
+id: 0cfa58df-29e0-4aca-93e8-fa12586ee472
+related:
+    - id: "100752"
+      type: derived
+status: test
+description: |
+    Detects the use of 'kubectl auth can-i' to enumerate Kubernetes RBAC
+    permissions. Attackers use this to discover what actions are permitted
+    with stolen ServiceAccount tokens before attempting privilege escalation.
+    Derived from Wazuh rule 100752.
+references:
+    - https://attack.mitre.org/techniques/T1069/003/
+    - https://attack.mitre.org/techniques/T1087/004/
+    - https://kubernetes.io/docs/reference/access-authn-authz/authorization/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.discovery
+    - attack.t1069.003
+    - attack.t1087.004
+    - nhi.kubernetes
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains|all:
+            - 'kubectl'
+            - 'auth can-i'
+    condition: selection
+falsepositives:
+    - Kubernetes operators performing self-checks
+    - CI/CD pipelines verifying deployment permissions
+level: medium

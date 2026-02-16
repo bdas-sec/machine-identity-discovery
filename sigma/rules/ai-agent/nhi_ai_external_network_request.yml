@@ -1,0 +1,66 @@
+title: "NHI: AI Agent Making External Network Request"
+id: 41b62af1-b4ed-4f94-b5ff-fa5e0991ad18
+related:
+    - id: "100859"
+      type: derived
+status: test
+description: |
+    Detects AI agent framework processes making HTTP requests to external
+    (non-private) IP addresses. This monitors for potential data exfiltration
+    or C2 communication by compromised AI agents. Excludes RFC 1918 private
+    ranges and localhost.
+    Derived from Wazuh rule 100859.
+references:
+    - https://attack.mitre.org/techniques/T1071/001/
+    - https://attack.mitre.org/techniques/T1041/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.command_and_control
+    - attack.exfiltration
+    - attack.t1071.001
+    - attack.t1041
+    - nhi.ai_agent
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_process:
+        Image|endswith:
+            - '/python'
+            - '/python3'
+            - '/node'
+        Image|contains:
+            - 'langchain'
+            - 'autogen'
+            - 'crewai'
+            - 'agent'
+            - 'llama'
+            - 'vllm'
+            - 'ollama'
+    filter_private:
+        dst_ip|startswith:
+            - '10.'
+            - '172.16.'
+            - '172.17.'
+            - '172.18.'
+            - '172.19.'
+            - '172.20.'
+            - '172.21.'
+            - '172.22.'
+            - '172.23.'
+            - '172.24.'
+            - '172.25.'
+            - '172.26.'
+            - '172.27.'
+            - '172.28.'
+            - '172.29.'
+            - '172.30.'
+            - '172.31.'
+            - '192.168.'
+            - '127.'
+    condition: 1 of selection_process and not filter_private
+falsepositives:
+    - AI agents calling external APIs (OpenAI, Anthropic, etc.)
+    - Model weight downloads from Hugging Face
+level: high

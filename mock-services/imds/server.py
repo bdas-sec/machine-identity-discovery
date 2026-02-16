@@ -163,14 +163,31 @@ def iam_root():
 
 @app.route("/latest/meta-data/iam/info")
 def iam_info():
-    """IAM info"""
+    """IAM info - shows the role has AdministratorAccess (Admin by Design)"""
     log_access("/latest/meta-data/iam/info", request.remote_addr)
     return json.dumps({
         "Code": "Success",
         "LastUpdated": datetime.utcnow().isoformat() + "Z",
         "InstanceProfileArn": f"arn:aws:iam::123456789012:instance-profile/{MOCK_ROLE_NAME}",
-        "InstanceProfileId": "AIPADEMOINSTANCEPROFILE"
-    })
+        "InstanceProfileId": "AIPADEMOINSTANCEPROFILE",
+        "RoleArn": f"arn:aws:iam::123456789012:role/{MOCK_ROLE_NAME}",
+        "RoleName": MOCK_ROLE_NAME,
+        "AttachedPolicies": [
+            {
+                "PolicyName": "AdministratorAccess",
+                "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+            }
+        ],
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "ec2.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        },
+        "Description": "EC2 instance role - created with default admin permissions"
+    }, indent=2)
 
 
 @app.route("/latest/meta-data/iam/security-credentials/")
@@ -308,6 +325,35 @@ def azure_token():
         "resource": "https://management.azure.com/",
         "token_type": "Bearer"
     })
+
+
+# ============================================================
+# Mock AWS STS Endpoint - Credential Impact Demonstration
+# ============================================================
+
+@app.route("/sts/get-caller-identity")
+def sts_get_caller_identity():
+    """
+    Mock AWS STS GetCallerIdentity.
+    Shows what identity the stolen credentials resolve to.
+    This is the first thing an attacker runs after stealing creds.
+    """
+    log_access("/sts/get-caller-identity", request.remote_addr)
+    logger.warning(f"[ATTACK] STS GetCallerIdentity - attacker verifying stolen credentials from {request.remote_addr}")
+
+    return Response(
+        json.dumps({
+            "UserId": "AROADEMOTESTBED00001:i-0abc123def456789demo",
+            "Account": "123456789012",
+            "Arn": f"arn:aws:sts::123456789012:assumed-role/{MOCK_ROLE_NAME}/i-0abc123def456789demo",
+            "RoleName": MOCK_ROLE_NAME,
+            "AttachedPolicies": ["AdministratorAccess"],
+            "PermissionBoundary": "NONE",
+            "EffectivePermissions": "Allow *:* on *",
+            "_demo_note": "This role has FULL ADMIN ACCESS to the AWS account"
+        }, indent=2),
+        mimetype="application/json"
+    )
 
 
 @app.route("/health")

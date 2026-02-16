@@ -1,0 +1,35 @@
+title: "NHI: SSH Private Key Access"
+id: 5416999d-8a39-47ec-a1a6-db248268bd30
+related:
+    - id: "100602"
+      type: derived
+status: test
+description: |
+    Detects access to SSH private key files (id_rsa, id_ed25519, id_ecdsa, .pem).
+    Stolen SSH keys enable lateral movement to other hosts without password
+    authentication.
+    Derived from Wazuh rule 100602.
+references:
+    - https://attack.mitre.org/techniques/T1552/004/
+author: Bodhisattva Das
+date: 2026-02-15
+tags:
+    - attack.credential_access
+    - attack.t1552.004
+    - nhi.credential_discovery
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|endswith:
+            - 'id_rsa'
+            - 'id_ed25519'
+            - 'id_ecdsa'
+            - '.pem'
+    condition: selection
+falsepositives:
+    - SSH client connecting to remote hosts
+    - Automated deployment scripts using SSH keys
+    - Certificate management tools
+level: high
