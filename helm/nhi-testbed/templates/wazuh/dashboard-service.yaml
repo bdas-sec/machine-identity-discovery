@@ -1,0 +1,23 @@
+{{- if .Values.wazuh.dashboard.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-dashboard") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-dashboard
+spec:
+  type: {{ .Values.wazuh.dashboard.service.type }}
+  ports:
+    - name: dashboard
+      port: {{ .Values.wazuh.dashboard.externalPort }}
+      targetPort: dashboard
+      protocol: TCP
+      {{- if and (eq .Values.wazuh.dashboard.service.type "NodePort") .Values.wazuh.dashboard.service.nodePort }}
+      nodePort: {{ .Values.wazuh.dashboard.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-dashboard
+{{- end }}

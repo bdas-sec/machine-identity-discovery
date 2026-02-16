@@ -1,0 +1,64 @@
+{{- if .Values.mockServices.oauth.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "mock-oauth") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-oauth
+    nhi.service: mock-oauth
+    nhi.mock.type: oauth-provider
+    nhi.network/tier: cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mock-oauth
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mock-oauth
+        nhi.service: mock-oauth
+        nhi.network/tier: cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mock-oauth
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.mockServices.oauth.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mockServices.oauth.port }}
+              protocol: TCP
+          env:
+            - name: OAUTH_PORT
+              value: {{ .Values.mockServices.oauth.port | quote }}
+            {{- range $key, $value := .Values.mockServices.oauth.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.mockServices.oauth.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+{{- end }}

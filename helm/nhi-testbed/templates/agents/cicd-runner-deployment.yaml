@@ -1,0 +1,50 @@
+{{- if .Values.agents.cicdRunner.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "cicd-runner") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cicd-runner
+    nhi.agent.type: cicd-runner
+    nhi.agent.ephemeral: "true"
+    nhi.network/tier: cicd
+spec:
+  replicas: {{ .Values.agents.cicdRunner.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cicd-runner
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cicd-runner
+        nhi.agent.type: cicd-runner
+        nhi.network/tier: cicd
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: cicd-runner
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.agents.cicdRunner.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: WAZUH_MANAGER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_REGISTRATION_SERVER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_AGENT_NAME
+              value: {{ .Values.agents.cicdRunner.agentName | quote }}
+            - name: WAZUH_AGENT_GROUP
+              value: {{ .Values.agents.cicdRunner.agentGroup | quote }}
+            {{- range $key, $value := .Values.agents.cicdRunner.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.agents.cicdRunner.resources | nindent 12 }}
+{{- end }}

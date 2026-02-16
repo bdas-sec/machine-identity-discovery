@@ -1,0 +1,116 @@
+================================================================================
+  NHI Machine Identity Security Testbed  v{{ .Chart.AppVersion }}
+  Purple Team Framework for NHI Threat Simulation and Detection
+================================================================================
+
+The NHI Security Testbed has been deployed to namespace: {{ include "nhi-testbed.namespace" . }}
+
+--- Access URLs ---
+
+{{- if .Values.wazuh.dashboard.enabled }}
+
+Wazuh Dashboard:
+  {{- if eq .Values.wazuh.dashboard.service.type "NodePort" }}
+  URL:  https://<NODE_IP>:{{ .Values.wazuh.dashboard.service.nodePort }}
+  {{- else }}
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "wazuh-dashboard") }} {{ .Values.wazuh.dashboard.externalPort }}:{{ .Values.wazuh.dashboard.externalPort }}
+  URL:  https://localhost:{{ .Values.wazuh.dashboard.externalPort }}
+  {{- end }}
+  User: admin
+  Pass: admin
+{{- end }}
+
+{{- if .Values.api.enabled }}
+
+NHI API:
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "api") }} {{ .Values.api.port }}:{{ .Values.api.port }}
+  URL:      http://localhost:{{ .Values.api.port }}
+  Docs:     http://localhost:{{ .Values.api.port }}/docs
+  Health:   http://localhost:{{ .Values.api.port }}/health
+{{- end }}
+
+{{- if .Values.monitoring.grafana.enabled }}
+
+Grafana:
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "grafana") }} {{ .Values.monitoring.grafana.port }}:{{ .Values.monitoring.grafana.port }}
+  URL:  http://localhost:{{ .Values.monitoring.grafana.port }}
+  User: {{ .Values.monitoring.grafana.adminUser }}
+  Pass: {{ .Values.monitoring.grafana.adminPassword }}
+{{- end }}
+
+{{- if .Values.monitoring.prometheus.enabled }}
+
+Prometheus:
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "prometheus") }} {{ .Values.monitoring.prometheus.port }}:{{ .Values.monitoring.prometheus.port }}
+  URL:  http://localhost:{{ .Values.monitoring.prometheus.port }}
+{{- end }}
+
+{{- if .Values.mockServices.vault.enabled }}
+
+HashiCorp Vault:
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "vault") }} {{ .Values.mockServices.vault.port }}:{{ .Values.mockServices.vault.port }}
+  URL:   http://localhost:{{ .Values.mockServices.vault.port }}
+  Token: {{ .Values.mockServices.vault.devRootToken }}
+{{- end }}
+
+{{- if .Values.agents.vulnerableApp.enabled }}
+
+Vulnerable App:
+  kubectl port-forward -n {{ include "nhi-testbed.namespace" . }} svc/{{ include "nhi-testbed.componentName" (list . "vulnerable-app") }} {{ .Values.agents.vulnerableApp.externalPort }}:{{ .Values.agents.vulnerableApp.externalPort }}
+  URL:  http://localhost:{{ .Values.agents.vulnerableApp.externalPort }}
+{{- end }}
+
+--- Running Attack Scenarios ---
+
+1. List all scenarios:
+   curl http://localhost:{{ .Values.api.port }}/scenarios
+
+2. Run all 24 scenarios:
+   curl -X POST http://localhost:{{ .Values.api.port }}/scenarios/run?all=true
+
+3. Run a specific level (e.g. Level 2 - Credential Theft):
+   curl -X POST http://localhost:{{ .Values.api.port }}/scenarios/run?level=2
+
+4. Check alerts:
+   curl http://localhost:{{ .Values.api.port }}/alerts
+
+--- Deployed Components ---
+
+Wazuh Stack:
+  [{{ if .Values.wazuh.manager.enabled }}x{{ else }} {{ end }}] Wazuh Manager    (port {{ .Values.wazuh.manager.ports.api }})
+  [{{ if .Values.wazuh.indexer.enabled }}x{{ else }} {{ end }}] Wazuh Indexer    (port {{ .Values.wazuh.indexer.port }})
+  [{{ if .Values.wazuh.dashboard.enabled }}x{{ else }} {{ end }}] Wazuh Dashboard  (port {{ .Values.wazuh.dashboard.externalPort }})
+
+Agents:
+  [{{ if .Values.agents.cloudWorkload.enabled }}x{{ else }} {{ end }}] Cloud Workload
+  [{{ if .Values.agents.vulnerableApp.enabled }}x{{ else }} {{ end }}] Vulnerable App   (port {{ .Values.agents.vulnerableApp.externalPort }})
+  [{{ if .Values.agents.cicdRunner.enabled }}x{{ else }} {{ end }}] CI/CD Runner
+
+Mock Services:
+  [{{ if .Values.mockServices.imds.enabled }}x{{ else }} {{ end }}] Mock IMDS          (port {{ .Values.mockServices.imds.port }})
+  [{{ if .Values.mockServices.gcpMetadata.enabled }}x{{ else }} {{ end }}] Mock GCP Metadata  (port {{ .Values.mockServices.gcpMetadata.port }})
+  [{{ if .Values.mockServices.oauth.enabled }}x{{ else }} {{ end }}] Mock OAuth         (port {{ .Values.mockServices.oauth.port }})
+  [{{ if .Values.mockServices.cicd.enabled }}x{{ else }} {{ end }}] Mock CI/CD         (port {{ .Values.mockServices.cicd.port }})
+  [{{ if .Values.mockServices.vault.enabled }}x{{ else }} {{ end }}] Vault              (port {{ .Values.mockServices.vault.port }})
+
+Monitoring:
+  [{{ if .Values.monitoring.metrics.enabled }}x{{ else }} {{ end }}] NHI Metrics    (port {{ .Values.monitoring.metrics.port }})
+  [{{ if .Values.monitoring.prometheus.enabled }}x{{ else }} {{ end }}] Prometheus     (port {{ .Values.monitoring.prometheus.port }})
+  [{{ if .Values.monitoring.grafana.enabled }}x{{ else }} {{ end }}] Grafana        (port {{ .Values.monitoring.grafana.port }})
+
+Optional Profiles:
+  [{{ if .Values.profiles.k8sSimulation.enabled }}x{{ else }} {{ end }}] Kubernetes Simulation
+  [{{ if .Values.profiles.aiAgent.enabled }}x{{ else }} {{ end }}] AI Agent Simulation
+
+Network Policies: {{ if .Values.networkPolicies.enabled }}ENABLED{{ else }}DISABLED{{ end }}
+
+--- Quick Health Check ---
+
+  kubectl get pods -n {{ include "nhi-testbed.namespace" . }}
+  kubectl get svc -n {{ include "nhi-testbed.namespace" . }}
+
+================================================================================
+WARNING: This testbed contains intentionally vulnerable components and FAKE
+credentials for security testing purposes. Do NOT deploy in production
+environments without proper network isolation.
+================================================================================

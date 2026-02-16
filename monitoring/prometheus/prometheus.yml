@@ -1,0 +1,56 @@
+# Prometheus Configuration - NHI Security Testbed
+# NDC Security 2026
+#
+# Scrapes metrics from:
+#   - NHI Metrics Exporter (detection coverage, alerts, service health)
+#   - NHI API (FastAPI application metrics)
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+  external_labels:
+    environment: "nhi-testbed"
+    project: "nhi-security"
+
+# Scrape configurations
+scrape_configs:
+
+  # NHI Metrics Exporter - primary metrics source
+  - job_name: "nhi-metrics"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["nhi-metrics:9091"]
+        labels:
+          service: "nhi-metrics-exporter"
+
+  # NHI API - FastAPI application health
+  - job_name: "nhi-api"
+    scrape_interval: 30s
+    metrics_path: "/health"
+    static_configs:
+      - targets: ["nhi-api:8000"]
+        labels:
+          service: "nhi-api"
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: "prometheus"
+
+  # Wazuh Manager health probe (basic connectivity)
+  # Note: Wazuh API uses HTTPS with self-signed certs
+  - job_name: "wazuh-manager-probe"
+    scrape_interval: 60s
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    metrics_path: "/"
+    static_configs:
+      - targets: ["wazuh.manager:55000"]
+        labels:
+          service: "wazuh-manager"

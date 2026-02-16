@@ -1,0 +1,50 @@
+{{- if .Values.agents.cloudWorkload.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "cloud-workload") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cloud-workload
+    nhi.agent.type: cloud-workload
+    nhi.agent.environment: production
+    nhi.network/tier: cloud
+spec:
+  replicas: {{ .Values.agents.cloudWorkload.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloud-workload
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cloud-workload
+        nhi.agent.type: cloud-workload
+        nhi.network/tier: cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: cloud-workload
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.agents.cloudWorkload.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: WAZUH_MANAGER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_REGISTRATION_SERVER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_AGENT_NAME
+              value: {{ .Values.agents.cloudWorkload.agentName | quote }}
+            - name: WAZUH_AGENT_GROUP
+              value: {{ .Values.agents.cloudWorkload.agentGroup | quote }}
+            {{- range $key, $value := .Values.agents.cloudWorkload.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.agents.cloudWorkload.resources | nindent 12 }}
+{{- end }}

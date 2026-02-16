@@ -80,9 +80,25 @@ Documentation = "https://github.com/your-org/machine-identity-discovery/tree/mai
 [project.scripts]
 nhi-demo = "scripts.run_demo:main"
 nhi-health = "scripts.health_check:main"
+nhi-convert = "scripts.sigma_convert:main"
+nhi-build-rules = "scripts.build_rule_pack:main"
+nhi-schedule = "scripts.scheduler:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["api", "src"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "api/",
+    "src/",
+    "sigma/rules/",
+    "sigma/output/",
+    "scripts/sigma_convert.py",
+    "scripts/build_rule_pack.py",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
 
 # --- Tool configuration ---
 
@@ -94,8 +110,10 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short --timeout=60"
 markers = [
     "smoke: Quick service availability checks",
+    "unit: Unit tests (no external dependencies)",
     "integration: Cross-service integration tests",
     "e2e: End-to-end scenario tests (require running testbed)",
+    "rules: Detection rule validation tests",
     "slow: Tests that take >30 seconds",
 ]
 

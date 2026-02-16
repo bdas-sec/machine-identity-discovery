@@ -336,6 +336,105 @@
     <group>nhi_k8s_etcd,</group>
   </rule>
 
+  <!-- ================================================= -->
+  <!-- Container Escape Detection (T1611)                 -->
+  <!-- Rule IDs: 100757-100764                            -->
+  <!-- Added: 2026-02-16                                  -->
+  <!-- ================================================= -->
+
+  <!-- Container escape: nsenter with namespace flags -->
+  <rule id="100757" level="14">
+    <if_sid>80792</if_sid>
+    <match type="pcre2">nsenter\s+.*--(target|mount|pid|net|uts|ipc)\b</match>
+    <description>NHI: Container escape via nsenter namespace entry</description>
+    <mitre>
+      <id>T1611</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_nsenter,</group>
+  </rule>
+
+  <!-- Container escape: chroot to host filesystem -->
+  <rule id="100758" level="14">
+    <if_sid>80792</if_sid>
+    <match type="pcre2">chroot\s+(/mnt/host|/host|/rootfs|/mnt/rootfs|/hostroot)</match>
+    <description>NHI: Container escape via chroot to host filesystem</description>
+    <mitre>
+      <id>T1611</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_chroot,</group>
+  </rule>
+
+  <!-- Container escape: unshare for namespace manipulation -->
+  <rule id="100759" level="12">
+    <if_sid>80792</if_sid>
+    <match type="pcre2">unshare\s+.*--(mount|user|pid|net|uts|ipc|cgroup)\b</match>
+    <description>NHI: Namespace manipulation via unshare - potential container escape</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1055</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_unshare,</group>
+  </rule>
+
+  <!-- Container escape: reading sensitive files from mounted host paths -->
+  <rule id="100760" level="12">
+    <if_sid>550,554,80700</if_sid>
+    <match type="pcre2">(/mnt/host|/host/|/rootfs/).*(etc/shadow|etc/passwd|var/lib/kubelet|etc/kubernetes|root/\.kube)</match>
+    <description>NHI: Sensitive host file access via mounted hostPath volume</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_hostpath_abuse,</group>
+  </rule>
+
+  <!-- Container escape: cgroup release_agent exploitation -->
+  <rule id="100761" level="14">
+    <if_sid>80792,550,554</if_sid>
+    <match type="pcre2">release_agent|notify_on_release</match>
+    <description>NHI: Cgroup escape attempt - release_agent manipulation</description>
+    <mitre>
+      <id>T1611</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_cgroup_escape,</group>
+  </rule>
+
+  <!-- Container escape: CAP_SYS_ADMIN abuse - mounting filesystems -->
+  <rule id="100762" level="12">
+    <if_sid>80792</if_sid>
+    <match type="pcre2">mount\s+(-t\s+)?(proc|sysfs|cgroup|tmpfs)\s|mount\s+/dev/(sd|vd|xvd|nvme)</match>
+    <description>NHI: CAP_SYS_ADMIN abuse - mounting filesystem from container</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1068</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_cap_sys_admin,</group>
+  </rule>
+
+  <!-- Container escape: accessing host PID 1 root filesystem -->
+  <rule id="100763" level="14">
+    <if_sid>550,554,80700,80792</if_sid>
+    <match type="pcre2">/proc/1/(root|cgroup|mountinfo|mounts)</match>
+    <description>NHI: Host PID namespace probe via /proc/1 - container escape recon</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1082</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_proc_escape,</group>
+  </rule>
+
+  <!-- Container escape: direct Kubernetes API access from container -->
+  <rule id="100764" level="10">
+    <if_sid>80700</if_sid>
+    <match type="pcre2">kubernetes\.default\.svc|:6443/api/|:10250/</match>
+    <description>NHI: Direct Kubernetes API/Kubelet access from container</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_container_escape,nhi_k8s_api_access,</group>
+  </rule>
+
 </group>
 
 <!-- ================================================= -->
@@ -782,6 +881,18 @@
       <id>T1078</id>
     </mitre>
     <group>nhi_complex_attack,</group>
+  </rule>
+
+  <!-- Multi-technique container escape chain -->
+  <rule id="100955" level="15" timeframe="300">
+    <if_group>nhi_k8s_container_escape</if_group>
+    <if_matched_group>nhi_k8s_sa_token</if_matched_group>
+    <description>NHI: Multi-technique container escape chain - escape + SA token theft</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_escape_chain,</group>
   </rule>
 
 </group>

@@ -1,0 +1,34 @@
+title: "NHI: Cgroup Escape via release_agent Manipulation"
+id: 6c553a18-f639-4dd4-9aa1-53dcbcc9fcaa
+related:
+    - id: "100761"
+      type: derived
+status: test
+description: |
+    Detects manipulation of cgroup release_agent or notify_on_release,
+    which is a well-known container escape technique (CVE-2022-0492).
+    By writing a payload to release_agent and triggering it, an attacker
+    can execute arbitrary commands on the host.
+    Derived from Wazuh rule 100761.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://blog.trailofbits.com/2019/07/19/understanding-docker-container-escapes/
+    - https://unit42.paloaltonetworks.com/cve-2022-0492-cgroups/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - nhi.kubernetes
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'release_agent'
+            - 'notify_on_release'
+    condition: selection
+falsepositives:
+    - Legitimate cgroup management tools
+level: critical

@@ -1,0 +1,20 @@
+{{- if .Values.mockServices.gcpMetadata.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "mock-gcp-metadata") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-gcp-metadata
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.mockServices.gcpMetadata.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-gcp-metadata
+{{- end }}

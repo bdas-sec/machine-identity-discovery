@@ -1,0 +1,2 @@
+# Mock GCP Metadata Service Dependencies
+flask==3.0.0

@@ -12,9 +12,14 @@
 #   55000 - Wazuh Manager API
 #   9200  - Wazuh Indexer (OpenSearch)
 #   8200  - HashiCorp Vault UI
-#   1338  - Mock IMDS Service
+#   1338  - Mock IMDS Service (AWS/Azure)
+#   1339  - Mock GCP Metadata Service
 #   8080  - Mock CI/CD Server
+#   8090  - Mock OAuth Provider
 #   8888  - Vulnerable App
+#   9091  - NHI Metrics Exporter (Prometheus format)
+#   9090  - Prometheus Server
+#   3000  - Grafana Dashboards
 
 version: '3.8'
 
@@ -539,7 +544,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # Mock CI/CD Server
+  # Mock CI/CD Server (GitHub Actions / GitLab CI / Azure DevOps + GitHub App)
   mock-cicd:
     build:
       context: ./mock-services/cicd-server
@@ -555,9 +560,182 @@ services:
       GITHUB_ACTIONS_TOKEN: "ghs_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       GITLAB_CI_TOKEN: "glcbt-XXXXXXXXXXXXXXXXXXXX"
       AZURE_DEVOPS_TOKEN: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      # GitHub App configuration (FAKE)
+      GITHUB_APP_ID: "12345"
+      GITHUB_APP_PRIVATE_KEY_STUB: "demo-private-key"
     networks:
       cicd_net:
         ipv4_address: 172.42.0.20
     labels:
       - "nhi.service=mock-cicd"
       - "nhi.mock.type=cicd-server"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Mock OAuth2/OIDC Provider (consent phishing simulation)
+  mock-oauth:
+    build:
+      context: ./mock-services/oauth-provider
+      dockerfile: Dockerfile
+    image: nhi-testbed/mock-oauth:latest
+    container_name: mock-oauth
+    hostname: mock-oauth
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      OAUTH_PORT: "8090"
+      OAUTH_ISSUER: "http://mock-oauth:8090"
+      # Malicious OAuth app credentials (FAKE)
+      OAUTH_CLIENT_ID: "demo-malicious-app"
+      OAUTH_CLIENT_SECRET: "demo-client-secret-FAKE"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.110
+    labels:
+      - "nhi.service=mock-oauth"
+      - "nhi.mock.type=oauth-provider"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8090/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Mock GCP Metadata Service (GCP metadata + Workload Identity Federation)
+  mock-gcp-metadata:
+    build:
+      context: ./mock-services/gcp-metadata
+      dockerfile: Dockerfile
+    image: nhi-testbed/mock-gcp-metadata:latest
+    container_name: mock-gcp-metadata
+    hostname: mock-gcp-metadata
+    restart: unless-stopped
+    ports:
+      - "1339:1339"
+    environment:
+      GCP_PORT: "1339"
+      # Mock GCP project config (FAKE)
+      GCP_PROJECT_ID: "demo-project-12345"
+      GCP_PROJECT_NUMBER: "123456789012"
+      GCP_SERVICE_ACCOUNT: "demo-compute@demo-project-12345.iam.gserviceaccount.com"
+      GCP_ACCESS_TOKEN: "ya29.DEMO_GCP_ACCESS_TOKEN_FOR_TESTING"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.101
+    labels:
+      - "nhi.service=mock-gcp-metadata"
+      - "nhi.mock.provider=gcp"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -H 'Metadata-Flavor: Google' http://localhost:1339/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================
+  # MONITORING STACK
+  # ==========================================
+
+  # NHI Metrics Exporter (Prometheus format)
+  nhi-metrics:
+    build:
+      context: ./src/metrics
+      dockerfile: Dockerfile
+    image: nhi-testbed/metrics-exporter:latest
+    container_name: nhi-metrics
+    hostname: nhi-metrics
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
+    environment:
+      METRICS_PORT: "9091"
+      WAZUH_API_URL: "https://wazuh.manager:55000"
+      WAZUH_API_USER: "${WAZUH_API_USER:-wazuh-wui}"
+      WAZUH_API_PASSWORD: "${WAZUH_API_PASSWORD:-MyS3cr3tP@ssw0rd}"
+      NHI_API_URL: "http://nhi-api:8000"
+      POLL_INTERVAL_SECONDS: "30"
+      SCENARIOS_DIR: "/app/scenarios"
+    volumes:
+      - ./scenarios:/app/scenarios:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.30
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    labels:
+      - "nhi.service=nhi-metrics"
+      - "nhi.role=monitoring"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9091/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus Server
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.31
+    depends_on:
+      nhi-metrics:
+        condition: service_healthy
+    labels:
+      - "nhi.service=prometheus"
+      - "nhi.role=monitoring"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/nhi-detection-coverage.json"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.32
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    labels:
+      - "nhi.service=grafana"
+      - "nhi.role=visualization"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

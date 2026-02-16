@@ -1,0 +1,62 @@
+{{- if .Values.mockServices.cicd.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "mock-cicd") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-cicd
+    nhi.service: mock-cicd
+    nhi.mock.type: cicd-server
+    nhi.network/tier: cicd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mock-cicd
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mock-cicd
+        nhi.service: mock-cicd
+        nhi.network/tier: cicd
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mock-cicd
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.mockServices.cicd.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mockServices.cicd.port }}
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.mockServices.cicd.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.mockServices.cicd.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+{{- end }}

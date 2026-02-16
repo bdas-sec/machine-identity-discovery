@@ -1,0 +1,24 @@
+{{- if .Values.wazuh.indexer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-indexer
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.wazuh.indexer.port }}
+      targetPort: http
+      protocol: TCP
+    - name: transport
+      port: 9300
+      targetPort: transport
+      protocol: TCP
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-indexer
+{{- end }}

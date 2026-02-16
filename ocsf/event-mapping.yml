@@ -1,0 +1,668 @@
+# OCSF Event Class Mapping for NHI Security Testbed
+# Open Cybersecurity Schema Framework (Linux Foundation)
+# https://schema.ocsf.io/
+#
+# Maps all testbed log events and Wazuh detection rules to OCSF event
+# classes for vendor-neutral data normalization. This complements
+# Sigma (detection rule layer) with OCSF (data normalization layer).
+
+metadata:
+  version: "1.0.0"
+  ocsf_version: "1.3.0"
+  project: "NHI Security Testbed"
+  author: "Bodhisattva Das"
+  date: "2026-02-16"
+  description: >
+    Complete OCSF event class mapping for all 57 Wazuh detection rules
+    and 11 log decoders in the NHI Security Testbed. Enables multi-SIEM
+    portability at the data layer.
+
+# ─────────────────────────────────────────────────────────
+# OCSF Severity Mapping (Wazuh Level → OCSF severity_id)
+# ─────────────────────────────────────────────────────────
+severity_mapping:
+  - wazuh_level_range: "0-3"
+    ocsf_severity_id: 0
+    ocsf_severity: "Unknown"
+  - wazuh_level_range: "4-5"
+    ocsf_severity_id: 1
+    ocsf_severity: "Informational"
+  - wazuh_level_range: "6-8"
+    ocsf_severity_id: 2
+    ocsf_severity: "Low"
+  - wazuh_level_range: "9-10"
+    ocsf_severity_id: 3
+    ocsf_severity: "Medium"
+  - wazuh_level_range: "11-12"
+    ocsf_severity_id: 4
+    ocsf_severity: "High"
+  - wazuh_level_range: "13-15"
+    ocsf_severity_id: 5
+    ocsf_severity: "Critical"
+
+# ─────────────────────────────────────────────────────────
+# Wazuh Field → OCSF Field Path Mapping
+# ─────────────────────────────────────────────────────────
+field_mapping:
+  srcip: "src_endpoint.ip"
+  dstip: "dst_endpoint.ip"
+  url: "http.url.path"
+  user: "actor.user.name"
+  action: "api.operation"
+  id: "metadata.uid"
+  status: "status"
+  extra_data: "unmapped.extra_data"
+  protocol: "connection_info.protocol_name"
+  srcport: "src_endpoint.port"
+  dstport: "dst_endpoint.port"
+  file: "file.path"
+  process_name: "actor.process.name"
+  command: "process.cmd_line"
+
+# ─────────────────────────────────────────────────────────
+# OCSF Event Classes Summary
+# ─────────────────────────────────────────────────────────
+ocsf_classes_used:
+  - class_uid: 1001
+    class_name: "File Activity"
+    category_uid: 1
+    category_name: "System Activity"
+    usage: "Credential file access, K8s token reads, hostPath abuse, pipeline config changes"
+
+  - class_uid: 1007
+    class_name: "Process Activity"
+    category_uid: 1
+    category_name: "System Activity"
+    usage: "AI agent shell spawns, nsenter/chroot/unshare container escapes"
+
+  - class_uid: 2001
+    class_name: "Security Finding"
+    category_uid: 2
+    category_name: "Findings"
+    usage: "All correlation rules, secret patterns, CI/CD token detections, frequency-based aggregations"
+
+  - class_uid: 3002
+    class_name: "Authentication"
+    category_uid: 3
+    category_name: "Identity & Access Management"
+    usage: "IMDSv2 token requests, Vault authentication events"
+
+  - class_uid: 4001
+    class_name: "Network Activity"
+    category_uid: 4
+    category_name: "Network Activity"
+    usage: "AI agent external network requests, shell network commands"
+
+  - class_uid: 6001
+    class_name: "Web Resources Activity"
+    category_uid: 6
+    category_name: "Application Activity"
+    usage: "Prompt injection via web requests"
+
+  - class_uid: 6003
+    class_name: "API Activity"
+    category_uid: 6
+    category_name: "Application Activity"
+    usage: "IMDS API access, K8s API calls, AI SSRF, MCP tool invocations"
+
+# ═════════════════════════════════════════════════════════
+# RULE GROUP MAPPINGS
+# ═════════════════════════════════════════════════════════
+
+rule_mappings:
+
+  # ───────────────────────────────────────────────────────
+  # Group 1: Credential Discovery (100600-100609)
+  # ───────────────────────────────────────────────────────
+  credential_discovery:
+    default_ocsf_class_uid: 1001
+    default_ocsf_class_name: "File Activity"
+    default_activity_id: 1  # Read
+    rules:
+      - rule_id: 100600
+        description: "Environment configuration file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+        fields:
+          file.path: "$(file)"
+          actor.user.name: "$(srcuser)"
+
+      - rule_id: 100601
+        description: "AWS credentials file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+        fields:
+          file.path: "$(file)"
+
+      - rule_id: 100602
+        description: "SSH private key access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.004"]
+        fields:
+          file.path: "$(file)"
+
+      - rule_id: 100603
+        description: "Git credential file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001", "T1555"]
+
+      - rule_id: 100604
+        description: "Docker config file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+      - rule_id: 100605
+        description: "Kubernetes kubeconfig access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+      - rule_id: 100606
+        description: "HashiCorp Vault token file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+      - rule_id: 100607
+        description: "/proc/*/environ enumeration"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1082", "T1552.007"]
+
+      - rule_id: 100608
+        description: "NPM config file access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+      - rule_id: 100609
+        description: "Multiple credential file accesses - harvesting"
+        ocsf_class_uid: 2001  # Security Finding (aggregation)
+        ocsf_severity_id: 5
+        mitre: ["T1552", "T1083"]
+        note: "Frequency-based correlation rule"
+
+  # ───────────────────────────────────────────────────────
+  # Group 2: Cloud Metadata / IMDS (100650-100658)
+  # ───────────────────────────────────────────────────────
+  cloud_imds:
+    default_ocsf_class_uid: 6003
+    default_ocsf_class_name: "API Activity"
+    default_activity_id: 1  # Read
+    rules:
+      - rule_id: 100650
+        description: "AWS IMDS access"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 2
+        mitre: ["T1552.005"]
+        fields:
+          api.operation: "GetMetadata"
+          api.service.name: "AWS-IMDS"
+          dst_endpoint.ip: "169.254.169.254"
+          src_endpoint.ip: "$(srcip)"
+
+      - rule_id: 100651
+        description: "AWS IMDS IAM credential theft"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 5
+        mitre: ["T1552.005", "T1078.004"]
+        fields:
+          api.operation: "GetIAMCredentials"
+          api.service.name: "AWS-IMDS"
+
+      - rule_id: 100652
+        description: "AWS IMDSv2 token request"
+        ocsf_class_uid: 3002  # Authentication
+        ocsf_severity_id: 1
+        mitre: ["T1552.005"]
+        note: "More secure IMDSv2 path - informational"
+
+      - rule_id: 100653
+        description: "GCP Metadata Service access"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 2
+        mitre: ["T1552.005"]
+        fields:
+          api.service.name: "GCP-Metadata"
+
+      - rule_id: 100654
+        description: "GCP service account token theft"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 5
+        mitre: ["T1552.005", "T1078.004"]
+
+      - rule_id: 100655
+        description: "Azure IMDS managed identity access"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 2
+        mitre: ["T1552.005"]
+        fields:
+          api.service.name: "Azure-IMDS"
+
+      - rule_id: 100656
+        description: "Azure managed identity token theft"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 5
+        mitre: ["T1552.005", "T1078.004"]
+
+      - rule_id: 100657
+        description: "Burst of IMDS requests - exfiltration"
+        ocsf_class_uid: 2001  # Security Finding (frequency)
+        ocsf_severity_id: 5
+        mitre: ["T1552.005", "T1041"]
+
+      - rule_id: 100658
+        description: "IMDS access from scripting tool"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 4
+        mitre: ["T1552.005"]
+        fields:
+          actor.process.name: "$(process_name)"
+
+  # ───────────────────────────────────────────────────────
+  # Group 3: Kubernetes Security (100750-100764)
+  # ───────────────────────────────────────────────────────
+  kubernetes:
+    rules:
+      - rule_id: 100750
+        description: "K8s ServiceAccount token access"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 2
+        mitre: ["T1552.007", "T1078.001"]
+        fields:
+          file.path: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+      - rule_id: 100751
+        description: "K8s secrets volume access"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 2
+        mitre: ["T1552.007"]
+
+      - rule_id: 100752
+        description: "K8s RBAC probing (kubectl auth can-i)"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 2
+        mitre: ["T1069.003", "T1087.004"]
+        fields:
+          api.operation: "SelfSubjectAccessReview"
+          api.service.name: "kubernetes"
+
+      - rule_id: 100753
+        description: "K8s secrets enumeration"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 3
+        mitre: ["T1552.007"]
+        fields:
+          api.operation: "ListSecrets"
+
+      - rule_id: 100754
+        description: "K8s service account enumeration"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 2
+        mitre: ["T1087.004"]
+
+      - rule_id: 100755
+        description: "Extensive K8s RBAC enumeration"
+        ocsf_class_uid: 2001  # Security Finding (frequency)
+        ocsf_severity_id: 5
+        mitre: ["T1069.003"]
+
+      - rule_id: 100756
+        description: "Direct etcd datastore access"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 5
+        mitre: ["T1552.007"]
+        note: "Complete cluster compromise indicator"
+
+      # Container Escape Rules (T1611) - Added 2026-02-16
+      - rule_id: 100757
+        description: "Container escape via nsenter"
+        ocsf_class_uid: 1007  # Process Activity
+        ocsf_severity_id: 5
+        mitre: ["T1611"]
+
+      - rule_id: 100758
+        description: "Container escape via chroot to host"
+        ocsf_class_uid: 1007
+        ocsf_severity_id: 5
+        mitre: ["T1611"]
+
+      - rule_id: 100759
+        description: "Namespace manipulation via unshare"
+        ocsf_class_uid: 1007
+        ocsf_severity_id: 4
+        mitre: ["T1611", "T1055"]
+
+      - rule_id: 100760
+        description: "Sensitive host file access via hostPath"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 4
+        mitre: ["T1611", "T1552.001"]
+
+      - rule_id: 100761
+        description: "Cgroup escape via release_agent"
+        ocsf_class_uid: 1007
+        ocsf_severity_id: 5
+        mitre: ["T1611"]
+
+      - rule_id: 100762
+        description: "CAP_SYS_ADMIN filesystem mount"
+        ocsf_class_uid: 1007
+        ocsf_severity_id: 4
+        mitre: ["T1611", "T1068"]
+
+      - rule_id: 100763
+        description: "Host PID namespace probe via /proc/1"
+        ocsf_class_uid: 1001
+        ocsf_severity_id: 5
+        mitre: ["T1611", "T1082"]
+
+      - rule_id: 100764
+        description: "Direct K8s API/Kubelet access from container"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 3
+        mitre: ["T1611", "T1552.007"]
+
+  # ───────────────────────────────────────────────────────
+  # Group 4: CI/CD Pipeline (100800-100805)
+  # ───────────────────────────────────────────────────────
+  cicd:
+    rules:
+      - rule_id: 100800
+        description: "GitHub token in environment"
+        ocsf_class_uid: 2001  # Security Finding
+        ocsf_severity_id: 3
+        mitre: ["T1552.007"]
+        finding_type: "secret_exposure"
+
+      - rule_id: 100801
+        description: "GitLab CI job token detected"
+        ocsf_class_uid: 2001
+        ocsf_severity_id: 3
+        mitre: ["T1552.007"]
+
+      - rule_id: 100802
+        description: "CI/CD runner credential file access"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+      - rule_id: 100803
+        description: "Pipeline config modified"
+        ocsf_class_uid: 1001
+        activity_id: 4  # Modify
+        ocsf_severity_id: 4
+        mitre: ["T1195.002"]
+
+      - rule_id: 100804
+        description: "NPM token detected"
+        ocsf_class_uid: 2001
+        ocsf_severity_id: 3
+        mitre: ["T1552.007"]
+
+      - rule_id: 100805
+        description: "GitHub Actions runtime token"
+        ocsf_class_uid: 2001
+        ocsf_severity_id: 3
+        mitre: ["T1552.007"]
+
+  # ───────────────────────────────────────────────────────
+  # Group 5: AI Agent Anomalies (100850-100859)
+  # ───────────────────────────────────────────────────────
+  ai_agent:
+    rules:
+      - rule_id: 100850
+        description: "AI agent framework spawning shell"
+        ocsf_class_uid: 1007  # Process Activity
+        activity_id: 1  # Launch
+        ocsf_severity_id: 3
+        mitre: ["T1059", "T1059.004"]
+        fields:
+          actor.process.name: "$(process_name)"
+          process.cmd_line: "$(command)"
+
+      - rule_id: 100855
+        description: "AI agent shell network/exfil command"
+        ocsf_class_uid: 4001  # Network Activity
+        ocsf_severity_id: 4
+        mitre: ["T1059", "T1041"]
+
+      - rule_id: 100851
+        description: "AI agent credential file access"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 4
+        mitre: ["T1552.001", "T1552.004"]
+        fields:
+          actor.process.name: "$(process_name)"
+          file.path: "$(file)"
+
+      - rule_id: 100852
+        description: "Prompt injection in web request"
+        ocsf_class_uid: 6001  # Web Resources Activity
+        ocsf_severity_id: 3
+        mitre: ["T1059", "T1190"]
+
+      - rule_id: 100856
+        description: "Prompt injection targeting credential extraction"
+        ocsf_class_uid: 6001
+        ocsf_severity_id: 5
+        mitre: ["T1059", "T1552.001"]
+
+      - rule_id: 100853
+        description: "AI agent SSRF to cloud metadata"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 4
+        mitre: ["T1552.005", "T1190"]
+        fields:
+          actor.process.name: "$(process_name)"
+
+      - rule_id: 100857
+        description: "AI agent SSRF to credential endpoint"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 5
+        mitre: ["T1552.005", "T1078.004"]
+
+      - rule_id: 100854
+        description: "AI agent rapid credential scanning"
+        ocsf_class_uid: 2001  # Security Finding (frequency)
+        ocsf_severity_id: 4
+        mitre: ["T1083", "T1552"]
+
+      - rule_id: 100858
+        description: "AI agent MCP/tool-use activity"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 3
+        mitre: ["T1059"]
+
+      - rule_id: 100859
+        description: "AI agent external network request"
+        ocsf_class_uid: 4001  # Network Activity
+        ocsf_severity_id: 3
+        mitre: ["T1071.001", "T1041"]
+
+  # ───────────────────────────────────────────────────────
+  # Group 6: Secret Pattern Detection (100900-100914)
+  # ───────────────────────────────────────────────────────
+  secret_patterns:
+    default_ocsf_class_uid: 2001
+    default_ocsf_class_name: "Security Finding"
+    finding_type: "secret_detected"
+    rules:
+      - rule_id: 100900
+        description: "AWS Access Key ID (AKIA...)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100901
+        description: "GitHub token (ghp_/gho_/ghs_)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100902
+        description: "OpenAI API key (sk-...)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100903
+        description: "Slack token (xox*)"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+      - rule_id: 100904
+        description: "Private key (BEGIN PRIVATE KEY)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.004"]
+      - rule_id: 100905
+        description: "Google API key (AIza...)"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+      - rule_id: 100906
+        description: "Azure Storage connection string"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100907
+        description: "JWT token (eyJ...)"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+      - rule_id: 100908
+        description: "Database connection string with creds"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100909
+        description: "Stripe live API key (sk_live_)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100910
+        description: "Twilio API key (SK...)"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+      - rule_id: 100911
+        description: "Firebase server key (AAAA...)"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+      - rule_id: 100912
+        description: "Terraform Cloud token (atlasv1.)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100913
+        description: "HashiCorp Vault token (hvs.)"
+        ocsf_severity_id: 4
+        mitre: ["T1552.001"]
+      - rule_id: 100914
+        description: "Datadog API key"
+        ocsf_severity_id: 3
+        mitre: ["T1552.001"]
+
+  # ───────────────────────────────────────────────────────
+  # Group 7: Correlation Rules (100950-100955)
+  # ───────────────────────────────────────────────────────
+  correlation:
+    default_ocsf_class_uid: 2001
+    default_ocsf_class_name: "Security Finding"
+    rules:
+      - rule_id: 100950
+        description: "Credential harvest + IMDS access"
+        ocsf_severity_id: 5
+        mitre: ["T1552", "T1078.004"]
+        timeframe_seconds: 120
+
+      - rule_id: 100951
+        description: "K8s token theft + secrets enumeration"
+        ocsf_severity_id: 5
+        mitre: ["T1552.007", "T1610"]
+        timeframe_seconds: 180
+
+      - rule_id: 100952
+        description: "CI/CD token + git credential access"
+        ocsf_severity_id: 5
+        mitre: ["T1195.002"]
+        timeframe_seconds: 300
+
+      - rule_id: 100953
+        description: "AI agent SSRF + credential access"
+        ocsf_severity_id: 5
+        mitre: ["T1552", "T1059"]
+        timeframe_seconds: 120
+
+      - rule_id: 100954
+        description: "Multiple NHI events from same source"
+        ocsf_severity_id: 5
+        mitre: ["T1078"]
+        timeframe_seconds: 600
+
+      - rule_id: 100955
+        description: "Container escape + SA token theft chain"
+        ocsf_severity_id: 5
+        mitre: ["T1611", "T1552.007"]
+        timeframe_seconds: 300
+
+# ═════════════════════════════════════════════════════════
+# DECODER MAPPINGS
+# ═════════════════════════════════════════════════════════
+decoder_mappings:
+  - decoder: "nhi_alert"
+    primary_ocsf_class_uid: 6001
+    primary_ocsf_class_name: "Web Resources Activity"
+    log_source: "Flask vulnerable-app security log"
+    extracted_fields: ["url", "srcip"]
+
+  - decoder: "nhi-imds-access"
+    primary_ocsf_class_uid: 6003
+    primary_ocsf_class_name: "API Activity"
+    log_source: "mock-imds server (AWS/Azure metadata)"
+    extracted_fields: ["srcip", "url", "extra_data"]
+
+  - decoder: "nhi-metadata-access"
+    primary_ocsf_class_uid: 6003
+    primary_ocsf_class_name: "API Activity"
+    log_source: "GCP/Azure metadata access"
+    extracted_fields: ["srcip", "url", "extra_data"]
+
+  - decoder: "nhi-k8s-audit"
+    primary_ocsf_class_uid: 6003
+    primary_ocsf_class_name: "API Activity"
+    log_source: "Kubernetes audit log (JSON)"
+    extracted_fields: ["action", "id", "extra_data", "user", "srcip"]
+
+  - decoder: "nhi-sa-token-access"
+    primary_ocsf_class_uid: 1001
+    primary_ocsf_class_name: "File Activity"
+    log_source: "ServiceAccount token file access"
+    extracted_fields: ["url", "extra_data", "id"]
+
+  - decoder: "nhi-cicd-runner"
+    primary_ocsf_class_uid: 2001
+    primary_ocsf_class_name: "Security Finding"
+    log_source: "mock-cicd server (GitHub/GitLab/Azure DevOps)"
+    extracted_fields: ["srcip", "url", "extra_data", "id"]
+
+  - decoder: "nhi-ai-agent"
+    primary_ocsf_class_uid: 1007
+    primary_ocsf_class_name: "Process Activity"
+    log_source: "AI agent framework (vulnerable-assistant)"
+    extracted_fields: ["extra_data", "url", "action"]
+
+  - decoder: "nhi-env-access"
+    primary_ocsf_class_uid: 1001
+    primary_ocsf_class_name: "File Activity"
+    log_source: "/proc/PID/environ access"
+    extracted_fields: ["id", "extra_data"]
+
+  - decoder: "nhi-secret-pattern"
+    primary_ocsf_class_uid: 2001
+    primary_ocsf_class_name: "Security Finding"
+    log_source: "Secret/token pattern matches in log output"
+    extracted_fields: ["extra_data"]
+
+  - decoder: "nhi-vault-audit"
+    primary_ocsf_class_uid: 3002
+    primary_ocsf_class_name: "Authentication"
+    log_source: "HashiCorp Vault audit log (JSON)"
+    extracted_fields: ["srcip", "url", "action", "user"]
+
+  - decoder: "nhi-attack-marker"
+    primary_ocsf_class_uid: 2001
+    primary_ocsf_class_name: "Security Finding"
+    log_source: "Generic [ATTACK]/[CRITICAL] markers from all services"
+    extracted_fields: ["status", "extra_data", "srcip"]

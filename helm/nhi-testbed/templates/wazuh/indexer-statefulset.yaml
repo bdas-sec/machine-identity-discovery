@@ -1,0 +1,109 @@
+{{- if .Values.wazuh.indexer.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-indexer
+    nhi.service: wazuh-indexer
+    nhi.role: storage
+    nhi.network/tier: mgmt
+spec:
+  serviceName: {{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}
+  replicas: {{ .Values.wazuh.indexer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wazuh-indexer
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wazuh-indexer
+        nhi.service: wazuh-indexer
+        nhi.role: storage
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Required for OpenSearch to function properly
+      initContainers:
+        - name: sysctl-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "sysctl -w vm.max_map_count=262144 || true"
+          securityContext:
+            privileged: true
+      containers:
+        - name: wazuh-indexer
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.wazuh.indexer.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.wazuh.indexer.port }}
+              protocol: TCP
+            - name: transport
+              containerPort: 9300
+              protocol: TCP
+          env:
+            - name: OPENSEARCH_JAVA_OPTS
+              value: {{ .Values.wazuh.indexer.javaOpts | quote }}
+            - name: bootstrap.memory_lock
+              value: "true"
+            - name: discovery.type
+              value: "single-node"
+            - name: plugins.security.ssl.http.enabled
+              value: "false"
+            - name: plugins.security.disabled
+              value: "true"
+            - name: compatibility.override_main_response_version
+              value: "true"
+            - name: cluster.routing.allocation.disk.threshold_enabled
+              value: "false"
+          resources:
+            {{- toYaml .Values.wazuh.indexer.resources | nindent 12 }}
+          volumeMounts:
+            - name: indexer-data
+              mountPath: /var/lib/wazuh-indexer
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+  {{- if .Values.wazuh.indexer.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: indexer-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.wazuh.indexer.persistence.storageClass }}
+        storageClassName: {{ .Values.wazuh.indexer.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.wazuh.indexer.persistence.size }}
+  {{- else }}
+      volumes:
+        - name: indexer-data
+          emptyDir: {}
+  {{- end }}
+{{- end }}

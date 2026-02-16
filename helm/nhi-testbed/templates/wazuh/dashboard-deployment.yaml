@@ -1,0 +1,79 @@
+{{- if .Values.wazuh.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-dashboard") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-dashboard
+    nhi.service: wazuh-dashboard
+    nhi.role: visualization
+    nhi.network/tier: mgmt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wazuh-dashboard
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wazuh-dashboard
+        nhi.service: wazuh-dashboard
+        nhi.role: visualization
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: wazuh-dashboard
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.wazuh.dashboard.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: dashboard
+              containerPort: {{ .Values.wazuh.dashboard.port }}
+              protocol: TCP
+          env:
+            - name: INDEXER_URL
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}:9200"
+            - name: INDEXER_USERNAME
+              value: {{ .Values.wazuh.manager.credentials.indexerUser | quote }}
+            - name: INDEXER_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.indexerPassword | quote }}
+            - name: WAZUH_API_URL
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}"
+            - name: DASHBOARD_USERNAME
+              value: {{ .Values.wazuh.dashboard.credentials.user | quote }}
+            - name: DASHBOARD_PASSWORD
+              value: {{ .Values.wazuh.dashboard.credentials.password | quote }}
+            - name: API_USERNAME
+              value: {{ .Values.wazuh.manager.credentials.apiUser | quote }}
+            - name: API_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.apiPassword | quote }}
+            - name: OPENSEARCH_HOSTS
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}:9200"
+          resources:
+            {{- toYaml .Values.wazuh.dashboard.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: dashboard
+              scheme: HTTPS
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: dashboard
+              scheme: HTTPS
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+{{- end }}

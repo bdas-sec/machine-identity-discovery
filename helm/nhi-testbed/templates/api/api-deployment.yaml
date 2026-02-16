@@ -1,0 +1,73 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "api") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nhi-api
+    nhi.service: api
+    nhi.role: management
+    nhi.network/tier: mgmt
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nhi-api
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nhi-api
+        nhi.service: api
+        nhi.role: management
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: nhi-api
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.api.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+          env:
+            - name: NHI_WAZUH_API_URL
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}:55000"
+            - name: NHI_WAZUH_API_USER
+              value: {{ .Values.wazuh.manager.credentials.apiUser | quote }}
+            - name: NHI_WAZUH_API_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.apiPassword | quote }}
+            - name: NHI_CONTAINER_RUNTIME
+              value: "kubernetes"
+            - name: NHI_SCENARIOS_DIR
+              value: "/app/scenarios"
+            - name: NHI_RULES_FILE
+              value: "/app/wazuh/rules/nhi-detection-rules.xml"
+            - name: NHI_DECODERS_FILE
+              value: "/app/wazuh/decoders/nhi-decoders.xml"
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+{{- end }}

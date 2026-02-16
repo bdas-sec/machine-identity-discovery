@@ -388,6 +388,40 @@ wait_for_services() {
         echo -e " ${GREEN}OK${NC}"
     fi
 
+    # Wait for Mock OAuth Provider
+    echo -n "  [*] Mock OAuth"
+    RETRIES=0
+    MAX_RETRIES=20
+    until curl -s http://localhost:8090/health 2>/dev/null | grep -q "healthy"; do
+        echo -n "."
+        sleep 2
+        RETRIES=$((RETRIES + 1))
+        if [ $RETRIES -ge $MAX_RETRIES ]; then
+            echo -e " ${YELLOW}TIMEOUT${NC}"
+            break
+        fi
+    done
+    if [ $RETRIES -lt $MAX_RETRIES ]; then
+        echo -e " ${GREEN}OK${NC}"
+    fi
+
+    # Wait for Mock GCP Metadata
+    echo -n "  [*] Mock GCP Metadata"
+    RETRIES=0
+    MAX_RETRIES=20
+    until curl -s -H "Metadata-Flavor: Google" http://localhost:1339/health 2>/dev/null | grep -q "healthy"; do
+        echo -n "."
+        sleep 2
+        RETRIES=$((RETRIES + 1))
+        if [ $RETRIES -ge $MAX_RETRIES ]; then
+            echo -e " ${YELLOW}TIMEOUT${NC}"
+            break
+        fi
+    done
+    if [ $RETRIES -lt $MAX_RETRIES ]; then
+        echo -e " ${GREEN}OK${NC}"
+    fi
+
     # Wait for agents to connect
     echo -n "  [*] Waiting for agents to connect"
     RETRIES=0
@@ -542,8 +576,15 @@ print_summary() {
     echo "  Wazuh API:        https://localhost:55000"
     echo "  Vault UI:         http://localhost:8200"
     echo "  Mock IMDS:        http://localhost:1338"
+    echo "  Mock GCP Meta:    http://localhost:1339"
     echo "  Mock CI/CD:       http://localhost:8080"
+    echo "  Mock OAuth:       http://localhost:8090"
     echo "  Vulnerable App:   http://localhost:8888"
+    echo ""
+    echo -e "${BLUE}Monitoring:${NC}"
+    echo "  Grafana:          http://localhost:3000  (admin / admin)"
+    echo "  Prometheus:       http://localhost:9090"
+    echo "  Metrics Exporter: http://localhost:9091/metrics"
     echo ""
     echo -e "${BLUE}Default Credentials:${NC}"
     echo "  Dashboard:  admin / admin"

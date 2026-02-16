@@ -1,0 +1,39 @@
+title: "NHI: Multi-Technique Container Escape Chain"
+id: 5b9e9cae-e55a-4b17-b264-9db027392da1
+related:
+    - id: "100955"
+      type: derived
+name: nhi_corr_k8s_container_escape_chain
+type: correlation
+status: test
+description: |
+    Detects when multiple container escape techniques are used in combination
+    with ServiceAccount token theft within a 5-minute window. This attack
+    chain indicates a sophisticated container breakout and lateral movement
+    attempt within Kubernetes.
+    Derived from Wazuh rule 100955 (timeframe=300s).
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1552/007/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.correlation
+rules:
+    - nhi_k8s_container_escape_nsenter
+    - nhi_k8s_container_escape_chroot
+    - nhi_k8s_container_escape_unshare
+    - nhi_k8s_cgroup_escape
+    - nhi_k8s_cap_sys_admin_mount
+    - nhi_k8s_proc_1_root_access
+    - nhi_k8s_sa_token_access
+group-by:
+    - SourceIP
+timespan: 5m
+condition:
+    gte: 2
+level: critical

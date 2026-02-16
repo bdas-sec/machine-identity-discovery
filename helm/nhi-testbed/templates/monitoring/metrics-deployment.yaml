@@ -1,0 +1,73 @@
+{{- if .Values.monitoring.metrics.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "metrics") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nhi-metrics
+    nhi.service: nhi-metrics
+    nhi.role: monitoring
+    nhi.network/tier: mgmt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nhi-metrics
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nhi-metrics
+        nhi.service: nhi-metrics
+        nhi.role: monitoring
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: nhi-metrics
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.monitoring.metrics.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.monitoring.metrics.port }}
+              protocol: TCP
+          env:
+            - name: METRICS_PORT
+              value: {{ .Values.monitoring.metrics.port | quote }}
+            - name: WAZUH_API_URL
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}:55000"
+            - name: WAZUH_API_USER
+              value: {{ .Values.wazuh.manager.credentials.apiUser | quote }}
+            - name: WAZUH_API_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.apiPassword | quote }}
+            - name: NHI_API_URL
+              value: "http://{{ include "nhi-testbed.componentName" (list . "api") }}:{{ .Values.api.port }}"
+            - name: POLL_INTERVAL_SECONDS
+              value: {{ .Values.monitoring.metrics.pollIntervalSeconds | quote }}
+            - name: SCENARIOS_DIR
+              value: "/app/scenarios"
+          resources:
+            {{- toYaml .Values.monitoring.metrics.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+{{- end }}

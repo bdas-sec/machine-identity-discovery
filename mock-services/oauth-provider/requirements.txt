@@ -1,0 +1,4 @@
+# Mock OAuth Provider Dependencies
+flask==3.0.0
+pyjwt==2.9.0
+cryptography==43.0.0

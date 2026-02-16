@@ -1,0 +1,15 @@
+apiVersion: v2
+name: nhi-testbed
+description: NHI Machine Identity Security Testbed — Purple team framework for NHI threat simulation and detection
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - nhi
+  - machine-identity
+  - security
+  - purple-team
+  - wazuh
+  - siem
+maintainers:
+  - name: NHI Security Testbed Contributors

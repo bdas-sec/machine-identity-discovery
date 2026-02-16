@@ -1,0 +1,20 @@
+{{- if .Values.agents.vulnerableApp.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "vulnerable-app") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vulnerable-app
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.agents.vulnerableApp.externalPort }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: vulnerable-app
+{{- end }}

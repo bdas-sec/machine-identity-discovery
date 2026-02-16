@@ -278,6 +278,34 @@ def check_mock_services() -> bool:
         fail(f"Mock CI/CD: {e}")
         all_ok = False
 
+    # Mock OAuth Provider
+    try:
+        url = "http://localhost:8090/health"
+        with urllib.request.urlopen(url, timeout=5) as response:
+            if "healthy" in response.read().decode():
+                ok("Mock OAuth Provider")
+            else:
+                fail("Mock OAuth Provider unhealthy")
+                all_ok = False
+    except Exception as e:
+        fail(f"Mock OAuth Provider: {e}")
+        all_ok = False
+
+    # Mock GCP Metadata
+    try:
+        url = "http://localhost:1339/health"
+        req = urllib.request.Request(url)
+        req.add_header("Metadata-Flavor", "Google")
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if "healthy" in response.read().decode():
+                ok("Mock GCP Metadata")
+            else:
+                fail("Mock GCP Metadata unhealthy")
+                all_ok = False
+    except Exception as e:
+        fail(f"Mock GCP Metadata: {e}")
+        all_ok = False
+
     # Vulnerable App
     try:
         url = "http://localhost:8888/"

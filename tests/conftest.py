@@ -29,9 +29,15 @@ WAZUH_INDEXER_URL = os.environ.get("WAZUH_INDEXER_URL", "https://localhost:9200"
 WAZUH_DASHBOARD_URL = os.environ.get("WAZUH_DASHBOARD_URL", "https://localhost:443")
 MOCK_IMDS_URL = os.environ.get("MOCK_IMDS_URL", "http://localhost:1338")
 MOCK_CICD_URL = os.environ.get("MOCK_CICD_URL", "http://localhost:8080")
+MOCK_OAUTH_URL = os.environ.get("MOCK_OAUTH_URL", "http://localhost:8090")
+MOCK_GCP_METADATA_URL = os.environ.get("MOCK_GCP_METADATA_URL", "http://localhost:1339")
 VULNERABLE_APP_URL = os.environ.get("VULNERABLE_APP_URL", "http://localhost:8888")
 VAULT_URL = os.environ.get("VAULT_URL", "http://localhost:8200")
 AI_AGENT_URL = os.environ.get("AI_AGENT_URL", "http://localhost:8889")
+NHI_API_URL = os.environ.get("NHI_API_URL", "http://localhost:8000")
+PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://localhost:9090")
+GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://localhost:3000")
+NHI_METRICS_URL = os.environ.get("NHI_METRICS_URL", "http://localhost:9091")
 
 # Wazuh credentials
 WAZUH_API_USER = os.environ.get("WAZUH_API_USER", "wazuh-wui")
@@ -84,6 +90,8 @@ def pytest_collection_modifyitems(config, items):
         elif "category_5" in path_str:
             item.add_marker(pytest.mark.category_5)
             item.add_marker(pytest.mark.requires_ai)
+        elif "category_6" in path_str:
+            item.add_marker(pytest.mark.category_6)
 
 
 # ============================================================
@@ -138,8 +146,10 @@ def testbed_containers(docker_client) -> Dict[str, Any]:
         name = container.name
         # Match our testbed containers
         if any(x in name for x in [
-            "wazuh", "mock-imds", "mock-cicd", "vulnerable-app",
-            "cloud-workload", "cicd-runner", "k8s-node", "ai-agent", "vault"
+            "wazuh", "mock-imds", "mock-cicd", "mock-oauth", "mock-gcp",
+            "vulnerable-app", "cloud-workload", "cicd-runner",
+            "k8s-node", "ai-agent", "vault", "nhi-api", "nhi-metrics",
+            "prometheus", "grafana"
         ]):
             containers[name] = container
     return containers
@@ -201,6 +211,20 @@ def mock_cicd_client():
     """HTTP client for Mock CI/CD service."""
     from helpers.http_client import MockCICDClient
     return MockCICDClient(base_url=MOCK_CICD_URL)
+
+
+@pytest.fixture(scope="session")
+def mock_oauth_client():
+    """HTTP client for Mock OAuth Provider."""
+    from helpers.http_client import MockOAuthClient
+    return MockOAuthClient(base_url=MOCK_OAUTH_URL)
+
+
+@pytest.fixture(scope="session")
+def mock_gcp_metadata_client():
+    """HTTP client for Mock GCP Metadata service."""
+    from helpers.http_client import MockGCPMetadataClient
+    return MockGCPMetadataClient(base_url=MOCK_GCP_METADATA_URL)
 
 
 @pytest.fixture(scope="session")
@@ -298,10 +322,16 @@ def expected_containers() -> List[str]:
         "wazuh-dashboard",
         "mock-imds",
         "mock-cicd",
+        "mock-oauth",
+        "mock-gcp-metadata",
         "vulnerable-app",
         "cloud-workload",
         "cicd-runner",
-        "vault"
+        "vault",
+        "nhi-api",
+        "nhi-metrics",
+        "prometheus",
+        "grafana",
     ]
 
 

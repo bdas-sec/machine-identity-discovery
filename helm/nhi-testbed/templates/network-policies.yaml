@@ -1,0 +1,236 @@
+{{- if .Values.networkPolicies.enabled }}
+# ==============================================================================
+# Network Policies — Enforce 4-zone isolation model
+#
+# Mirrors the Docker Compose network topology:
+#   mgmt_net  (172.40.0.0/24) — Wazuh stack, API, monitoring
+#   cloud_net (172.41.0.0/24) — Cloud workloads, mock services, vault
+#   cicd_net  (172.42.0.0/24) — CI/CD runner, mock CI/CD server
+#   k8s_net   (172.43.0.0/24) — Kubernetes simulation nodes
+#
+# The Wazuh Manager is allowed ingress from ALL tiers (agents must reach it).
+# All other cross-tier traffic is denied by default.
+# ==============================================================================
+
+---
+# Default deny all ingress and egress within the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-default-deny
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Allow DNS egress for all pods (required for service discovery)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-allow-dns
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# MGMT tier: Allow intra-tier communication
+# Pods: wazuh-manager, wazuh-indexer, wazuh-dashboard, nhi-api, nhi-metrics, prometheus, grafana
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-mgmt-intra
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      nhi.network/tier: mgmt
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: mgmt
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: mgmt
+
+---
+# CLOUD tier: Allow intra-tier communication
+# Pods: cloud-workload, vulnerable-app, mock-imds, mock-gcp-metadata, mock-oauth, vault
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-cloud-intra
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      nhi.network/tier: cloud
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cloud
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cloud
+
+---
+# CICD tier: Allow intra-tier communication
+# Pods: cicd-runner, mock-cicd
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-cicd-intra
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      nhi.network/tier: cicd
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cicd
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cicd
+
+---
+# K8S tier: Allow intra-tier communication (only active with k8sSimulation profile)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-k8s-intra
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      nhi.network/tier: k8s
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: k8s
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: k8s
+
+---
+# Wazuh Manager: Accept agent connections from ALL tiers
+# Agents in cloud, cicd, and k8s tiers must be able to reach the manager
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-wazuh-manager-ingress
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: wazuh-manager
+  policyTypes:
+    - Ingress
+  ingress:
+    # Accept from cloud tier agents
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cloud
+      ports:
+        - protocol: TCP
+          port: 1514
+        - protocol: TCP
+          port: 1515
+    # Accept from cicd tier agents
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: cicd
+      ports:
+        - protocol: TCP
+          port: 1514
+        - protocol: TCP
+          port: 1515
+    # Accept from k8s tier agents
+    - from:
+        - podSelector:
+            matchLabels:
+              nhi.network/tier: k8s
+      ports:
+        - protocol: TCP
+          port: 1514
+        - protocol: TCP
+          port: 1515
+
+---
+# Cloud/CICD/K8S agents: Allow egress to Wazuh Manager
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-agents-to-manager
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: nhi.network/tier
+        operator: In
+        values: ["cloud", "cicd", "k8s"]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: wazuh-manager
+      ports:
+        - protocol: TCP
+          port: 1514
+        - protocol: TCP
+          port: 1515
+{{- end }}

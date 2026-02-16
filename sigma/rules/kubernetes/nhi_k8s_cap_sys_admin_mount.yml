@@ -1,0 +1,42 @@
+title: "NHI: CAP_SYS_ADMIN Abuse - Mounting Filesystem from Container"
+id: f68ed2f2-5242-4a7b-851f-7cede4a74e13
+related:
+    - id: "100762"
+      type: derived
+status: test
+description: |
+    Detects mount commands for proc, sysfs, cgroup, or block devices
+    from within a container, indicating abuse of CAP_SYS_ADMIN capability
+    for container escape.
+    Derived from Wazuh rule 100762.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1068/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.t1068
+    - nhi.kubernetes
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_mount:
+        Image|endswith: '/mount'
+    selection_target:
+        CommandLine|contains:
+            - '-t proc'
+            - '-t sysfs'
+            - '-t cgroup'
+            - '-t tmpfs'
+            - '/dev/sd'
+            - '/dev/vd'
+            - '/dev/xvd'
+            - '/dev/nvme'
+    condition: selection_mount and 1 of selection_target
+falsepositives:
+    - Container image builds requiring filesystem mounts
+    - System initialization scripts
+level: high

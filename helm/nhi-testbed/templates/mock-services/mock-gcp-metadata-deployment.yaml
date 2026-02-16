@@ -1,0 +1,70 @@
+{{- if .Values.mockServices.gcpMetadata.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "mock-gcp-metadata") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-gcp-metadata
+    nhi.service: mock-gcp-metadata
+    nhi.mock.provider: gcp
+    nhi.network/tier: cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mock-gcp-metadata
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mock-gcp-metadata
+        nhi.service: mock-gcp-metadata
+        nhi.network/tier: cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mock-gcp-metadata
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.mockServices.gcpMetadata.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mockServices.gcpMetadata.port }}
+              protocol: TCP
+          env:
+            - name: GCP_PORT
+              value: {{ .Values.mockServices.gcpMetadata.port | quote }}
+            {{- range $key, $value := .Values.mockServices.gcpMetadata.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.mockServices.gcpMetadata.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+              httpHeaders:
+                - name: Metadata-Flavor
+                  value: Google
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              httpHeaders:
+                - name: Metadata-Flavor
+                  value: Google
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+{{- end }}

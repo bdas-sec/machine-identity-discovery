@@ -1,0 +1,70 @@
+{{- if .Values.agents.vulnerableApp.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "vulnerable-app") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vulnerable-app
+    nhi.agent.type: vulnerable-app
+    nhi.agent.vulnerability: exposed-secrets
+    nhi.network/tier: cloud
+spec:
+  replicas: {{ .Values.agents.vulnerableApp.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: vulnerable-app
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: vulnerable-app
+        nhi.agent.type: vulnerable-app
+        nhi.network/tier: cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: vulnerable-app
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.agents.vulnerableApp.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.agents.vulnerableApp.port }}
+              protocol: TCP
+          env:
+            - name: WAZUH_MANAGER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_REGISTRATION_SERVER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_AGENT_NAME
+              value: {{ .Values.agents.vulnerableApp.agentName | quote }}
+            - name: WAZUH_AGENT_GROUP
+              value: {{ .Values.agents.vulnerableApp.agentGroup | quote }}
+            {{- range $key, $value := .Values.agents.vulnerableApp.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.agents.vulnerableApp.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+{{- end }}

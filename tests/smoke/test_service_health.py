@@ -157,6 +157,45 @@ class TestVulnerableAppHealth:
 
 
 @pytest.mark.smoke
+class TestMockOAuthHealth:
+    """Tests for Mock OAuth Provider health."""
+
+    def test_oauth_responds(self, mock_oauth_client):
+        """Verify Mock OAuth Provider is responding."""
+        assert mock_oauth_client.is_available(), \
+            "Mock OAuth Provider is not available"
+
+    def test_oauth_oidc_discovery(self, mock_oauth_client):
+        """Verify OIDC discovery endpoint works."""
+        discovery = mock_oauth_client.get_oidc_discovery()
+        assert discovery is not None, "Could not get OIDC discovery"
+        assert "issuer" in discovery, "OIDC discovery missing issuer"
+
+    def test_oauth_jwks(self, mock_oauth_client):
+        """Verify JWKS endpoint returns key set."""
+        jwks = mock_oauth_client.get_jwks()
+        assert jwks is not None, "Could not get JWKS"
+        assert "keys" in jwks, "JWKS missing 'keys' array"
+        assert len(jwks["keys"]) > 0, "JWKS has no keys"
+
+
+@pytest.mark.smoke
+class TestMockGCPMetadataHealth:
+    """Tests for Mock GCP Metadata service health."""
+
+    def test_gcp_metadata_responds(self, mock_gcp_metadata_client):
+        """Verify Mock GCP Metadata is responding."""
+        assert mock_gcp_metadata_client.health_check("/health"), \
+            "Mock GCP Metadata is not available"
+
+    def test_gcp_project_id(self, mock_gcp_metadata_client):
+        """Verify can get GCP project ID."""
+        project_id = mock_gcp_metadata_client.get_project_id()
+        assert project_id is not None, "Could not get GCP project ID"
+        assert "demo-project" in project_id, "Unexpected project ID"
+
+
+@pytest.mark.smoke
 class TestWorkloadServicesHealth:
     """Tests for workload services health."""
 

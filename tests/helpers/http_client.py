@@ -194,3 +194,197 @@ class MockCICDClient(TestHttpClient):
             return None
         except Exception:
             return None
+
+    def get_app_installations(self) -> Optional[list]:
+        """Get GitHub App installations."""
+        try:
+            response = self.get("/github/app/installations")
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_app_installation_token(self, installation_id: int = 1) -> Optional[Dict]:
+        """Get GitHub App installation access token."""
+        try:
+            response = self.post(f"/github/app/installations/{installation_id}/access_tokens")
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_app_repositories(self, installation_id: int = 1) -> Optional[Dict]:
+        """Get repositories accessible to a GitHub App installation."""
+        try:
+            response = self.get(f"/github/app/installations/{installation_id}/repositories")
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+
+class MockOAuthClient(TestHttpClient):
+    """Specialized client for Mock OAuth Provider."""
+
+    def get_oidc_discovery(self) -> Optional[Dict]:
+        """Get OIDC discovery document."""
+        try:
+            response = self.get("/.well-known/openid-configuration")
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_jwks(self) -> Optional[Dict]:
+        """Get JWKS document."""
+        try:
+            response = self.get("/.well-known/jwks.json")
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_token(
+        self,
+        grant_type: str = "client_credentials",
+        client_id: str = "demo-malicious-app",
+        client_secret: str = "demo-client-secret-FAKE",
+        scope: str = "admin:org repo user:email"
+    ) -> Optional[Dict]:
+        """Request OAuth token."""
+        try:
+            response = self.post(
+                "/oauth/token",
+                data={
+                    "grant_type": grant_type,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "scope": scope
+                }
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def introspect_token(self, token: str) -> Optional[Dict]:
+        """Introspect an OAuth token."""
+        try:
+            response = self.post(
+                "/oauth/token/introspect",
+                data={"token": token}
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_userinfo(self, access_token: str = None) -> Optional[Dict]:
+        """Get userinfo endpoint."""
+        try:
+            headers = {}
+            if access_token:
+                headers["Authorization"] = f"Bearer {access_token}"
+            response = self.get("/userinfo", headers=headers)
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+
+class MockGCPMetadataClient(TestHttpClient):
+    """Specialized client for Mock GCP Metadata service."""
+
+    GCP_HEADERS = {"Metadata-Flavor": "Google"}
+
+    def get_project_id(self) -> Optional[str]:
+        """Get GCP project ID."""
+        try:
+            response = self.get(
+                "/computeMetadata/v1/project/project-id",
+                headers=self.GCP_HEADERS
+            )
+            if response.status_code == 200:
+                return response.text
+            return None
+        except Exception:
+            return None
+
+    def get_service_accounts(self) -> Optional[str]:
+        """List service accounts."""
+        try:
+            response = self.get(
+                "/computeMetadata/v1/instance/service-accounts/",
+                headers=self.GCP_HEADERS
+            )
+            if response.status_code == 200:
+                return response.text
+            return None
+        except Exception:
+            return None
+
+    def get_service_account_token(self) -> Optional[Dict]:
+        """Get service account access token."""
+        try:
+            response = self.get(
+                "/computeMetadata/v1/instance/service-accounts/default/token",
+                headers=self.GCP_HEADERS
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def get_service_account_identity(self, audience: str = "https://example.com") -> Optional[str]:
+        """Get service account identity token."""
+        try:
+            response = self.get(
+                "/computeMetadata/v1/instance/service-accounts/default/identity",
+                headers=self.GCP_HEADERS,
+                params={"audience": audience}
+            )
+            if response.status_code == 200:
+                return response.text
+            return None
+        except Exception:
+            return None
+
+    def exchange_wif_token(self, subject_token: str) -> Optional[Dict]:
+        """Exchange WIF token via STS."""
+        try:
+            response = self.post(
+                "/v1/token",
+                json={
+                    "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                    "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+                    "subject_token": subject_token,
+                    "scope": "https://www.googleapis.com/auth/cloud-platform"
+                }
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None
+
+    def impersonate_service_account(self, sa_email: str) -> Optional[Dict]:
+        """Impersonate a service account via generateAccessToken."""
+        try:
+            response = self.post(
+                f"/v1/projects/-/serviceAccounts/{sa_email}:generateAccessToken",
+                json={"scope": ["https://www.googleapis.com/auth/cloud-platform"]}
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception:
+            return None

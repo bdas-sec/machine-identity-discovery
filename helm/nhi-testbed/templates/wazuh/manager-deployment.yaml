@@ -1,0 +1,134 @@
+{{- if .Values.wazuh.manager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-manager
+    nhi.service: wazuh-manager
+    nhi.role: siem
+    nhi.network/tier: mgmt
+spec:
+  replicas: {{ .Values.wazuh.manager.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wazuh-manager
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wazuh-manager
+        nhi.service: wazuh-manager
+        nhi.role: siem
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: wazuh-manager
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.wazuh.manager.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.wazuh.manager.ports.api }}
+              protocol: TCP
+            - name: agent-comm
+              containerPort: {{ .Values.wazuh.manager.ports.agentComm }}
+              protocol: TCP
+            - name: agent-enroll
+              containerPort: {{ .Values.wazuh.manager.ports.agentEnroll }}
+              protocol: TCP
+            - name: syslog
+              containerPort: {{ .Values.wazuh.manager.ports.syslog }}
+              protocol: UDP
+          env:
+            - name: INDEXER_URL
+              value: "https://{{ include "nhi-testbed.componentName" (list . "wazuh-indexer") }}:9200"
+            - name: INDEXER_USERNAME
+              value: {{ .Values.wazuh.manager.credentials.indexerUser | quote }}
+            - name: INDEXER_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.indexerPassword | quote }}
+            - name: FILEBEAT_SSL_VERIFICATION_MODE
+              value: {{ .Values.wazuh.manager.ssl.verificationMode | quote }}
+            - name: SSL_CERTIFICATE_AUTHORITIES
+              value: "/etc/ssl/root-ca.pem"
+            - name: SSL_CERTIFICATE
+              value: "/etc/ssl/filebeat.pem"
+            - name: SSL_KEY
+              value: "/etc/ssl/filebeat.key"
+            - name: API_USERNAME
+              value: {{ .Values.wazuh.manager.credentials.apiUser | quote }}
+            - name: API_PASSWORD
+              value: {{ .Values.wazuh.manager.credentials.apiPassword | quote }}
+          resources:
+            {{- toYaml .Values.wazuh.manager.resources | nindent 12 }}
+          volumeMounts:
+            - name: wazuh-api-configuration
+              mountPath: /var/ossec/api/configuration
+            - name: wazuh-logs
+              mountPath: /var/ossec/logs
+            - name: wazuh-queue
+              mountPath: /var/ossec/queue
+            - name: wazuh-var-multigroups
+              mountPath: /var/ossec/var/multigroups
+            - name: wazuh-integrations
+              mountPath: /var/ossec/integrations
+            - name: wazuh-active-response
+              mountPath: /var/ossec/active-response/bin
+            - name: wazuh-agentless
+              mountPath: /var/ossec/agentless
+            - name: wazuh-wodles
+              mountPath: /var/ossec/wodles
+            - name: filebeat-etc
+              mountPath: /etc/filebeat
+            - name: filebeat-var
+              mountPath: /var/lib/filebeat
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "curl -sk https://localhost:55000/ || exit 1"
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "curl -sk https://localhost:55000/ || exit 1"
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: wazuh-api-configuration
+          emptyDir: {}
+        - name: wazuh-logs
+          emptyDir: {}
+        - name: wazuh-queue
+          emptyDir: {}
+        - name: wazuh-var-multigroups
+          emptyDir: {}
+        - name: wazuh-integrations
+          emptyDir: {}
+        - name: wazuh-active-response
+          emptyDir: {}
+        - name: wazuh-agentless
+          emptyDir: {}
+        - name: wazuh-wodles
+          emptyDir: {}
+        - name: filebeat-etc
+          emptyDir: {}
+        - name: filebeat-var
+          emptyDir: {}
+{{- end }}

@@ -2,69 +2,333 @@
   Non-Human Identity (NHI) Security Decoders
   NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
 
-  Custom decoders for parsing NHI-related log formats.
+  Production-grade decoders with JSON parsing, field extraction via
+  <order> tags, and timestamp normalization.
+
+  Each parent decoder has one or more child decoders that extract
+  structured fields from log events.
+
+  Field conventions (Wazuh standard):
+    srcip     - Source IP address
+    dstip     - Destination IP address
+    url       - URL or file path
+    user      - Username or identity
+    action    - Action performed (GET, POST, read, write, etc.)
+    id        - Identifier (PID, job ID, token ID)
+    status    - Status or severity label
+    extra_data - Additional context (command output, descriptions)
+    protocol  - Protocol (HTTP, HTTPS, etc.)
+    srcport   - Source port
+    dstport   - Destination port
 
   Copyright (C) 2026, Bodhisattva Das
 -->
 
-<!-- NHI Security Alert Decoder (Flask app security log) -->
+<!-- ================================================= -->
+<!-- DECODER 1: NHI Security Alert (Flask vulnerable-app) -->
+<!-- Log format: NHI_ALERT program_name prefix          -->
+<!-- Example: "SSRF request to http://169.254... from 172.41.0.5" -->
+<!-- ================================================= -->
 <decoder name="nhi_alert">
   <program_name>NHI_ALERT</program_name>
 </decoder>
 
-<!-- NHI SSRF URL extractor -->
 <decoder name="nhi_alert_url">
   <parent>nhi_alert</parent>
   <regex type="pcre2">SSRF request to (.+?)(?:\s+from|$)</regex>
   <order>url</order>
 </decoder>
 
-<!-- IMDS Access Log Decoder -->
+<decoder name="nhi_alert_srcip">
+  <parent>nhi_alert</parent>
+  <regex type="pcre2">from\s+(\d+\.\d+\.\d+\.\d+)</regex>
+  <order>srcip</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 2: IMDS Access Log (mock-imds/server.py)   -->
+<!-- Logger: mock-imds                                  -->
+<!-- Format: "IMDS ACCESS: 172.41.0.10 -> /latest/..."  -->
+<!-- Attack: "[CRITICAL ATTACK] IAM credential theft for role 'X' from 172.41.0.10" -->
+<!-- Attack: "[ATTACK] IAM role enumeration from 172.41.0.10" -->
+<!-- ================================================= -->
 <decoder name="nhi-imds-access">
-  <prematch>IMDS-ACCESS:|169.254.169.254|mock-imds</prematch>
+  <prematch>IMDS.ACCESS:|169.254.169.254|mock-imds</prematch>
 </decoder>
 
-<!-- Cloud Metadata Service Access -->
+<decoder name="nhi-imds-access-fields">
+  <parent>nhi-imds-access</parent>
+  <regex type="pcre2">IMDS.ACCESS:\s+(\S+)\s+->\s+(\S+)</regex>
+  <order>srcip,url</order>
+</decoder>
+
+<decoder name="nhi-imds-attack-critical">
+  <parent>nhi-imds-access</parent>
+  <regex type="pcre2">\[CRITICAL ATTACK\]\s+IAM credential theft for role '([^']+)' from (\S+)</regex>
+  <order>extra_data,srcip</order>
+</decoder>
+
+<decoder name="nhi-imds-attack-enum">
+  <parent>nhi-imds-access</parent>
+  <regex type="pcre2">\[ATTACK\]\s+(.*?)\s+from\s+(\S+)</regex>
+  <order>extra_data,srcip</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 3: Cloud Metadata Service (GCP/Azure)      -->
+<!-- GCP: metadata.google.internal                      -->
+<!-- Azure: 169.254.169.254/metadata/identity           -->
+<!-- ================================================= -->
 <decoder name="nhi-metadata-access">
-  <prematch>metadata.google.internal|168.254</prematch>
+  <prematch>metadata.google.internal|metadata/identity|metadata/instance</prematch>
 </decoder>
 
-<!-- Kubernetes Audit Log Decoder -->
+<decoder name="nhi-metadata-access-fields">
+  <parent>nhi-metadata-access</parent>
+  <regex type="pcre2">(\d+\.\d+\.\d+\.\d+)\s+.*?(metadata\S+)</regex>
+  <order>srcip,url</order>
+</decoder>
+
+<decoder name="nhi-metadata-access-attack">
+  <parent>nhi-metadata-access</parent>
+  <regex type="pcre2">\[CRITICAL ATTACK\]\s+(.*?)\s+from\s+(\S+)</regex>
+  <order>extra_data,srcip</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 4: Kubernetes Audit Log                    -->
+<!-- Format: JSON with verb, resource, namespace, user  -->
+<!-- Uses JSON plugin decoder for automatic parsing     -->
+<!-- ================================================= -->
 <decoder name="nhi-k8s-audit">
-  <prematch>audit.k8s.io</prematch>
+  <prematch>audit.k8s.io|"apiVersion":"audit</prematch>
 </decoder>
 
-<!-- ServiceAccount Token Access -->
+<decoder name="nhi-k8s-audit-json">
+  <parent>nhi-k8s-audit</parent>
+  <plugin_decoder>JSON</plugin_decoder>
+</decoder>
+
+<decoder name="nhi-k8s-audit-fields">
+  <parent>nhi-k8s-audit</parent>
+  <regex type="pcre2">"verb":"(\w+)".*?"resource":"(\w+)".*?"namespace":"([\w-]+)"</regex>
+  <order>action,id,extra_data</order>
+</decoder>
+
+<decoder name="nhi-k8s-audit-user">
+  <parent>nhi-k8s-audit</parent>
+  <regex type="pcre2">"username":"([^"]+)"</regex>
+  <order>user</order>
+</decoder>
+
+<decoder name="nhi-k8s-audit-srcip">
+  <parent>nhi-k8s-audit</parent>
+  <regex type="pcre2">"sourceIPs":\["(\d+\.\d+\.\d+\.\d+)"</regex>
+  <order>srcip</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 5: ServiceAccount Token Access             -->
+<!-- Detects reads of K8s SA token from mount path      -->
+<!-- ================================================= -->
 <decoder name="nhi-sa-token-access">
   <prematch>/var/run/secrets/kubernetes.io/serviceaccount</prematch>
 </decoder>
 
-<!-- CI/CD Runner Log Decoder -->
+<decoder name="nhi-sa-token-access-file">
+  <parent>nhi-sa-token-access</parent>
+  <regex type="pcre2">(/var/run/secrets/kubernetes\.io/serviceaccount/\S+)</regex>
+  <order>url</order>
+</decoder>
+
+<decoder name="nhi-sa-token-access-process">
+  <parent>nhi-sa-token-access</parent>
+  <regex type="pcre2">comm="(\S+)".*?pid=(\d+)</regex>
+  <order>extra_data,id</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 6: CI/CD Runner Log (mock-cicd/server.py)  -->
+<!-- Logger: mock-cicd                                  -->
+<!-- Format: "CI/CD ACCESS: 172.42.0.10 -> /github/..." -->
+<!-- Attack: "[ATTACK] GitHub runner token requested from 172.42.0.10" -->
+<!-- ================================================= -->
 <decoder name="nhi-cicd-runner">
-  <prematch>RUNNER:|github-runner|gitlab-runner</prematch>
+  <prematch>RUNNER:|github-runner|gitlab-runner|CI/CD.ACCESS:|mock-cicd</prematch>
 </decoder>
 
-<!-- AI Agent Activity Decoder -->
+<decoder name="nhi-cicd-runner-access">
+  <parent>nhi-cicd-runner</parent>
+  <regex type="pcre2">CI/CD.ACCESS:\s+(\S+)\s+->\s+(\S+)</regex>
+  <order>srcip,url</order>
+</decoder>
+
+<decoder name="nhi-cicd-runner-attack">
+  <parent>nhi-cicd-runner</parent>
+  <regex type="pcre2">\[ATTACK\]\s+(.*?)\s+from\s+(\S+)</regex>
+  <order>extra_data,srcip</order>
+</decoder>
+
+<decoder name="nhi-cicd-runner-attack-generic">
+  <parent>nhi-cicd-runner</parent>
+  <regex type="pcre2">\[ATTACK\]\s+(.+)</regex>
+  <order>extra_data</order>
+</decoder>
+
+<decoder name="nhi-cicd-runner-token">
+  <parent>nhi-cicd-runner</parent>
+  <regex type="pcre2">(GITHUB_TOKEN|CI_JOB_TOKEN|ACTIONS_RUNTIME_TOKEN|RUNNER_TOKEN|NPM_TOKEN)\s*=?\s*(\S*)</regex>
+  <order>id,extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 7: AI Agent Activity (ai-agent/agent.py)   -->
+<!-- Logger: ai-agent                                   -->
+<!-- Formats:                                           -->
+<!--   "AI Agent executing command: id"                 -->
+<!--   "AI Agent reading file: /etc/passwd"             -->
+<!--   "AI Agent writing to file: /tmp/test"            -->
+<!--   "AI Agent making HTTP request: GET http://..."   -->
+<!--   "PROMPT INJECTION DETECTED: ignore previous..."  -->
+<!--   "Tool execution requested: execute_command with args: {...}" -->
+<!--   "Memory poisoned with: malicious content"        -->
+<!-- ================================================= -->
 <decoder name="nhi-ai-agent">
-  <prematch>AI-AGENT:|ai-agent|vulnerable-assistant</prematch>
+  <prematch>AI.Agent|ai-agent|vulnerable-assistant|PROMPT.INJECTION|Tool execution|Memory poisoned</prematch>
 </decoder>
 
-<!-- Environment Variable Access Decoder -->
+<decoder name="nhi-ai-agent-command">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">AI Agent executing command:\s+(.+)</regex>
+  <order>extra_data</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-file-read">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">AI Agent reading file:\s+(\S+)</regex>
+  <order>url</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-file-write">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">AI Agent writing to file:\s+(\S+)</regex>
+  <order>url</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-http">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">AI Agent making HTTP request:\s+(GET|POST|PUT|DELETE)\s+(\S+)</regex>
+  <order>action,url</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-injection">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">PROMPT INJECTION DETECTED:\s+(.+)</regex>
+  <order>extra_data</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-tool">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">Tool execution requested:\s+(\w+)\s+with args:\s+(.+)</regex>
+  <order>action,extra_data</order>
+</decoder>
+
+<decoder name="nhi-ai-agent-poison">
+  <parent>nhi-ai-agent</parent>
+  <regex type="pcre2">Memory poisoned with:\s+(.+)</regex>
+  <order>extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 8: Environment Variable Access             -->
+<!-- Detects /proc/PID/environ reads                    -->
+<!-- ================================================= -->
 <decoder name="nhi-env-access">
   <prematch>/proc/</prematch>
 </decoder>
 
-<!-- Secret Pattern Decoder -->
+<decoder name="nhi-env-access-pid">
+  <parent>nhi-env-access</parent>
+  <regex type="pcre2">/proc/(\d+)/environ</regex>
+  <order>id</order>
+</decoder>
+
+<decoder name="nhi-env-access-process">
+  <parent>nhi-env-access</parent>
+  <regex type="pcre2">comm="(\S+)"</regex>
+  <order>extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 9: Secret Pattern Detection                -->
+<!-- Matches known secret/token patterns in log output  -->
+<!-- Updated prematch to cover all 15 secret types      -->
+<!-- ================================================= -->
 <decoder name="nhi-secret-pattern">
-  <prematch>AKIA|ghp_|gho_|sk-|xox</prematch>
+  <prematch>AKIA|ghp_|gho_|ghs_|sk-|xox|hvs\.|atlasv1\.|sk_live_|DefaultEndpointsProtocol|eyJhbG</prematch>
 </decoder>
 
-<!-- HashiCorp Vault Audit Log Decoder -->
+<decoder name="nhi-secret-pattern-aws">
+  <parent>nhi-secret-pattern</parent>
+  <regex type="pcre2">(AKIA[0-9A-Z]{16})</regex>
+  <order>extra_data</order>
+</decoder>
+
+<decoder name="nhi-secret-pattern-github">
+  <parent>nhi-secret-pattern</parent>
+  <regex type="pcre2">(gh[pos]_[a-zA-Z0-9]{36})</regex>
+  <order>extra_data</order>
+</decoder>
+
+<decoder name="nhi-secret-pattern-generic">
+  <parent>nhi-secret-pattern</parent>
+  <regex type="pcre2">(sk-[a-zA-Z0-9]{20,}|hvs\.[a-zA-Z0-9_-]{24,}|atlasv1\.[a-zA-Z0-9_-]{40,}|sk_live_[0-9a-zA-Z]{24,})</regex>
+  <order>extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 10: HashiCorp Vault Audit Log              -->
+<!-- Format: JSON with auth, request, response sections -->
+<!-- Uses JSON plugin decoder for automatic parsing     -->
+<!-- ================================================= -->
 <decoder name="nhi-vault-audit">
-  <prematch>vault|X-Vault-Token</prematch>
+  <prematch>vault|X-Vault-Token|"type":"request"|"type":"response"</prematch>
 </decoder>
 
-<!-- Attack Detection Markers -->
+<decoder name="nhi-vault-audit-json">
+  <parent>nhi-vault-audit</parent>
+  <plugin_decoder>JSON</plugin_decoder>
+</decoder>
+
+<decoder name="nhi-vault-audit-access">
+  <parent>nhi-vault-audit</parent>
+  <regex type="pcre2">"remote_address":"(\S+?)".*?"path":"(\S+?)".*?"operation":"(\w+)"</regex>
+  <order>srcip,url,action</order>
+</decoder>
+
+<decoder name="nhi-vault-audit-auth">
+  <parent>nhi-vault-audit</parent>
+  <regex type="pcre2">"display_name":"([^"]+)"</regex>
+  <order>user</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 11: Attack Detection Markers               -->
+<!-- Generic [ATTACK] and [CRITICAL] markers across     -->
+<!-- all mock services                                  -->
+<!-- ================================================= -->
 <decoder name="nhi-attack-marker">
   <prematch>ATTACK|CRITICAL</prematch>
+</decoder>
+
+<decoder name="nhi-attack-marker-source">
+  <parent>nhi-attack-marker</parent>
+  <regex type="pcre2">\[(ATTACK|CRITICAL.*?)\]\s+(.*?)\s+from\s+(\S+)</regex>
+  <order>status,extra_data,srcip</order>
+</decoder>
+
+<decoder name="nhi-attack-marker-event">
+  <parent>nhi-attack-marker</parent>
+  <regex type="pcre2">\[(ATTACK|CRITICAL)\]\s+(.+)</regex>
+  <order>status,extra_data</order>
 </decoder>

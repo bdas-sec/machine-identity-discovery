@@ -1,0 +1,38 @@
+title: "NHI: Host PID Namespace Probe via /proc/1"
+id: 680546f2-7ca0-400f-9b52-12cf8148fa23
+related:
+    - id: "100763"
+      type: derived
+status: test
+description: |
+    Detects access to /proc/1/root, /proc/1/cgroup, /proc/1/mountinfo,
+    or /proc/1/mounts from within a container. When hostPID is enabled,
+    PID 1 belongs to the host init process, and /proc/1/root provides
+    access to the host root filesystem.
+    Derived from Wazuh rule 100763.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1082/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.discovery
+    - attack.t1082
+    - nhi.kubernetes
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection:
+        TargetFilename|startswith: '/proc/1/'
+        TargetFilename|endswith:
+            - '/root'
+            - '/cgroup'
+            - '/mountinfo'
+            - '/mounts'
+    condition: selection
+falsepositives:
+    - Container health monitoring reading /proc/1/cgroup
+level: critical

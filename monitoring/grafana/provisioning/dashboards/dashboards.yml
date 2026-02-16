@@ -1,0 +1,16 @@
+# Grafana Dashboard Provisioning - NHI Security Testbed
+# Auto-loads dashboard JSON files from the dashboards directory
+
+apiVersion: 1
+
+providers:
+  - name: "NHI Security Testbed"
+    orgId: 1
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,20 @@
+{{- if .Values.mockServices.cicd.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "mock-cicd") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-cicd
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.mockServices.cicd.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-cicd
+{{- end }}

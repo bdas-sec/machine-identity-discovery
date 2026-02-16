@@ -1,0 +1,32 @@
+{{- if .Values.wazuh.manager.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-manager
+spec:
+  type: ClusterIP
+  ports:
+    - name: api
+      port: {{ .Values.wazuh.manager.ports.api }}
+      targetPort: api
+      protocol: TCP
+    - name: agent-comm
+      port: {{ .Values.wazuh.manager.ports.agentComm }}
+      targetPort: agent-comm
+      protocol: TCP
+    - name: agent-enroll
+      port: {{ .Values.wazuh.manager.ports.agentEnroll }}
+      targetPort: agent-enroll
+      protocol: TCP
+    - name: syslog
+      port: {{ .Values.wazuh.manager.ports.syslog }}
+      targetPort: syslog
+      protocol: UDP
+  selector:
+    {{- include "nhi-testbed.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-manager
+{{- end }}

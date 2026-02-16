@@ -1,0 +1,4 @@
+# NHI Metrics Exporter Dependencies
+flask==3.0.0
+prometheus_client==0.21.0
+httpx==0.27.0

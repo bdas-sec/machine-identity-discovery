@@ -1,0 +1,38 @@
+title: "NHI: Direct Kubernetes API/Kubelet Access from Container"
+id: 321c501b-c279-40f7-a668-e848174f3e33
+related:
+    - id: "100764"
+      type: derived
+status: test
+description: |
+    Detects network connections to the Kubernetes API server
+    (kubernetes.default.svc, port 6443) or Kubelet API (port 10250)
+    from within a container. This may indicate use of a stolen
+    ServiceAccount token for API access or post-escape lateral movement.
+    Derived from Wazuh rule 100764.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1552/007/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.kubernetes
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_dns:
+        DestinationHostname|contains: 'kubernetes.default.svc'
+    selection_port:
+        DestinationPort:
+            - 6443
+            - 10250
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate application Kubernetes API calls
+    - Service mesh control plane communication
+level: medium

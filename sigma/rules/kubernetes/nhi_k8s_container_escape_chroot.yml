@@ -1,0 +1,36 @@
+title: "NHI: Container Escape via chroot to Host Filesystem"
+id: b2f5ef6d-acc8-4083-9243-5ff262db3f9b
+related:
+    - id: "100758"
+      type: derived
+status: test
+description: |
+    Detects chroot commands targeting common host filesystem mount points
+    (/mnt/host, /host, /rootfs). Chrooting to the host filesystem from
+    within a container provides full host access.
+    Derived from Wazuh rule 100758.
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://blog.trailofbits.com/2019/07/19/understanding-docker-container-escapes/
+author: Bodhisattva Das
+date: 2026-02-16
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - nhi.kubernetes
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        Image|endswith: '/chroot'
+        CommandLine|contains:
+            - '/mnt/host'
+            - '/host'
+            - '/rootfs'
+            - '/mnt/rootfs'
+            - '/hostroot'
+    condition: selection
+falsepositives:
+    - Container image build processes using chroot
+level: critical

@@ -1,0 +1,69 @@
+{{- if .Values.mockServices.vault.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "vault") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vault
+    nhi.service: vault
+    nhi.role: secrets-management
+    nhi.network/tier: cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: vault
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: vault
+        nhi.service: vault
+        nhi.network/tier: cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: vault
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.mockServices.vault.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["server", "-dev"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.mockServices.vault.port }}
+              protocol: TCP
+          env:
+            - name: VAULT_DEV_ROOT_TOKEN_ID
+              value: {{ .Values.mockServices.vault.devRootToken | quote }}
+            - name: VAULT_DEV_LISTEN_ADDRESS
+              value: "0.0.0.0:{{ .Values.mockServices.vault.port }}"
+            - name: VAULT_ADDR
+              value: "http://0.0.0.0:{{ .Values.mockServices.vault.port }}"
+            - name: VAULT_API_ADDR
+              value: "http://{{ include "nhi-testbed.componentName" (list . "vault") }}:{{ .Values.mockServices.vault.port }}"
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          resources:
+            {{- toYaml .Values.mockServices.vault.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["vault", "status"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["vault", "status"]
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+{{- end }}

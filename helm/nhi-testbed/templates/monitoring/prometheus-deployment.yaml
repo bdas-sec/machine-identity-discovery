@@ -1,0 +1,106 @@
+{{- if .Values.monitoring.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "prometheus") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+    nhi.service: prometheus
+    nhi.role: monitoring
+    nhi.network/tier: mgmt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+        nhi.service: prometheus
+        nhi.role: monitoring
+        nhi.network/tier: mgmt
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: prometheus
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.monitoring.prometheus.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time={{ .Values.monitoring.prometheus.retention }}"
+            - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+            - "--web.console.templates=/usr/share/prometheus/consoles"
+            - "--web.enable-lifecycle"
+          ports:
+            - name: http
+              containerPort: {{ .Values.monitoring.prometheus.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.monitoring.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus
+            - name: prometheus-data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: {{ include "nhi-testbed.componentName" (list . "prometheus-config") }}
+        - name: prometheus-data
+          emptyDir: {}
+---
+# Inline Prometheus configuration as a ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nhi-testbed.componentName" (list . "prometheus-config") }}
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: "nhi-metrics"
+        static_configs:
+          - targets:
+              - "{{ include "nhi-testbed.componentName" (list . "metrics") }}:{{ .Values.monitoring.metrics.port }}"
+        metrics_path: /metrics
+        scrape_interval: 30s
+
+      - job_name: "nhi-api"
+        static_configs:
+          - targets:
+              - "{{ include "nhi-testbed.componentName" (list . "api") }}:{{ .Values.api.port }}"
+        metrics_path: /metrics
+        scrape_interval: 30s
+{{- end }}

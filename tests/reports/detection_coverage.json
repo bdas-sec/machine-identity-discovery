@@ -1,12 +1,15 @@
 {
   "summary": {
-    "total_scenarios": 24,
-    "scenarios_with_tests": 23,
+    "total_scenarios": 29,
+    "scenarios_with_tests": 28,
     "scenarios_without_tests": 1,
-    "total_expected_rules": 65,
-    "total_test_methods": 133,
+    "total_expected_rules": 80,
+    "total_test_methods": 179,
     "correlation_rules_tested": 5,
-    "coverage_pct": 95.8
+    "total_wazuh_rules": 71,
+    "ocsf_mapped_rules": 52,
+    "sigma_rules": 71,
+    "coverage_pct": 96.6
   },
   "scenarios": [
     {
@@ -24,21 +27,31 @@
       "test_class": "TestS101HardcodedCredentials",
       "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
       "test_method_count": 3,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100600",
           "level": 10,
-          "description": "NHI: Environment configuration file access detected - $(file)"
+          "description": "NHI: Environment configuration file access detected - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100601",
           "level": 12,
-          "description": "NHI: AWS credentials file access detected"
+          "description": "NHI: AWS credentials file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100900",
           "level": 12,
-          "description": "NHI: AWS Access Key ID pattern detected"
+          "description": "NHI: AWS Access Key ID pattern detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         }
       ]
     },
@@ -56,16 +69,23 @@
       "test_class": "TestS102ExposedEnvFiles",
       "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
       "test_method_count": 3,
+      "ocsf_classes": [
+        "1001 (File Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100603",
           "level": 10,
-          "description": "NHI: Git credential file access detected"
+          "description": "NHI: Git credential file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100604",
           "level": 10,
-          "description": "NHI: Docker config file access (may contain registry tokens)"
+          "description": "NHI: Docker config file access (may contain registry tokens)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -83,16 +103,23 @@
       "test_class": "TestS103GitHistoryLeak",
       "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
       "test_method_count": 3,
+      "ocsf_classes": [
+        "1001 (File Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100605",
           "level": 10,
-          "description": "NHI: Kubernetes config file access detected"
+          "description": "NHI: Kubernetes config file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100606",
           "level": 10,
-          "description": "NHI: HashiCorp Vault token file access"
+          "description": "NHI: HashiCorp Vault token file access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -111,21 +138,31 @@
       "test_class": "TestS104ProcEnviron",
       "test_file": "tests/e2e/category_1_secrets/test_scenarios.py",
       "test_method_count": 3,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100607",
           "level": 10,
-          "description": "NHI: Process environment variable enumeration via /proc"
+          "description": "NHI: Process environment variable enumeration via /proc",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100608",
           "level": 10,
-          "description": "NHI: NPM configuration file access (may contain auth tokens)"
+          "description": "NHI: NPM configuration file access (may contain auth tokens)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100609",
           "level": 14,
-          "description": "NHI: Multiple credential file accesses by same user - credential harvesting"
+          "description": "NHI: Multiple credential file accesses by same user - credential harvesting",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         }
       ]
     },
@@ -142,11 +179,16 @@
       "test_class": "",
       "test_file": "",
       "test_method_count": 0,
+      "ocsf_classes": [
+        "1001 (File Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100605",
           "level": 10,
-          "description": "NHI: Kubernetes config file access detected"
+          "description": "NHI: Kubernetes config file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -164,16 +206,23 @@
       "test_class": "TestS201IMDSCredentialTheft",
       "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
       "test_method_count": 8,
+      "ocsf_classes": [
+        "6003 (API Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100650",
           "level": 8,
-          "description": "NHI: AWS Instance Metadata Service (IMDS) access detected"
+          "description": "NHI: AWS Instance Metadata Service (IMDS) access detected",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         },
         {
           "rule_id": "100651",
           "level": 12,
-          "description": "NHI: AWS IMDS IAM credential request - CREDENTIAL THEFT ATTEMPT"
+          "description": "NHI: AWS IMDS IAM credential request - CREDENTIAL THEFT ATTEMPT",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         }
       ]
     },
@@ -192,21 +241,28 @@
       "test_class": "TestS202OverPermissionedIAM",
       "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
       "test_method_count": 5,
+      "ocsf_classes": [],
       "rule_details": [
         {
           "rule_id": "100700",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100701",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100702",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     },
@@ -225,21 +281,28 @@
       "test_class": "TestS203CrossAccountRole",
       "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [],
       "rule_details": [
         {
           "rule_id": "100703",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100704",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100705",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     },
@@ -258,21 +321,28 @@
       "test_class": "TestS204ServiceAccountExfil",
       "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [],
       "rule_details": [
         {
           "rule_id": "100706",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100707",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100708",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     },
@@ -289,11 +359,16 @@
       "test_class": "TestS205VaultTokenTheft",
       "test_file": "tests/e2e/category_2_cloud/test_scenarios.py",
       "test_method_count": 5,
+      "ocsf_classes": [
+        "1001 (File Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100606",
           "level": 10,
-          "description": "NHI: HashiCorp Vault token file access"
+          "description": "NHI: HashiCorp Vault token file access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -312,21 +387,31 @@
       "test_class": "TestS301StolenRunnerToken",
       "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
       "test_method_count": 8,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100800",
           "level": 10,
-          "description": "NHI: GitHub token detected in environment/process"
+          "description": "NHI: GitHub token detected in environment/process",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         },
         {
           "rule_id": "100801",
           "level": 10,
-          "description": "NHI: GitLab CI job token detected"
+          "description": "NHI: GitLab CI job token detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         },
         {
           "rule_id": "100802",
           "level": 10,
-          "description": "NHI: CI/CD runner credential file access"
+          "description": "NHI: CI/CD runner credential file access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -345,21 +430,31 @@
       "test_class": "TestS302PipelineInjection",
       "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100803",
           "level": 12,
-          "description": "NHI: CI/CD pipeline configuration modified - $(file)"
+          "description": "NHI: CI/CD pipeline configuration modified - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100804",
           "level": 10,
-          "description": "NHI: NPM authentication token detected"
+          "description": "NHI: NPM authentication token detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         },
         {
           "rule_id": "100805",
           "level": 10,
-          "description": "NHI: GitHub Actions runtime token detected"
+          "description": "NHI: GitHub Actions runtime token detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         }
       ]
     },
@@ -378,21 +473,28 @@
       "test_class": "TestS303OIDCTokenAbuse",
       "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [],
       "rule_details": [
         {
           "rule_id": "100806",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100807",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100808",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     },
@@ -409,11 +511,16 @@
       "test_class": "TestS304VaultPrivilegeEscalation",
       "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
       "test_method_count": 5,
+      "ocsf_classes": [
+        "1001 (File Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100606",
           "level": 10,
-          "description": "NHI: HashiCorp Vault token file access"
+          "description": "NHI: HashiCorp Vault token file access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         }
       ]
     },
@@ -435,36 +542,52 @@
       "test_class": "TestS305MultipleCredentialHarvest",
       "test_file": "tests/e2e/category_3_cicd/test_scenarios.py",
       "test_method_count": 5,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100601",
           "level": 12,
-          "description": "NHI: AWS credentials file access detected"
+          "description": "NHI: AWS credentials file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100602",
           "level": 10,
-          "description": "NHI: SSH private key access detected - $(file)"
+          "description": "NHI: SSH private key access detected - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100603",
           "level": 10,
-          "description": "NHI: Git credential file access detected"
+          "description": "NHI: Git credential file access detected",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100606",
           "level": 10,
-          "description": "NHI: HashiCorp Vault token file access"
+          "description": "NHI: HashiCorp Vault token file access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100600",
           "level": 10,
-          "description": "NHI: Environment configuration file access detected - $(file)"
+          "description": "NHI: Environment configuration file access detected - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100609",
           "level": 14,
-          "description": "NHI: Multiple credential file accesses by same user - credential harvesting"
+          "description": "NHI: Multiple credential file accesses by same user - credential harvesting",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         }
       ]
     },
@@ -483,21 +606,31 @@
       "test_class": "TestS401PrivilegedPodEscape",
       "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "6003 (API Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100750",
           "level": 8,
-          "description": "NHI: Kubernetes ServiceAccount token access"
+          "description": "NHI: Kubernetes ServiceAccount token access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100751",
           "level": 8,
-          "description": "NHI: Kubernetes secrets volume access"
+          "description": "NHI: Kubernetes secrets volume access",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100752",
           "level": 8,
-          "description": "NHI: Kubernetes RBAC probing - kubectl auth can-i"
+          "description": "NHI: Kubernetes RBAC probing - kubectl auth can-i",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         }
       ]
     },
@@ -516,21 +649,31 @@
       "test_class": "TestS402ServiceAccountTokenTheft",
       "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [
+        "2001 (Security Finding)",
+        "6003 (API Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100753",
           "level": 10,
-          "description": "NHI: Kubernetes secrets enumeration via kubectl"
+          "description": "NHI: Kubernetes secrets enumeration via kubectl",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         },
         {
           "rule_id": "100754",
           "level": 8,
-          "description": "NHI: Kubernetes service account enumeration"
+          "description": "NHI: Kubernetes service account enumeration",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         },
         {
           "rule_id": "100755",
           "level": 12,
-          "description": "NHI: Extensive Kubernetes RBAC enumeration - permission discovery"
+          "description": "NHI: Extensive Kubernetes RBAC enumeration - permission discovery",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         }
       ]
     },
@@ -549,21 +692,31 @@
       "test_class": "TestS403RBACMisconfiguration",
       "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "1007 (Process Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100756",
           "level": 14,
-          "description": "NHI: Direct etcd datastore access - CRITICAL"
+          "description": "NHI: Direct etcd datastore access - CRITICAL",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100757",
-          "level": "?",
-          "description": "Unknown"
+          "level": 14,
+          "description": "NHI: Container escape via nsenter namespace entry",
+          "ocsf_class_uid": 1007,
+          "ocsf_class_name": "Process Activity"
         },
         {
           "rule_id": "100758",
-          "level": "?",
-          "description": "Unknown"
+          "level": 14,
+          "description": "NHI: Container escape via chroot to host filesystem",
+          "ocsf_class_uid": 1007,
+          "ocsf_class_name": "Process Activity"
         }
       ]
     },
@@ -582,21 +735,31 @@
       "test_class": "TestS404MountedSecrets",
       "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "1007 (Process Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100759",
-          "level": "?",
-          "description": "Unknown"
+          "level": 12,
+          "description": "NHI: Namespace manipulation via unshare - potential container escape",
+          "ocsf_class_uid": 1007,
+          "ocsf_class_name": "Process Activity"
         },
         {
           "rule_id": "100760",
-          "level": "?",
-          "description": "Unknown"
+          "level": 12,
+          "description": "NHI: Sensitive host file access via mounted hostPath volume",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100761",
-          "level": "?",
-          "description": "Unknown"
+          "level": 14,
+          "description": "NHI: Cgroup escape attempt - release_agent manipulation",
+          "ocsf_class_uid": 1007,
+          "ocsf_class_name": "Process Activity"
         }
       ]
     },
@@ -614,16 +777,23 @@
       "test_class": "TestS405APIKeyAbuse",
       "test_file": "tests/e2e/category_4_kubernetes/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [
+        "2001 (Security Finding)"
+      ],
       "rule_details": [
         {
           "rule_id": "100900",
           "level": 12,
-          "description": "NHI: AWS Access Key ID pattern detected"
+          "description": "NHI: AWS Access Key ID pattern detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         },
         {
           "rule_id": "100901",
           "level": 12,
-          "description": "NHI: GitHub token pattern detected"
+          "description": "NHI: GitHub token pattern detected",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     },
@@ -642,21 +812,32 @@
       "test_class": "TestS501PromptInjection",
       "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "1007 (Process Activity)",
+        "6001 (Web Resources Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100850",
           "level": 10,
-          "description": "NHI: AI agent framework spawning shell subprocess - $(process_name) executing $(command)"
+          "description": "NHI: AI agent framework spawning shell subprocess - $(process_name) executing $(command)",
+          "ocsf_class_uid": 1007,
+          "ocsf_class_name": "Process Activity"
         },
         {
           "rule_id": "100851",
           "level": 12,
-          "description": "NHI: AI agent accessing credential/config file - $(file)"
+          "description": "NHI: AI agent accessing credential/config file - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
         },
         {
           "rule_id": "100852",
           "level": 10,
-          "description": "NHI: Prompt injection attempt detected in web request"
+          "description": "NHI: Prompt injection attempt detected in web request",
+          "ocsf_class_uid": 6001,
+          "ocsf_class_name": "Web Resources Activity"
         }
       ]
     },
@@ -675,21 +856,32 @@
       "test_class": "TestS502ExcessivePermissions",
       "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [
+        "2001 (Security Finding)",
+        "4001 (Network Activity)",
+        "6003 (API Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100853",
           "level": 12,
-          "description": "NHI: AI agent SSRF - cloud metadata access from $(process_name)"
+          "description": "NHI: AI agent SSRF - cloud metadata access from $(process_name)",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         },
         {
           "rule_id": "100854",
           "level": 12,
-          "description": "NHI: AI agent rapid credential scanning - $(srcuser) accessed 20+ credential files in 60s"
+          "description": "NHI: AI agent rapid credential scanning - $(srcuser) accessed 20+ credential files in 60s",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
         },
         {
           "rule_id": "100855",
           "level": 12,
-          "description": "NHI: AI agent shell executing network/exfiltration command"
+          "description": "NHI: AI agent shell executing network/exfiltration command",
+          "ocsf_class_uid": 4001,
+          "ocsf_class_name": "Network Activity"
         }
       ]
     },
@@ -708,21 +900,31 @@
       "test_class": "TestS503ToolUseSSRF",
       "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
       "test_method_count": 6,
+      "ocsf_classes": [
+        "6001 (Web Resources Activity)",
+        "6003 (API Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100856",
           "level": 14,
-          "description": "NHI: Prompt injection targeting credential extraction - CRITICAL"
+          "description": "NHI: Prompt injection targeting credential extraction - CRITICAL",
+          "ocsf_class_uid": 6001,
+          "ocsf_class_name": "Web Resources Activity"
         },
         {
           "rule_id": "100857",
           "level": 14,
-          "description": "NHI: AI agent SSRF escalated to credential theft endpoint - CRITICAL"
+          "description": "NHI: AI agent SSRF escalated to credential theft endpoint - CRITICAL",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         },
         {
           "rule_id": "100858",
           "level": 10,
-          "description": "NHI: AI agent MCP/tool-use activity detected"
+          "description": "NHI: AI agent MCP/tool-use activity detected",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
         }
       ]
     },
@@ -741,21 +943,243 @@
       "test_class": "TestS504ContextPoisoning",
       "test_file": "tests/e2e/category_5_ai_agents/test_scenarios.py",
       "test_method_count": 7,
+      "ocsf_classes": [
+        "4001 (Network Activity)"
+      ],
       "rule_details": [
         {
           "rule_id": "100859",
           "level": 10,
-          "description": "NHI: AI agent making external network request"
+          "description": "NHI: AI agent making external network request",
+          "ocsf_class_uid": 4001,
+          "ocsf_class_name": "Network Activity"
         },
         {
           "rule_id": "100860",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         },
         {
           "rule_id": "100861",
           "level": "?",
-          "description": "Unknown"
+          "description": "Unknown",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        }
+      ]
+    },
+    {
+      "id": "S6-01",
+      "name": "OAuth App Consent Phishing",
+      "category": "Infrastructure",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100907",
+        "100853"
+      ],
+      "expected_rule_count": 2,
+      "has_e2e_test": true,
+      "test_class": "TestS601OAuthConsentPhishing",
+      "test_file": "tests/e2e/category_6_infrastructure/test_scenarios.py",
+      "test_method_count": 9,
+      "ocsf_classes": [
+        "6003 (API Activity)"
+      ],
+      "rule_details": [
+        {
+          "rule_id": "100907",
+          "level": 10,
+          "description": "NHI: JWT token pattern detected",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        },
+        {
+          "rule_id": "100853",
+          "level": 12,
+          "description": "NHI: AI agent SSRF - cloud metadata access from $(process_name)",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
+        }
+      ]
+    },
+    {
+      "id": "S6-02",
+      "name": "GitHub App Installation Token Theft",
+      "category": "Infrastructure",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100800",
+        "100901",
+        "100952"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS602GitHubAppTokenTheft",
+      "test_file": "tests/e2e/category_6_infrastructure/test_scenarios.py",
+      "test_method_count": 9,
+      "ocsf_classes": [
+        "2001 (Security Finding)"
+      ],
+      "rule_details": [
+        {
+          "rule_id": "100800",
+          "level": 10,
+          "description": "NHI: GitHub token detected in environment/process",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
+        },
+        {
+          "rule_id": "100901",
+          "level": 12,
+          "description": "NHI: GitHub token pattern detected",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        },
+        {
+          "rule_id": "100952",
+          "level": 14,
+          "description": "NHI: CI/CD token + git credential access - supply chain attack",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        }
+      ]
+    },
+    {
+      "id": "S6-03",
+      "name": "Workload Identity Federation Abuse",
+      "category": "Infrastructure",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100653",
+        "100654",
+        "100907",
+        "100950"
+      ],
+      "expected_rule_count": 4,
+      "has_e2e_test": true,
+      "test_class": "TestS603WorkloadIdentityFederationAbuse",
+      "test_file": "tests/e2e/category_6_infrastructure/test_scenarios.py",
+      "test_method_count": 10,
+      "ocsf_classes": [
+        "6001 (Web Resources Activity)",
+        "6003 (API Activity)"
+      ],
+      "rule_details": [
+        {
+          "rule_id": "100653",
+          "level": 8,
+          "description": "NHI: GCP Metadata Service access detected",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
+        },
+        {
+          "rule_id": "100654",
+          "level": 12,
+          "description": "NHI: GCP service account token request - CREDENTIAL THEFT",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
+        },
+        {
+          "rule_id": "100907",
+          "level": 10,
+          "description": "NHI: JWT token pattern detected",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        },
+        {
+          "rule_id": "100950",
+          "level": 14,
+          "description": "NHI: Credential harvesting combined with IMDS access - multi-vector attack",
+          "ocsf_class_uid": 6001,
+          "ocsf_class_name": "Web Resources Activity"
+        }
+      ]
+    },
+    {
+      "id": "S6-04",
+      "name": "Terraform State File Credential Exposure",
+      "category": "Infrastructure",
+      "difficulty": "Medium",
+      "expected_rules": [
+        "100600",
+        "100912",
+        "100900"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS604TerraformStateCredentialExposure",
+      "test_file": "tests/e2e/category_6_infrastructure/test_scenarios.py",
+      "test_method_count": 8,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "2001 (Security Finding)"
+      ],
+      "rule_details": [
+        {
+          "rule_id": "100600",
+          "level": 10,
+          "description": "NHI: Environment configuration file access detected - $(file)",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
+        },
+        {
+          "rule_id": "100912",
+          "level": 12,
+          "description": "NHI: Terraform Cloud/Enterprise API token detected",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
+        },
+        {
+          "rule_id": "100900",
+          "level": 12,
+          "description": "NHI: AWS Access Key ID pattern detected",
+          "ocsf_class_uid": 2001,
+          "ocsf_class_name": "Security Finding"
+        }
+      ]
+    },
+    {
+      "id": "S6-05",
+      "name": "Kubernetes etcd Direct Access - Cluster Secret Extraction",
+      "category": "Infrastructure",
+      "difficulty": "Hard",
+      "expected_rules": [
+        "100756",
+        "100764",
+        "100955"
+      ],
+      "expected_rule_count": 3,
+      "has_e2e_test": true,
+      "test_class": "TestS605K8sEtcdDirectAccess",
+      "test_file": "tests/e2e/category_6_infrastructure/test_scenarios.py",
+      "test_method_count": 10,
+      "ocsf_classes": [
+        "1001 (File Activity)",
+        "6003 (API Activity)"
+      ],
+      "rule_details": [
+        {
+          "rule_id": "100756",
+          "level": 14,
+          "description": "NHI: Direct etcd datastore access - CRITICAL",
+          "ocsf_class_uid": 1001,
+          "ocsf_class_name": "File Activity"
+        },
+        {
+          "rule_id": "100764",
+          "level": 10,
+          "description": "NHI: Direct Kubernetes API/Kubelet access from container",
+          "ocsf_class_uid": 6003,
+          "ocsf_class_name": "API Activity"
+        },
+        {
+          "rule_id": "100955",
+          "level": 15,
+          "description": "NHI: Multi-technique container escape chain - escape + SA token theft",
+          "ocsf_class_uid": "",
+          "ocsf_class_name": ""
         }
       ]
     }
@@ -767,7 +1191,9 @@
       "description": "NHI: Credential harvesting combined with IMDS access - multi-vector attack",
       "has_test": true,
       "test_class": "TestCorrelationRule100950",
-      "test_method_count": 3
+      "test_method_count": 3,
+      "ocsf_class_uid": 6001,
+      "ocsf_class_name": "Web Resources Activity"
     },
     {
       "rule_id": "100951",
@@ -775,7 +1201,9 @@
       "description": "NHI: K8s token theft followed by secrets enumeration - container attack",
       "has_test": true,
       "test_class": "TestCorrelationRule100951",
-      "test_method_count": 3
+      "test_method_count": 3,
+      "ocsf_class_uid": "",
+      "ocsf_class_name": ""
     },
     {
       "rule_id": "100952",
@@ -783,7 +1211,9 @@
       "description": "NHI: CI/CD token + git credential access - supply chain attack",
       "has_test": true,
       "test_class": "TestCorrelationRule100952",
-      "test_method_count": 3
+      "test_method_count": 3,
+      "ocsf_class_uid": "",
+      "ocsf_class_name": ""
     },
     {
       "rule_id": "100953",
@@ -791,7 +1221,9 @@
       "description": "NHI: AI agent SSRF with credential access - agent compromise",
       "has_test": true,
       "test_class": "TestCorrelationRule100953",
-      "test_method_count": 3
+      "test_method_count": 3,
+      "ocsf_class_uid": "",
+      "ocsf_class_name": ""
     },
     {
       "rule_id": "100954",
@@ -799,10 +1231,60 @@
       "description": "NHI: Multiple machine identity security events from same source - complex attack",
       "has_test": true,
       "test_class": "TestCorrelationRule100954",
-      "test_method_count": 2
+      "test_method_count": 2,
+      "ocsf_class_uid": "",
+      "ocsf_class_name": ""
+    },
+    {
+      "rule_id": "100955",
+      "level": 15,
+      "description": "NHI: Multi-technique container escape chain - escape + SA token theft",
+      "has_test": false,
+      "test_class": "",
+      "test_method_count": 0,
+      "ocsf_class_uid": "",
+      "ocsf_class_name": ""
     }
   ],
   "untested_scenarios": [
     "S1-05"
-  ]
+  ],
+  "ocsf_classes_used": {
+    "1001": {
+      "class_uid": 1001,
+      "class_name": "File Activity",
+      "scenario_count": 25,
+      "rule_count": 25
+    },
+    "2001": {
+      "class_uid": 2001,
+      "class_name": "Security Finding",
+      "scenario_count": 12,
+      "rule_count": 12
+    },
+    "6003": {
+      "class_uid": 6003,
+      "class_name": "API Activity",
+      "scenario_count": 12,
+      "rule_count": 12
+    },
+    "1007": {
+      "class_uid": 1007,
+      "class_name": "Process Activity",
+      "scenario_count": 5,
+      "rule_count": 5
+    },
+    "6001": {
+      "class_uid": 6001,
+      "class_name": "Web Resources Activity",
+      "scenario_count": 3,
+      "rule_count": 3
+    },
+    "4001": {
+      "class_uid": 4001,
+      "class_name": "Network Activity",
+      "scenario_count": 2,
+      "rule_count": 2
+    }
+  }
 }
