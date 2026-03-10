@@ -1,0 +1,49 @@
+title: "NHI-SPIRE: Kubelet Verification Skip Detected"
+id: e1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c
+related:
+    - id: "101043"
+      type: derived
+status: test
+description: |
+    Detects the insecure configuration skip_kubelet_verification being set to
+    true in SPIRE Agent configuration. This weakens workload attestation by
+    not verifying the kubelet's TLS identity, enabling an attacker to provide
+    forged pod metadata to the SPIRE Agent via MITM.
+
+    Detection uses two methods:
+    1. File integrity monitoring (FIM) — detects config file changes containing
+       the insecure setting. Requires FIM backend that captures FileContent.
+    2. SPIRE Agent startup log — detects when the agent logs the setting at boot.
+       Works with standard JSON/text log ingestion (no FIM required).
+
+    Derived from Wazuh rule 101043.
+references:
+    - https://attack.mitre.org/techniques/T1562/001/
+    - https://github.com/spiffe/spire/blob/main/doc/plugin_agent_workloadattestor_k8s.md
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.defense_evasion
+    - attack.t1562.001
+    - nhi.spiffe_spire
+logsource:
+    category: file_change
+    product: linux
+detection:
+    selection_file:
+        TargetFilename|contains:
+            - 'spire'
+        TargetFilename|endswith:
+            - '.conf'
+            - '.hcl'
+    selection_content:
+        FileContent|contains:
+            - 'skip_kubelet_verification = true'
+            - 'skip_kubelet_verification: true'
+    selection_log:
+        msg|contains:
+            - 'skip_kubelet_verification'
+    condition: (all of selection_file and selection_content) or selection_log
+falsepositives:
+    - Development or testing environments where kubelet TLS is not configured
+level: high

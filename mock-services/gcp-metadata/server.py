@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock GCP Metadata Service + Workload Identity Federation
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 
 Simulates GCP Compute Engine metadata service and
 Workload Identity Federation token exchange.
@@ -350,7 +350,7 @@ def index():
     return jsonify({
         "service": "Mock GCP Metadata Service",
         "version": "1.0.0",
-        "description": "NDC Security 2026 - NHI Testbed",
+        "description": "NHI Security Testbed",
         "endpoints": {
             "/": "This page",
             "/health": "Health check",
@@ -373,7 +373,7 @@ def health():
 if __name__ == "__main__":
     print("=" * 60)
     print("Mock GCP Metadata Service + Workload Identity Federation")
-    print("NDC Security 2026 - NHI Security Testbed")
+    print("NHI Security Testbed")
     print("=" * 60)
     print("")
     print("Simulates GCP Compute Engine metadata and WIF for")

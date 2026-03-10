@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Machine Identity Security Testbed - Startup Script
-# NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+# NHI Security Testbed
 #
 # Usage:
 #   ./scripts/start.sh              # Start core services
@@ -42,7 +42,7 @@ fi
 echo -e "${BLUE}"
 echo "=========================================="
 echo "  Machine Identity Security Testbed"
-echo "  NDC Security 2026 Demo Environment"
+echo "  NHI Security Testbed"
 echo "=========================================="
 echo -e "${NC}"
 

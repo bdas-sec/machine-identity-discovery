@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NHI Security Testbed - Prometheus Metrics Exporter
-NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+NHI Security Testbed
 
 Exposes Prometheus-format metrics at /metrics for detection coverage,
 scenario execution, alert latency, and service health monitoring.
@@ -461,7 +461,7 @@ def record_scenario_run():
 if __name__ == "__main__":
     print("=" * 60)
     print("NHI Security Testbed - Prometheus Metrics Exporter")
-    print("NDC Security 2026")
+    print("NHI Security Testbed")
     print("=" * 60)
     print()
     print(f"Wazuh API:       {WAZUH_API_URL}")

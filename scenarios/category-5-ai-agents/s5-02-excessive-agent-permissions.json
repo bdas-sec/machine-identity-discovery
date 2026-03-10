@@ -91,37 +91,37 @@
 
   "indicators_of_compromise": [
     {
-      "type": "AI Logs",
-      "description": "Privileged operation requests through AI agent",
-      "wazuh_rule": "100853"
+      "type": "Auditd",
+      "description": "AI agent framework spawning shell subprocess",
+      "wazuh_rule": "100850"
     },
     {
-      "type": "CloudTrail",
-      "description": "IAM operations from AI agent service account",
-      "wazuh_rule": "100854"
-    },
-    {
-      "type": "CloudTrail",
-      "description": "Unusual resource creation patterns",
+      "type": "Auditd",
+      "description": "AI agent shell executing network/exfiltration commands",
       "wazuh_rule": "100855"
+    },
+    {
+      "type": "Correlation",
+      "description": "AI agent rapid credential scanning - 20+ files in 60s",
+      "wazuh_rule": "100854"
     }
   ],
 
   "expected_wazuh_alerts": [
     {
-      "rule_id": "100853",
-      "level": 12,
-      "description": "NHI: Privileged operation requested via AI agent"
-    },
-    {
-      "rule_id": "100854",
-      "level": 14,
-      "description": "NHI: IAM modification from AI agent - PRIVILEGE ESCALATION"
+      "rule_id": "100850",
+      "level": 10,
+      "description": "NHI: AI agent framework spawning shell subprocess"
     },
     {
       "rule_id": "100855",
-      "level": 10,
-      "description": "NHI: Suspicious resource creation via AI agent"
+      "level": 12,
+      "description": "NHI: AI agent shell executing network/exfiltration command"
+    },
+    {
+      "rule_id": "100854",
+      "level": 12,
+      "description": "NHI: AI agent rapid credential scanning - 20+ credential files in 60s"
     }
   ],
 

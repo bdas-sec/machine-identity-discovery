@@ -1,0 +1,42 @@
+title: "NHI-SPIRE: CONFIRMED - SVID Request Burst from Single PID"
+id: d2e3f4a5-b6c7-4d8e-9f0a-1b2c3d4e5f6a
+related:
+    - id: "101008"
+      type: derived
+status: test
+description: |
+    Detects confirmed SVID credential harvesting via the
+    spire_identity_monitor.py script output. The script tracks per-PID
+    request counts in a 5-minute sliding window and fires when a single
+    PID makes 10+ SVID fetch requests — far exceeding normal workload
+    behavior (1 fetch at startup + rotation on hourly intervals).
+
+    This provides HIGH-CONFIDENCE burst detection with proper sliding
+    window semantics that Wazuh frequency-based rules approximate
+    but cannot precisely implement.
+
+    Derived from Wazuh rule 101008.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://attack.mitre.org/techniques/T1078/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.initial_access
+    - attack.t1078
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: wazuh
+detection:
+    selection:
+        message|contains:
+            - 'NHI_SPIRE_DETECT'
+            - 'type=svid_burst'
+    condition: selection
+falsepositives:
+    - Workloads with extremely short SVID TTLs causing frequent rotation
+level: high

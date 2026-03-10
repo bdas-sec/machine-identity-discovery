@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock CI/CD Server
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 
 Simulates GitHub Actions / GitLab CI API endpoints for demonstrating
 CI/CD token theft and pipeline attacks.
@@ -40,7 +40,7 @@ def index():
     return jsonify({
         "service": "Mock CI/CD Server",
         "version": "2.0.0",
-        "description": "NDC Security 2026 - NHI Testbed",
+        "description": "NHI Security Testbed",
         "endpoints": {
             "/": "This page",
             "/health": "Health check",
@@ -546,7 +546,7 @@ def github_oidc_token():
 if __name__ == "__main__":
     print("=" * 60)
     print("Mock CI/CD Server")
-    print("NDC Security 2026 - NHI Security Testbed")
+    print("NHI Security Testbed")
     print("=" * 60)
     print("")
     print("Simulates GitHub Actions / GitLab CI / Azure DevOps APIs")

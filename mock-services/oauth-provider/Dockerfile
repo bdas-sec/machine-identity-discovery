@@ -1,6 +1,6 @@
 # Mock OAuth Provider
 # Simulates OAuth2/OIDC provider for consent phishing demos
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM python:3.11-slim
 

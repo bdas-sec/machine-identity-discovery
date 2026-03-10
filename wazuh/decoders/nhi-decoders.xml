@@ -1,6 +1,6 @@
 <!--
   Non-Human Identity (NHI) Security Decoders
-  NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+  NHI Security Testbed
 
   Production-grade decoders with JSON parsing, field extraction via
   <order> tags, and timestamp normalization.
@@ -106,7 +106,7 @@
 
 <decoder name="nhi-k8s-audit-json">
   <parent>nhi-k8s-audit</parent>
-  <plugin_decoder>JSON</plugin_decoder>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
 </decoder>
 
 <decoder name="nhi-k8s-audit-fields">
@@ -297,7 +297,7 @@
 
 <decoder name="nhi-vault-audit-json">
   <parent>nhi-vault-audit</parent>
-  <plugin_decoder>JSON</plugin_decoder>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
 </decoder>
 
 <decoder name="nhi-vault-audit-access">
@@ -331,4 +331,201 @@
   <parent>nhi-attack-marker</parent>
   <regex type="pcre2">\[(ATTACK|CRITICAL)\]\s+(.+)</regex>
   <order>status,extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 12: SPIRE Server Log                       -->
+<!-- Logger: spire-server (Logrus TEXT or JSON format)   -->
+<!--                                                     -->
+<!-- SPIRE DEFAULTS (verified against spiffe.io docs):   -->
+<!--   log_format = "text"   (NOT json!)                 -->
+<!--   log_level  = "INFO"                               -->
+<!--   audit_log_enabled = false                         -->
+<!--                                                     -->
+<!-- PREREQUISITE for server-side detection rules:        -->
+<!--   server {                                          -->
+<!--     log_format = "json"     # RECOMMENDED for SIEM  -->
+<!--     audit_log_enabled = true                        -->
+<!--   }                                                 -->
+<!--                                                     -->
+<!-- JSON format: {"type":"audit","method":"BatchCreate  -->
+<!--   Entry","spiffe_id":"spiffe://...","status":"ok"}  -->
+<!-- TEXT format: type=audit method=BatchCreateEntry      -->
+<!--   spiffe_id=spiffe://example.org/workload ...       -->
+<!-- Audit msg field value: "API accessed"               -->
+<!-- ================================================= -->
+<decoder name="nhi-spire-server">
+  <prematch>spire-server|spire_server|"type":"audit"|type=audit|"subsystem_name":"api"|subsystem_name=api|"subsystem_name":"entry"|subsystem_name=entry|"subsystem_name":"svid"|subsystem_name=svid|"subsystem_name":"registration"|subsystem_name=registration|"service":"entry\.v1|service=entry.v1|"service":"agent\.v1|service=agent.v1</prematch>
+</decoder>
+
+<decoder name="nhi-spire-server-json">
+  <parent>nhi-spire-server</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- JSON format: spiffe_id before caller_id -->
+<decoder name="nhi-spire-server-entry">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"spiffe_id":"(spiffe://[^"]+)".*?"caller_id":"([^"]+)".*?"method":"([^"]+)"</regex>
+  <order>url,user,action</order>
+</decoder>
+
+<!-- JSON format: method before spiffe_id (audit log field order) -->
+<decoder name="nhi-spire-server-audit">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"method":"([^"]+)".*?"spiffe_id":"(spiffe://[^"]+)"</regex>
+  <order>action,url</order>
+</decoder>
+
+<!-- TEXT format: spiffe_id and caller_id and method -->
+<decoder name="nhi-spire-server-entry-text">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">spiffe_id=(spiffe://\S+).*?caller_id=(\S+).*?method=(\S+)</regex>
+  <order>url,user,action</order>
+</decoder>
+
+<!-- TEXT format: method before spiffe_id -->
+<decoder name="nhi-spire-server-audit-text">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">method=(\S+).*?spiffe_id=(spiffe://\S+)</regex>
+  <order>action,url</order>
+</decoder>
+
+<decoder name="nhi-spire-server-caller">
+  <parent>nhi-spire-server</parent>
+  <!-- Strip port from caller_addr (real format: "172.43.0.31:49160") -->
+  <regex type="pcre2">"caller_addr":"(\d+\.\d+\.\d+\.\d+):\d+"|"caller_uid":(\d+)|caller_addr=(\d+\.\d+\.\d+\.\d+):\d+|caller_uid=(\d+)</regex>
+  <order>srcip</order>
+</decoder>
+
+<decoder name="nhi-spire-server-selectors">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"selectors":"([^"]+)"|selectors=(\S+)</regex>
+  <order>extra_data</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 13: SPIRE Agent Log                        -->
+<!-- Logger: spire-agent (Logrus TEXT or JSON format)    -->
+<!--                                                     -->
+<!-- SPIRE DEFAULTS (verified against spiffe.io docs):   -->
+<!--   log_format = "text"   (NOT json!)                 -->
+<!--   log_level  = "INFO"                               -->
+<!--                                                     -->
+<!-- PREREQUISITE for PID-based detection (101004-101006) -->
+<!--   agent {                                           -->
+<!--     log_format = "json"     # RECOMMENDED for SIEM  -->
+<!--     log_level  = "DEBUG"    # REQUIRED for PID on   -->
+<!--                             # SVID fetch events     -->
+<!--   }                                                 -->
+<!--                                                     -->
+<!-- Verified against SPIRE source code (handler.go):    -->
+<!--   "Fetched X.509 SVID" - DEBUG, fields: spiffe_id, -->
+<!--     ttl, pid (via middleware)                        -->
+<!--   "Fetched JWT SVID" - DEBUG, fields: ttl, pid      -->
+<!--     (via middleware) — NOTE: NO spiffe_id field!     -->
+<!--   "No identity issued" - ERROR, fields: registered, -->
+<!--     selectors, pid (via middleware)                  -->
+<!--                                                     -->
+<!-- PID is injected by addWatcherPID middleware via      -->
+<!-- peertracker.WatcherFromContext(ctx).PID() into the  -->
+<!-- logger context — so it appears on ALL workload API  -->
+<!-- log lines, even if not explicitly added by handler. -->
+<!--                                                     -->
+<!-- Subsystem names (verified against SPIRE 1.11.2 real logs): -->
+<!--   endpoints          — Workload API SVID fetch handler    -->
+<!--   workload_attestor  — PID attestation / selector lookup  -->
+<!--   attestor           — Node attestation                   -->
+<!--   cache_manager      — Entry cache updates                -->
+<!--   manager            — SVID rotation / renewal            -->
+<!--   catalog            — Plugin loading                     -->
+<!--   svid_store_cache   — Bundle/SVID store operations       -->
+<!--   health             — Health check subsystem             -->
+<!--   workload_api       — Legacy (pre-1.8) Workload API      -->
+<!--   node               — Node operations                    -->
+<!-- ================================================= -->
+<decoder name="nhi-spire-agent">
+  <prematch>spire-agent|spire_agent|"subsystem_name":"workload_api"|"subsystem_name":"endpoints"|"subsystem_name":"attestor"|"subsystem_name":"workload_attestor"|"subsystem_name":"cache_manager"|"subsystem_name":"node"|"subsystem_name":"manager"|"subsystem_name":"catalog"|"subsystem_name":"svid_store_cache"|"subsystem_name":"health"|subsystem_name=workload_api|subsystem_name=endpoints|subsystem_name=attestor|subsystem_name=workload_attestor|subsystem_name=cache_manager|subsystem_name=node|subsystem_name=manager|subsystem_name=catalog|subsystem_name=svid_store_cache|subsystem_name=health</prematch>
+</decoder>
+
+<decoder name="nhi-spire-agent-json">
+  <parent>nhi-spire-agent</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- JSON format: PID + SPIFFE ID extraction (both field orders) -->
+<decoder name="nhi-spire-agent-workload">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">"pid":(\d+).*?"spiffe_id":"(spiffe://[^"]+)"</regex>
+  <order>id,url</order>
+</decoder>
+
+<decoder name="nhi-spire-agent-workload-alt">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">"spiffe_id":"(spiffe://[^"]+)".*?"pid":(\d+)</regex>
+  <order>url,id</order>
+</decoder>
+
+<!-- TEXT format: PID + SPIFFE ID extraction (both field orders) -->
+<decoder name="nhi-spire-agent-workload-text">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">pid=(\d+).*?spiffe_id=(spiffe://\S+)</regex>
+  <order>id,url</order>
+</decoder>
+
+<decoder name="nhi-spire-agent-workload-text-alt">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">spiffe_id=(spiffe://\S+).*?pid=(\d+)</regex>
+  <order>url,id</order>
+</decoder>
+
+<!-- PID-only extraction fallback — critical for "Fetched JWT SVID" events
+     which include pid (via middleware) but NOT spiffe_id. Also matches
+     "No identity issued" events. Covers both JSON and TEXT formats. -->
+<decoder name="nhi-spire-agent-pid-only-json">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">"pid":(\d+)</regex>
+  <order>id</order>
+</decoder>
+
+<decoder name="nhi-spire-agent-pid-only-text">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">\bpid=(\d+)</regex>
+  <order>id</order>
+</decoder>
+
+<decoder name="nhi-spire-agent-attestation">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">"attestation_type":"([^"]+)".*?"selectors":\[([^\]]+)\]|attestation_type=(\S+).*?selectors=\[([^\]]+)\]</regex>
+  <order>action,extra_data</order>
+</decoder>
+
+<decoder name="nhi-spire-agent-svid">
+  <parent>nhi-spire-agent</parent>
+  <regex type="pcre2">"svid_type":"(x509|jwt)".*?"spiffe_id":"(spiffe://[^"]+)"|svid_type=(x509|jwt).*?spiffe_id=(spiffe://\S+)</regex>
+  <order>status,url</order>
+</decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 14: SPIRE Identity Monitor Script Output   -->
+<!-- Source: spire_identity_monitor.py (full_command)    -->
+<!-- Format: NHI_SPIRE_DETECT: type=X pid=Y ...         -->
+<!--                                                     -->
+<!-- Captures fields:                                    -->
+<!--   action    = detection type (multi_identity, svid_ -->
+<!--               burst)                                -->
+<!--   id        = PID of suspicious process             -->
+<!--   status    = count of distinct SPIFFE IDs          -->
+<!--   extra_data = total request count in window        -->
+<!--   url       = comma-separated SPIFFE ID list        -->
+<!--   protocol  = severity (critical, high)             -->
+<!-- ================================================= -->
+<decoder name="nhi-spire-detect">
+  <prematch>NHI_SPIRE_DETECT:</prematch>
+</decoder>
+
+<decoder name="nhi-spire-detect-fields">
+  <parent>nhi-spire-detect</parent>
+  <regex type="pcre2">type=(\S+)\s+pid=(\d+)\s+distinct_count=(\d+)\s+request_count=(\d+)\s+spiffe_ids="([^"]+)".*?severity=(\S+)</regex>
+  <order>action,id,status,extra_data,url,protocol</order>
 </decoder>

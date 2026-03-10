@@ -97,36 +97,36 @@
   "indicators_of_compromise": [
     {
       "type": "AI Logs",
-      "description": "Memory manipulation attempts detected",
-      "wazuh_rule": "100859"
-    },
-    {
-      "type": "AI Logs",
-      "description": "Suspicious persistent instructions",
+      "description": "Injection patterns detected in AI agent logs (context manipulation)",
       "wazuh_rule": "100860"
     },
     {
-      "type": "File",
-      "description": "Indirect injection patterns in data files",
-      "wazuh_rule": "100861"
+      "type": "Auditd",
+      "description": "AI agent making external network requests (exfiltration from poisoned context)",
+      "wazuh_rule": "100859"
+    },
+    {
+      "type": "Auditd",
+      "description": "AI agent MCP/tool-use activity (tool abuse from poisoned instructions)",
+      "wazuh_rule": "100858"
     }
   ],
 
   "expected_wazuh_alerts": [
     {
-      "rule_id": "100859",
-      "level": 12,
-      "description": "NHI: AI agent memory manipulation attempt"
-    },
-    {
       "rule_id": "100860",
-      "level": 14,
-      "description": "NHI: Suspicious instructions in AI agent context - PERSISTENCE"
+      "level": 10,
+      "description": "NHI: Prompt injection attempt detected via AI agent logs"
     },
     {
-      "rule_id": "100861",
+      "rule_id": "100859",
       "level": 10,
-      "description": "NHI: Indirect prompt injection pattern in data"
+      "description": "NHI: AI agent making external network request"
+    },
+    {
+      "rule_id": "100858",
+      "level": 10,
+      "description": "NHI: AI agent MCP/tool-use activity detected"
     }
   ],
 

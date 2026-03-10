@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock OAuth2/OIDC Provider
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 
 Simulates OAuth2 authorization server for demonstrating
 consent phishing and token theft attacks (T1550.001).
@@ -209,7 +209,7 @@ This application is requesting broad permissions including admin access to your 
 </div>
 
 <hr>
-<p><small>Mock OAuth Provider - NHI Security Testbed (NDC Security 2026)</small></p>
+<p><small>Mock OAuth Provider - NHI Security Testbed</small></p>
 <p><small>This is a simulated consent phishing page for security training.</small></p>
 </body></html>"""
 
@@ -397,7 +397,7 @@ def index():
     return jsonify({
         "service": "Mock OAuth2/OIDC Provider",
         "version": "1.0.0",
-        "description": "NDC Security 2026 - NHI Testbed",
+        "description": "NHI Security Testbed",
         "endpoints": {
             "/": "This page",
             "/health": "Health check",
@@ -420,7 +420,7 @@ def health():
 if __name__ == "__main__":
     print("=" * 60)
     print("Mock OAuth2/OIDC Provider")
-    print("NDC Security 2026 - NHI Security Testbed")
+    print("NHI Security Testbed")
     print("=" * 60)
     print("")
     print("Simulates OAuth2 authorization for demonstrating")

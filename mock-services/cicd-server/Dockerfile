@@ -1,6 +1,6 @@
 # Mock CI/CD Server
 # Simulates GitHub Actions / GitLab CI API for token theft demos
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM python:3.11-slim
 

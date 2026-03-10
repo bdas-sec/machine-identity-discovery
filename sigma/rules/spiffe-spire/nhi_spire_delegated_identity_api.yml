@@ -1,0 +1,45 @@
+title: "NHI-SPIRE: Delegated Identity API Access Detected"
+id: a3c4d5e6-f7a8-4b9c-0d1e-2f3a4b5c6d7e
+related:
+    - id: "101061"
+      type: derived
+status: test
+description: |
+    Detects access to the SPIRE Agent's Delegated Identity API. Any workload
+    authorized for this API can impersonate ALL other workloads served by that
+    agent. This is the highest-privilege SPIRE API - abuse is catastrophic and
+    results in full identity compromise for the node.
+    Derived from Wazuh rule 101061.
+references:
+    - https://attack.mitre.org/techniques/T1134/
+    - https://attack.mitre.org/techniques/T1078/
+    - https://github.com/spiffe/spire/blob/main/proto/spire/api/agent/delegatedidentity/v1/delegatedidentity.proto
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.privilege_escalation
+    - attack.t1134
+    - attack.initial_access
+    - attack.t1078
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_method:
+        method|contains:
+            - 'DelegatedIdentity'
+            - 'FetchX509SVIDs'
+            - 'SubscribeToX509SVIDs'
+    selection_socket:
+        TargetFilename|contains:
+            - 'spire'
+        TargetFilename|endswith:
+            - 'admin.sock'
+            - 'admin_api.sock'
+            - 'private/api.sock'
+    condition: 1 of selection_*
+falsepositives:
+    - Service mesh data planes (Envoy) authorized for delegated identity
+    - Secret store integrations (SPIFFE Helper) with legitimate delegation
+level: critical

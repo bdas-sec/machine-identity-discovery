@@ -1,0 +1,44 @@
+title: "NHI-SPIRE: Registration with Weak/Spoofable Selectors"
+id: f6b7c8d9-e0f1-4a2b-3c4d-5e6f7a8b9c0d
+related:
+    - id: "101021"
+      type: derived
+status: test
+description: |
+    Detects registration entries using selectors known to be easily spoofed:
+    k8s:node-name (spoofable if agent SVID is stolen), unix:uid:0 (root -
+    overly broad), or docker:label with generic values. These weak selectors
+    create impersonation opportunities as documented in Eviatar Gerzi's
+    selector spoofing research.
+    Derived from Wazuh rule 101021 (child of 101020).
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1078/
+    - https://github.com/spiffe/spire/blob/main/doc/plugin_agent_workloadattestor_k8s.md
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.initial_access
+    - attack.t1078
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_action:
+        method|contains:
+            - 'CreateEntry'
+            - 'BatchCreateEntry'
+    selection_weak:
+        selectors|contains:
+            - 'k8s:node-name'
+            - 'unix:uid:0'
+            - 'unix:gid:0'
+            - 'docker:label:'
+    condition: all of selection_*
+falsepositives:
+    - Legitimate infrastructure services that must run as root
+    - Node-level DaemonSets that require node-name selectors
+level: high

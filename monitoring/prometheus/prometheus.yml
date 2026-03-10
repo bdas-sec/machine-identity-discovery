@@ -1,5 +1,5 @@
 # Prometheus Configuration - NHI Security Testbed
-# NDC Security 2026
+# NHI Security Testbed
 #
 # Scrapes metrics from:
 #   - NHI Metrics Exporter (detection coverage, alerts, service health)

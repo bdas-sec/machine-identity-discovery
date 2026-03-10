@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrypoint script for Kubernetes Node Agent
-# NHI Security Testbed - NDC Security 2026
+# NHI Security Testbed
 
 set -e
 
@@ -50,10 +50,14 @@ fi
 # Start auditd
 if command -v auditd &>/dev/null; then
     service auditd start 2>/dev/null || auditd 2>/dev/null || true
+    # Monitor command execution (required for kubectl, nsenter, chroot, mount detection)
+    auditctl -a always,exit -F arch=b64 -S execve -k nhi_k8s_exec 2>/dev/null || true
     # Monitor ServiceAccount token access
     auditctl -w /var/run/secrets/kubernetes.io/serviceaccount/token -p rwxa -k nhi_sa_token 2>/dev/null || true
     auditctl -w /var/run/secrets -p rwxa -k nhi_k8s_secrets 2>/dev/null || true
     auditctl -w /root/.kube/config -p rwxa -k nhi_kubeconfig 2>/dev/null || true
+    # SPIRE socket monitoring (required for SPIRE socket access detection)
+    auditctl -w /opt/spire/sockets/workload_api.sock -p rwa -k spire_socket 2>/dev/null || true
 fi
 
 # Start Wazuh agent

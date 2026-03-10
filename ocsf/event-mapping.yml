@@ -13,9 +13,10 @@ metadata:
   author: "Bodhisattva Das"
   date: "2026-02-16"
   description: >
-    Complete OCSF event class mapping for all 57 Wazuh detection rules
-    and 11 log decoders in the NHI Security Testbed. Enables multi-SIEM
-    portability at the data layer.
+    Complete OCSF event class mapping for all 100 Wazuh detection rules
+    and 65 log decoders in the NHI Security Testbed. Enables multi-SIEM
+    portability at the data layer. Includes SPIFFE/SPIRE workload identity
+    attack detection (Group 8) with script-based confirmed detections.
 
 # ─────────────────────────────────────────────────────────
 # OCSF Severity Mapping (Wazuh Level → OCSF severity_id)
@@ -103,7 +104,7 @@ ocsf_classes_used:
     class_name: "API Activity"
     category_uid: 6
     category_name: "Application Activity"
-    usage: "IMDS API access, K8s API calls, AI SSRF, MCP tool invocations"
+    usage: "IMDS API access, K8s API calls, AI SSRF, MCP tool invocations, SPIRE registration/trust bundle/delegated identity API"
 
 # ═════════════════════════════════════════════════════════
 # RULE GROUP MAPPINGS
@@ -597,6 +598,177 @@ rule_mappings:
         mitre: ["T1611", "T1552.007"]
         timeframe_seconds: 300
 
+  # ───────────────────────────────────────────────────────
+  # Group 8: SPIFFE/SPIRE Workload Identity (101000-101081)
+  # Based on Eviatar Gerzi's "The Machine with Many Faces"
+  # research (nullcon Goa 2026)
+  # ───────────────────────────────────────────────────────
+  spiffe_spire:
+    rules:
+      - rule_id: 101000
+        description: "SPIRE Workload API socket access"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 2
+        mitre: ["T1552.007", "T1078.001"]
+
+      - rule_id: 101001
+        description: "SPIRE socket access from scripting tool"
+        ocsf_class_uid: 1007  # Process Activity
+        ocsf_severity_id: 4
+        mitre: ["T1552.007", "T1059"]
+        fields:
+          actor.process.name: "$(process_name)"
+
+      - rule_id: 101002
+        description: "SVID private key extraction"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 5
+        mitre: ["T1552.004", "T1552.001"]
+
+      - rule_id: 101003
+        description: "Burst SVID requests - harvesting"
+        ocsf_class_uid: 2001  # Security Finding (frequency)
+        ocsf_severity_id: 5
+        mitre: ["T1552.007", "T1041"]
+        note: "Frequency-based: 10+ events in 60s"
+
+      - rule_id: 101004
+        description: "SVID fetch/issuance event (base)"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 1
+        note: "Low-severity base rule for PID-based correlation"
+
+      - rule_id: 101005
+        description: "Multiple SVID requests from same PID"
+        ocsf_class_uid: 2001  # Security Finding (frequency)
+        ocsf_severity_id: 4
+        mitre: ["T1552.007", "T1078"]
+        note: "Frequency-based: 5+ events in 120s, grouped by PID"
+
+      - rule_id: 101006
+        description: "Same PID obtained multiple distinct SVID identities"
+        ocsf_class_uid: 2001  # Security Finding (correlation)
+        ocsf_severity_id: 5
+        mitre: ["T1098", "T1134"]
+        note: "Selector spoofing / overlapping registration entries indicator (triage — confirmed by 101007)"
+
+      - rule_id: 101007
+        description: "CONFIRMED: Multiple distinct SPIFFE identities for same PID (script-based)"
+        ocsf_class_uid: 2001  # Security Finding
+        ocsf_severity_id: 5
+        mitre: ["T1098", "T1134"]
+        note: "High-confidence selector spoofing detection via spire_identity_monitor.py"
+        fields:
+          finding.title: "Confirmed SPIFFE Selector Spoofing"
+          finding.types: ["Credential Access"]
+
+      - rule_id: 101008
+        description: "SVID burst harvesting detected (script-based)"
+        ocsf_class_uid: 2001  # Security Finding
+        ocsf_severity_id: 4
+        mitre: ["T1552.007", "T1078"]
+        note: "High-confidence credential harvesting via spire_identity_monitor.py"
+        fields:
+          finding.title: "SVID Credential Harvesting"
+          finding.types: ["Credential Access"]
+
+      - rule_id: 101020
+        description: "SPIRE registration entry created"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 4
+        mitre: ["T1098", "T1136"]
+        fields:
+          api.operation: "CreateEntry"
+          api.service.name: "SPIRE-Server"
+
+      - rule_id: 101021
+        description: "Registration with weak/spoofable selectors"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 4
+        mitre: ["T1098", "T1078"]
+
+      - rule_id: 101022
+        description: "Registration entry modified or deleted"
+        ocsf_class_uid: 6003
+        ocsf_severity_id: 4
+        mitre: ["T1098", "T1531"]
+
+      - rule_id: 101040
+        description: "SPIRE Agent attestation/re-attestation (server audit)"
+        ocsf_class_uid: 3002  # Authentication
+        ocsf_severity_id: 3
+        mitre: ["T1078", "T1550"]
+
+      - rule_id: 101044
+        description: "SPIRE Agent attestation/re-attestation (agent log)"
+        ocsf_class_uid: 3002  # Authentication
+        ocsf_severity_id: 3
+        mitre: ["T1078", "T1550"]
+        note: "Agent-side companion to server-side 101040"
+
+      - rule_id: 101041
+        description: "Trust bundle modified"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 5
+        mitre: ["T1553.004", "T1556"]
+
+      - rule_id: 101042
+        description: "SPIRE configuration file modified"
+        ocsf_class_uid: 1001  # File Activity
+        ocsf_severity_id: 4
+        mitre: ["T1562.001", "T1556"]
+        fields:
+          file.path: "$(file)"
+
+      - rule_id: 101043
+        description: "skip_kubelet_verification enabled"
+        ocsf_class_uid: 2001  # Security Finding
+        ocsf_severity_id: 4
+        mitre: ["T1562.001"]
+
+      - rule_id: 101060
+        description: "JWT-SVID token in logs"
+        ocsf_class_uid: 2001  # Security Finding
+        ocsf_severity_id: 4
+        mitre: ["T1552.001", "T1528"]
+
+      - rule_id: 101061
+        description: "Delegated Identity API access (FIM-based)"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 5
+        mitre: ["T1134", "T1078"]
+
+      - rule_id: 101062
+        description: "Delegated Identity API access (agent log-based)"
+        ocsf_class_uid: 6003  # API Activity
+        ocsf_severity_id: 4
+        mitre: ["T1134", "T1078"]
+        note: "Secondary detection via agent log for DelegatedIdentity API methods"
+
+      - rule_id: 101080
+        description: "Container escape + SVID theft chain"
+        ocsf_class_uid: 2001  # Security Finding (correlation)
+        ocsf_severity_id: 5
+        mitre: ["T1611", "T1552.007"]
+        timeframe_seconds: 300
+        note: "Correlates K8s container escape with SPIRE socket access"
+
+      - rule_id: 101081
+        description: "Registration tampering + SVID acquisition chain"
+        ocsf_class_uid: 2001
+        ocsf_severity_id: 5
+        mitre: ["T1098", "T1552.007"]
+        timeframe_seconds: 600
+        note: "Correlates registration entry creation with SVID fetch"
+
+      - rule_id: 101082
+        description: "Registration manipulation + PID identity spoofing chain"
+        ocsf_class_uid: 2001  # Security Finding (correlation)
+        ocsf_severity_id: 5
+        mitre: ["T1098", "T1134"]
+        timeframe_seconds: 600
+        note: "Correlates entry creation with same-PID multi-identity anomaly"
+
 # ═════════════════════════════════════════════════════════
 # DECODER MAPPINGS
 # ═════════════════════════════════════════════════════════
@@ -666,3 +838,15 @@ decoder_mappings:
     primary_ocsf_class_name: "Security Finding"
     log_source: "Generic [ATTACK]/[CRITICAL] markers from all services"
     extracted_fields: ["status", "extra_data", "srcip"]
+
+  - decoder: "nhi-spire-server"
+    primary_ocsf_class_uid: 6003
+    primary_ocsf_class_name: "API Activity"
+    log_source: "SPIRE Server structured log (Logrus JSON)"
+    extracted_fields: ["url", "user", "action", "extra_data", "srcip"]
+
+  - decoder: "nhi-spire-agent"
+    primary_ocsf_class_uid: 1007
+    primary_ocsf_class_name: "Process Activity"
+    log_source: "SPIRE Agent structured log (Logrus JSON)"
+    extracted_fields: ["id", "url", "status", "action", "extra_data"]

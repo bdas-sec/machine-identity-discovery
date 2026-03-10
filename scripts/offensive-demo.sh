@@ -2,7 +2,7 @@
 # ============================================================
 # Offensive Kill Chain Demo Script
 # "From Admin by Design to Breach by Default"
-# CyberWiseCon Europe 2026
+# NHI Security Testbed
 #
 # Usage:
 #   ./scripts/offensive-demo.sh --all           # Run full kill chain

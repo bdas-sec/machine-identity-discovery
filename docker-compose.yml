@@ -1,5 +1,5 @@
 # Machine Identity Security Testbed
-# NDC Security 2026 - "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
+# NHI Security Testbed
 #
 # Usage:
 #   ./scripts/start.sh                    # Start all services
@@ -87,6 +87,10 @@ volumes:
   filebeat_etc:
   filebeat_var:
   wazuh_indexer_data:
+  spire_server_data:
+  spire_server_logs:
+  spire_agent_sockets:
+  spire_agent_logs:
 
 # ============================================
 # Services
@@ -377,6 +381,11 @@ services:
       WAZUH_AGENT_GROUP: "kubernetes,node,worker"
       NODE_NAME: "k8s-worker-01"
       KUBE_SERVICE_ACCOUNT: "default"
+    volumes:
+      - spire_agent_logs:/var/log/spire:ro
+      - spire_server_logs:/var/log/spire-server:ro
+      - spire_agent_sockets:/opt/spire/sockets:ro
+      - ./scripts/spire_identity_monitor.py:/opt/spire-monitor/spire_identity_monitor.py:ro
     networks:
       k8s_net:
         ipv4_address: 172.43.0.10
@@ -412,6 +421,68 @@ services:
     labels:
       - "nhi.agent.type=k8s-node"
       - "nhi.agent.k8s-role=worker"
+
+  # ==========================================
+  # SPIFFE/SPIRE - Workload Identity
+  # ==========================================
+
+  spire-server:
+    profiles: ["k8s", "all"]
+    image: ghcr.io/spiffe/spire-server:1.11.2
+    container_name: spire-server
+    hostname: spire-server
+    restart: unless-stopped
+    user: "0:0"   # Root required for volume write access in testbed
+    volumes:
+      - ./spire/server/server.conf:/opt/spire/conf/server/server.conf:ro
+      - ./spire/server/dummy_upstream_ca.key:/opt/spire/conf/server/dummy_upstream_ca.key:ro
+      - ./spire/server/dummy_upstream_ca.crt:/opt/spire/conf/server/dummy_upstream_ca.crt:ro
+      - spire_server_data:/opt/spire/data
+      - spire_server_logs:/var/log/spire
+    networks:
+      k8s_net:
+        ipv4_address: 172.43.0.30
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+    labels:
+      - "nhi.service=spire-server"
+      - "nhi.role=workload-identity"
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-server", "healthcheck", "-socketPath", "/tmp/spire-server/private/api.sock"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  spire-agent:
+    profiles: ["k8s", "all"]
+    image: ghcr.io/spiffe/spire-agent:1.11.2
+    container_name: spire-agent
+    hostname: spire-agent
+    restart: "no"   # Don't restart — join token is single-use
+    user: "0:0"   # Root required for volume write access + PID attestation
+    depends_on:
+      spire-server:
+        condition: service_healthy
+    pid: "host"
+    volumes:
+      - ./spire/agent/agent.conf:/opt/spire/conf/agent/agent.conf:ro
+      - ./spire/agent/bootstrap.crt:/opt/spire/conf/agent/bootstrap.crt:ro
+      - spire_agent_sockets:/opt/spire/sockets
+      - spire_agent_logs:/var/log/spire
+      - /var/run:/var/run:ro
+    networks:
+      k8s_net:
+        ipv4_address: 172.43.0.31
+    command: ["-config", "/opt/spire/conf/agent/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN}"]
+    labels:
+      - "nhi.service=spire-agent"
+      - "nhi.role=workload-identity"
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-agent", "healthcheck", "-socketPath", "/opt/spire/sockets/workload_api.sock"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # ==========================================
   # AI AGENT SIMULATION

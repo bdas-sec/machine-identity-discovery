@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Vulnerable application**: Intentionally insecure Flask app (port 8888) with SSRF endpoints, exposed `.env` files, and hardcoded credentials
 - **Lifecycle scripts**: `scripts/start.sh` (auto-detects Podman/Docker, creates Wazuh groups, deploys stack), `scripts/stop.sh`, `scripts/offensive-demo.sh`
 - **Workshop handbook**: 8-chapter documentation covering introduction, architecture, installation, rule reference, scenario catalog, detection playbook, remediation guide, and testbed extension
-- **Conference materials**: CyberWiseCon Europe 2026 presentation (10-minute screen-recorded demo), NDC Security 2026 talk materials
+- **Conference materials**: Presentation materials and demo scripts
 - **5 kill chain stages**: Discovery → Credential Theft → Privilege Escalation → Lateral Movement → Persistence, mapped to MITRE ATT&CK techniques (T1190, T1552.001, T1552.005, T1078.004, T1528, T1195.002, T1078, T1136)
 - **Conference abstracts**: 45-minute talk, 2-hour workshop, 10-minute lightning talk — targeting Black Hat, DEF CON, BSides, OWASP, KubeCon, fwd:cloudsec, RSA
 - **Product strategy**: Purple Team Framework positioning ("Atomic Red Team for NHI"), open-core licensing model, competitive analysis of 9 funded NHI startups ($240M+ combined)

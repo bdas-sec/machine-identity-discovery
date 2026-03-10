@@ -1,0 +1,40 @@
+title: "NHI-SPIRE: Workload API Socket Access Detected"
+id: a1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e
+related:
+    - id: "101000"
+      type: derived
+status: test
+description: |
+    Detects access to the SPIRE Agent Workload API Unix domain socket.
+    Unauthorized access to this socket enables SVID harvesting, allowing
+    an attacker to obtain cryptographic identity credentials for workload
+    impersonation. Based on attack vectors from Eviatar Gerzi's "The Machine
+    with Many Faces" research (nullcon Goa 2026).
+    Derived from Wazuh rule 101000.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://spiffe.io/docs/latest/spiffe-specs/spiffe_workload_endpoint/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.t1078.001
+    - nhi.spiffe_spire
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection_path:
+        TargetFilename|contains:
+            - 'spire-agent/public/api.sock'
+            - '/run/spire/sockets/agent.sock'
+    selection_env:
+        CommandLine|contains: 'SPIFFE_ENDPOINT_SOCKET'
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate workloads fetching their own SVIDs via SPIFFE SDK
+    - SPIRE health check probes
+    - Service mesh sidecars (Envoy, Istio, Linkerd)
+level: medium

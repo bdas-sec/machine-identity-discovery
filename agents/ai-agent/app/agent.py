@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vulnerable AI Agent - NHI Security Testbed
-NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+NHI Security Testbed
 
 WARNING: This agent contains INTENTIONAL security vulnerabilities
 for demonstration purposes. DO NOT use in production.

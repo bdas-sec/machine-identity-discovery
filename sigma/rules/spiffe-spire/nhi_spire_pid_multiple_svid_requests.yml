@@ -1,0 +1,43 @@
+title: "NHI-SPIRE: Multiple SVID Requests from Same PID"
+id: f8a9b0c1-d2e3-4f5a-6b7c-8d9e0f1a2b3c
+related:
+    - id: "101005"
+      type: derived
+name: nhi_spire_pid_multiple_svid_requests
+type: correlation
+status: test
+description: |
+    Correlates 10 or more SVID fetch events from the same PID within 2 minutes.
+    A legitimate workload typically fetches its SVID once at startup and then
+    on rotation intervals (hours). Rapid repeated requests from the same PID
+    indicate SVID harvesting, identity enumeration, or an attacker fuzzing
+    the Workload API.
+
+    Threshold set to 10 (raised from original 5) to reduce false positives
+    from workloads with short TTLs or health-check probes.
+
+    Derived from Wazuh rule 101005 (frequency=5, timeframe=120).
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://attack.mitre.org/techniques/T1078/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.initial_access
+    - attack.t1078
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_spire_svid_fetch_event
+group-by:
+    - pid
+timespan: 2m
+condition:
+    gte: 10
+level: high
+falsepositives:
+    - Workloads with very short SVID TTLs (under 2 minutes) causing frequent rotations
+    - SPIRE health monitoring tools polling SVID status

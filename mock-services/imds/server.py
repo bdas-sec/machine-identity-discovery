@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock Instance Metadata Service (IMDS)
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 
 Simulates AWS EC2 Instance Metadata Service for demonstrating
 credential theft attacks (SSRF to IMDS).
@@ -51,7 +51,7 @@ def log_access(endpoint: str, source_ip: str):
 def root():
     """IMDS root"""
     log_access("/", request.remote_addr)
-    return "Mock IMDS Service - NDC Security 2026 Demo\n"
+    return "Mock IMDS Service - NHI Security Testbed\n"
 
 
 @app.route("/latest/")
@@ -365,7 +365,7 @@ def health():
 if __name__ == "__main__":
     print("=" * 60)
     print("Mock Instance Metadata Service (IMDS)")
-    print("NDC Security 2026 - NHI Security Testbed")
+    print("NHI Security Testbed")
     print("=" * 60)
     print("")
     print("This service simulates AWS/Azure IMDS for demonstrating")

@@ -1,0 +1,34 @@
+title: "NHI-SPIRE: Burst of SVID Requests - Credential Harvesting"
+id: d4f5a6b7-c8d9-4e0f-1a2b-3c4d5e6f7a8b
+related:
+    - id: "101003"
+      type: derived
+name: nhi_spire_burst_svid_requests
+type: correlation
+status: test
+description: |
+    Detects a rapid burst of access to the SPIRE Workload API socket within
+    60 seconds, indicating an attacker systematically harvesting all available
+    SVIDs. Groups by ComputerName since SPIRE Workload API uses Unix domain
+    sockets (no SourceIP). For PID-level burst detection, see the
+    spire_identity_monitor.py script-based rule (101008).
+    Derived from Wazuh rule 101003 (frequency=10, timeframe=60).
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.exfiltration
+    - attack.t1041
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_spire_workload_api_socket_access
+group-by:
+    - ComputerName
+timespan: 1m
+condition:
+    gte: 10
+level: critical

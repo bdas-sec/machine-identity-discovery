@@ -1,6 +1,6 @@
 <!--
   Non-Human Identity (NHI) Security Detection Rules
-  NDC Security 2026 - "Who Gave the Agent Admin Rights?!"
+  NHI Security Testbed
 
   Rule ID Ranges:
     100600-100649: Credential Discovery & Exposure
@@ -11,6 +11,7 @@
     100850-100899: AI Agent Anomalies
     100900-100949: Secret Pattern Detection
     100950-100999: Correlation Rules
+    101000-101099: SPIFFE/SPIRE Workload Identity
 
   Copyright (C) 2026, Bodhisattva Das
 -->
@@ -123,11 +124,11 @@
     <group>nhi_npm_cred,</group>
   </rule>
 
-  <!-- Multiple credential file accesses -->
+  <!-- Multiple credential file accesses (same_source_ip: more reliable than srcuser for FIM events) -->
   <rule id="100609" level="14" frequency="5" timeframe="60">
     <if_matched_group>nhi_cloud_cred,nhi_ssh_key,nhi_git_cred,nhi_docker_cred</if_matched_group>
-    <same_field>srcuser</same_field>
-    <description>NHI: Multiple credential file accesses by same user - credential harvesting</description>
+    <same_source_ip />
+    <description>NHI: Multiple credential file accesses from same source - credential harvesting</description>
     <mitre>
       <id>T1552</id>
       <id>T1083</id>
@@ -143,9 +144,9 @@
 <!-- ================================================= -->
 <group name="nhi,cloud_metadata,">
 
-  <!-- AWS IMDS access -->
+  <!-- AWS IMDS access (80700=auditd, 530/531=full_command polling output) -->
   <rule id="100650" level="8">
-    <if_sid>80700</if_sid>
+    <if_sid>80700,530,531</if_sid>
     <match>169.254.169.254</match>
     <description>NHI: AWS Instance Metadata Service (IMDS) access detected</description>
     <mitre>
@@ -177,9 +178,9 @@
     <group>nhi_imds_token,</group>
   </rule>
 
-  <!-- GCP Metadata access -->
+  <!-- GCP Metadata access (80700=auditd, 530/531=full_command polling output) -->
   <rule id="100653" level="8">
-    <if_sid>80700</if_sid>
+    <if_sid>80700,530,531</if_sid>
     <match>metadata.google.internal</match>
     <description>NHI: GCP Metadata Service access detected</description>
     <mitre>
@@ -201,9 +202,9 @@
     <group>nhi_gcp_token,</group>
   </rule>
 
-  <!-- Azure IMDS access -->
+  <!-- Azure IMDS access (80700=auditd, 530/531=full_command polling output) -->
   <rule id="100655" level="8">
-    <if_sid>80700</if_sid>
+    <if_sid>80700,530,531</if_sid>
     <match>169.254.169.254</match>
     <match>metadata/identity</match>
     <description>NHI: Azure IMDS managed identity access detected</description>
@@ -236,11 +237,11 @@
     <group>nhi_imds_burst,</group>
   </rule>
 
-  <!-- IMDS from unusual process -->
+  <!-- IMDS from unusual process (match comm= from auditd or process name in polling output) -->
   <rule id="100658" level="12">
     <if_sid>100650,100653,100655</if_sid>
-    <field name="process_name" type="pcre2">curl|wget|python|ruby|perl|nc|ncat</field>
-    <description>NHI: IMDS access from scripting tool - $(process_name)</description>
+    <match type="pcre2">comm="(curl|wget|python3?|ruby|perl|nc|ncat)"|/(curl|wget|python3?|ruby|perl|nc|ncat)\b</match>
+    <description>NHI: IMDS access from scripting tool</description>
     <mitre>
       <id>T1552.005</id>
     </mitre>
@@ -345,7 +346,7 @@
   <!-- Container escape: nsenter with namespace flags -->
   <rule id="100757" level="14">
     <if_sid>80792</if_sid>
-    <match type="pcre2">nsenter\s+.*--(target|mount|pid|net|uts|ipc)\b</match>
+    <match type="pcre2">nsenter\s+.*(--(target|mount|pid|net|uts|ipc)\b|-[tmpnui]\s)</match>
     <description>NHI: Container escape via nsenter namespace entry</description>
     <mitre>
       <id>T1611</id>
@@ -356,7 +357,7 @@
   <!-- Container escape: chroot to host filesystem -->
   <rule id="100758" level="14">
     <if_sid>80792</if_sid>
-    <match type="pcre2">chroot\s+(/mnt/host|/host|/rootfs|/mnt/rootfs|/hostroot)</match>
+    <match type="pcre2">chroot\s+(/mnt/host|/host|/rootfs|/mnt/rootfs|/hostroot|/proc/1/root)</match>
     <description>NHI: Container escape via chroot to host filesystem</description>
     <mitre>
       <id>T1611</id>
@@ -402,7 +403,7 @@
   <!-- Container escape: CAP_SYS_ADMIN abuse - mounting filesystems -->
   <rule id="100762" level="12">
     <if_sid>80792</if_sid>
-    <match type="pcre2">mount\s+(-t\s+)?(proc|sysfs|cgroup|tmpfs)\s|mount\s+/dev/(sd|vd|xvd|nvme)</match>
+    <match type="pcre2">mount\s+(-t\s+)?(proc|sysfs|cgroup|tmpfs)\s|mount\s+/dev/(sd|vd|xvd|nvme)|mount\s+.*(-o\s+)?bind\b|mount\s+--bind</match>
     <description>NHI: CAP_SYS_ADMIN abuse - mounting filesystem from container</description>
     <mitre>
       <id>T1611</id>
@@ -519,12 +520,12 @@
 <!-- ================================================= -->
 <group name="nhi,ai_agent,">
 
-  <!-- AI agent framework spawning shell subprocess -->
+  <!-- AI agent framework spawning shell subprocess (match auditd comm= and execve args) -->
   <rule id="100850" level="10">
     <if_sid>80792</if_sid>
-    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
-    <field name="command" type="pcre2">(/bin/)?(bash|sh|zsh|dash|cmd|powershell|pwsh)\s</field>
-    <description>NHI: AI agent framework spawning shell subprocess - $(process_name) executing $(command)</description>
+    <match type="pcre2">comm="(python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama)"</match>
+    <match type="pcre2">a\d+="?(/bin/)?(bash|sh|zsh|dash|cmd|powershell|pwsh)"?\s</match>
+    <description>NHI: AI agent framework spawning shell subprocess</description>
     <mitre>
       <id>T1059</id>
       <id>T1059.004</id>
@@ -544,12 +545,13 @@
     <group>nhi_ai_shell_network,</group>
   </rule>
 
-  <!-- AI process accessing credential files with expanded patterns -->
+  <!-- AI process accessing credential files (uses auditd file watches, not FIM,
+       since FIM cannot report which process accessed a file) -->
   <rule id="100851" level="12">
-    <if_sid>550,554</if_sid>
-    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
-    <field name="file" type="pcre2">\.env$|\.env\.|credentials$|\.aws/|\.kube/config|\.vault-token|\.npmrc|\.docker/config\.json|\.git-credentials|id_rsa|id_ed25519|\.pem$|\.key$|\.p12$|\.pfx$|service[-_]?account.*\.json|\.mcp/|tool[-_]?config</field>
-    <description>NHI: AI agent accessing credential/config file - $(file)</description>
+    <if_sid>80700,80790</if_sid>
+    <match type="pcre2">comm="(python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama)"</match>
+    <match type="pcre2">name="[^"]*(\.env|credentials|\.aws/|\.kube/config|\.vault-token|\.npmrc|\.docker/config\.json|\.git-credentials|id_rsa|id_ed25519|\.pem|\.key|\.p12|\.pfx|service[-_]?account.*\.json|\.mcp/|tool[-_]?config)"</match>
+    <description>NHI: AI agent accessing credential/config file</description>
     <mitre>
       <id>T1552.001</id>
       <id>T1552.004</id>
@@ -569,9 +571,21 @@
     <group>nhi_ai_prompt_injection,</group>
   </rule>
 
+  <!-- Prompt injection detection via custom AI agent decoder (Flask/custom log formats) -->
+  <rule id="100860" level="10">
+    <decoded_as>nhi-ai-agent</decoded_as>
+    <match type="pcre2">(?i)ignore\s+(all\s+)?previous|disregard\s+(all\s+)?instructions|system\s*prompt|jailbreak|you\s+are\s+now|act\s+as\s+(a\s+)?root|reveal\s+(your\s+)?(system|secret|hidden)|override\s+(safety|security|filter)|bypass\s+(filter|restriction|guard)|execute\s+(this\s+)?command</match>
+    <description>NHI: Prompt injection attempt detected via AI agent logs</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1190</id>
+    </mitre>
+    <group>nhi_ai_prompt_injection,</group>
+  </rule>
+
   <!-- Elevated prompt injection - targeting credential extraction -->
   <rule id="100856" level="14">
-    <if_sid>100852</if_sid>
+    <if_sid>100852,100860</if_sid>
     <match type="pcre2">(?i)(fetch|read|cat|access|show|print|display).{0,30}(credential|password|secret|token|key|\.env|/etc/passwd|/etc/shadow|aws.*key|api.*key)</match>
     <description>NHI: Prompt injection targeting credential extraction - CRITICAL</description>
     <mitre>
@@ -581,11 +595,11 @@
     <group>nhi_ai_prompt_injection_cred,</group>
   </rule>
 
-  <!-- AI agent SSRF via cloud metadata with expanded endpoint coverage -->
+  <!-- AI agent SSRF via cloud metadata (match comm= from auditd or process name in log) -->
   <rule id="100853" level="12">
     <if_sid>100650,100653,100655</if_sid>
-    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama|uvicorn|gunicorn|flask|fastapi</field>
-    <description>NHI: AI agent SSRF - cloud metadata access from $(process_name)</description>
+    <match type="pcre2">comm="(python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama|uvicorn|gunicorn|flask|fastapi)"|/(python3?|node|uvicorn|gunicorn)\b</match>
+    <description>NHI: AI agent SSRF - cloud metadata access</description>
     <mitre>
       <id>T1552.005</id>
       <id>T1190</id>
@@ -605,11 +619,11 @@
     <group>nhi_ai_ssrf_cred,</group>
   </rule>
 
-  <!-- Rapid credential file scanning by AI agent (tuned threshold) -->
+  <!-- Rapid credential file scanning by AI agent (same_source_ip: more reliable than srcuser) -->
   <rule id="100854" level="12" frequency="20" timeframe="60">
     <if_matched_group>nhi_ai_cred_access</if_matched_group>
-    <same_field>srcuser</same_field>
-    <description>NHI: AI agent rapid credential scanning - $(srcuser) accessed 20+ credential files in 60s</description>
+    <same_source_ip />
+    <description>NHI: AI agent rapid credential scanning - 20+ credential files in 60s from same source</description>
     <mitre>
       <id>T1083</id>
       <id>T1552</id>
@@ -617,11 +631,11 @@
     <group>nhi_ai_fs_scan,</group>
   </rule>
 
-  <!-- AI agent MCP tool abuse - unauthorized resource access -->
+  <!-- AI agent MCP tool abuse - unauthorized resource access (match comm= from auditd) -->
   <rule id="100858" level="10">
     <if_sid>80792</if_sid>
     <match type="pcre2">mcp[-_]?(server|tool|client)|tool[-_]?use|function[-_]?call</match>
-    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent</field>
+    <match type="pcre2">comm="(python3?|node|langchain|autogen|crewai|agent)"</match>
     <description>NHI: AI agent MCP/tool-use activity detected</description>
     <mitre>
       <id>T1059</id>
@@ -629,10 +643,10 @@
     <group>nhi_ai_tool_use,</group>
   </rule>
 
-  <!-- AI agent accessing external URLs (potential data exfiltration) -->
+  <!-- AI agent accessing external URLs (match comm= from auditd or process in log) -->
   <rule id="100859" level="10">
     <if_sid>80700</if_sid>
-    <field name="process_name" type="pcre2">python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama</field>
+    <match type="pcre2">comm="(python3?|node|langchain|autogen|crewai|agent|llama|vllm|ollama)"|/(python3?|node)\b</match>
     <match type="pcre2">https?://(?!localhost|127\.0\.0\.1|::1|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)</match>
     <description>NHI: AI agent making external network request</description>
     <mitre>
@@ -653,8 +667,8 @@
   <!-- AWS Access Key pattern -->
   <rule id="100900" level="12">
     <if_sid>550,530,531</if_sid>
-    <match type="pcre2">AKIA[0-9A-Z]{16}</match>
-    <description>NHI: AWS Access Key ID pattern detected</description>
+    <match type="pcre2">(AKIA|ASIA)[0-9A-Z]{16}</match>
+    <description>NHI: AWS Access Key ID pattern detected (includes STS temporary credentials)</description>
     <mitre>
       <id>T1552.001</id>
     </mitre>
@@ -664,7 +678,7 @@
   <!-- GitHub token pattern -->
   <rule id="100901" level="12">
     <if_sid>550,530,531</if_sid>
-    <match type="pcre2">ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}</match>
+    <match type="pcre2">ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{22,}|ghu_[a-zA-Z0-9]{36}</match>
     <description>NHI: GitHub token pattern detected</description>
     <mitre>
       <id>T1552.001</id>
@@ -675,8 +689,8 @@
   <!-- OpenAI API key pattern -->
   <rule id="100902" level="12">
     <if_sid>550,530,531</if_sid>
-    <match type="pcre2">sk-[a-zA-Z0-9]{48}</match>
-    <description>NHI: OpenAI API key pattern detected</description>
+    <match type="pcre2">sk-(?:proj-)?[a-zA-Z0-9]{20,}</match>
+    <description>NHI: OpenAI API key pattern detected (includes project-scoped keys)</description>
     <mitre>
       <id>T1552.001</id>
     </mitre>
@@ -893,6 +907,393 @@
       <id>T1552.007</id>
     </mitre>
     <group>nhi_k8s_escape_chain,</group>
+  </rule>
+
+  <!-- ================================================= -->
+  <!-- REVERSE CORRELATION RULES (100960-100969)          -->
+  <!-- Mirror rules for bidirectional temporal correlation -->
+  <!-- ================================================= -->
+
+  <!-- Reverse of 100950: IMDS access followed by credential harvesting -->
+  <rule id="100960" level="14" timeframe="120">
+    <if_group>nhi_imds</if_group>
+    <if_matched_group>nhi_credential_harvest</if_matched_group>
+    <description>NHI: IMDS access combined with credential harvesting - multi-vector attack</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_multi_attack,</group>
+  </rule>
+
+  <!-- Reverse of 100951: secrets enumeration followed by K8s token theft -->
+  <rule id="100961" level="14" timeframe="180">
+    <if_group>nhi_k8s_secret_enum</if_group>
+    <if_matched_group>nhi_k8s_sa_token</if_matched_group>
+    <description>NHI: K8s secrets enumeration with token theft - container attack</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1610</id>
+    </mitre>
+    <group>nhi_k8s_attack_chain,</group>
+  </rule>
+
+  <!-- Reverse of 100952: git credential access followed by CI/CD token exposure -->
+  <rule id="100962" level="14" timeframe="300">
+    <if_group>nhi_git_cred</if_group>
+    <if_matched_group>nhi_cicd_github,nhi_cicd_gitlab</if_matched_group>
+    <description>NHI: Git credential + CI/CD token access - supply chain attack</description>
+    <mitre>
+      <id>T1195.002</id>
+    </mitre>
+    <group>nhi_supply_chain,</group>
+  </rule>
+
+  <!-- Reverse of 100953: AI credential access followed by SSRF -->
+  <rule id="100963" level="15" timeframe="120">
+    <if_group>nhi_ai_cred_access</if_group>
+    <if_matched_group>nhi_ai_ssrf</if_matched_group>
+    <description>NHI: AI agent credential access with SSRF - agent compromise</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_compromise,</group>
+  </rule>
+
+  <!-- Reverse of 100955: SA token theft followed by container escape -->
+  <rule id="100964" level="15" timeframe="300">
+    <if_group>nhi_k8s_sa_token</if_group>
+    <if_matched_group>nhi_k8s_container_escape</if_matched_group>
+    <description>NHI: SA token theft combined with container escape - lateral movement</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_k8s_escape_chain,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 8: SPIFFE/SPIRE WORKLOAD IDENTITY           -->
+<!-- Rule IDs: 101000-101099                           -->
+<!-- Attack surface based on Eviatar Gerzi's (CyberArk)-->
+<!-- "The Machine with Many Faces" research (2026)     -->
+<!-- ================================================= -->
+<group name="nhi,spiffe_spire,">
+
+  <!-- ===== SPIRE Socket & SVID Access (101000-101019) ===== -->
+
+  <!-- SPIRE Workload API socket access
+       Detection via: FIM (550/554) for file creation/deletion of socket,
+       auditd (80700-80799) for socket connect() syscalls, or SPIRE Agent
+       logs referencing socket paths.
+       NOTE: FIM alone won't catch socket connections — add auditd rule:
+         -w /tmp/spire-agent/public/api.sock -p rwa -k spire_socket
+       Or use syscheck <directories> on the socket parent directory. -->
+  <rule id="101000" level="8">
+    <if_sid>550,554,80700,80790</if_sid>
+    <match type="pcre2">spire-agent.*api\.sock|SPIFFE_ENDPOINT_SOCKET|/run/spire/sockets/agent\.sock</match>
+    <description>NHI-SPIRE: Workload API socket access detected</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1078.001</id>
+    </mitre>
+    <group>nhi_spire_socket,</group>
+  </rule>
+
+  <!-- SPIRE socket access from scripting/exploitation tool -->
+  <rule id="101001" level="12">
+    <if_sid>101000</if_sid>
+    <field name="process_name" type="pcre2">curl|wget|python3?|ruby|perl|nc|ncat|grpcurl|go</field>
+    <description>NHI-SPIRE: Workload API access from scripting tool - $(process_name)</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_spire_socket_suspicious,</group>
+  </rule>
+
+  <!-- X.509 SVID private key extraction -->
+  <rule id="101002" level="14">
+    <if_sid>550,554</if_sid>
+    <match type="pcre2">svid\.key|svid\.pem|/opt/spire/data/agent/.*\.(key|pem)|FetchX509SVID.*private</match>
+    <description>NHI-SPIRE: X.509 SVID private key extraction attempt</description>
+    <mitre>
+      <id>T1552.004</id>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi_spire_svid_theft,</group>
+  </rule>
+
+  <!-- Burst of SVID requests — credential harvesting
+       FIX: Removed <same_source_ip/> (meaningless for local Unix domain socket access).
+       Lowered from level 14 to 12 — precise detection is now in script-based rule 101008. -->
+  <rule id="101003" level="12" frequency="10" timeframe="60">
+    <if_matched_group>nhi_spire_socket</if_matched_group>
+    <description>NHI-SPIRE: Burst of SVID requests - credential harvesting likely (see 101008 for confirmed detection)</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1041</id>
+    </mitre>
+    <group>nhi_spire_svid_harvest,</group>
+  </rule>
+
+  <!-- SVID fetch/issuance event from SPIRE Agent logs (base for PID correlation)
+       NOTE: Requires SPIRE Agent log_level=DEBUG to capture PID on SVID fetch.
+       Actual SPIRE msg values: "Fetched JWT SVID", "Fetched X.509 SVID",
+       "No identity issued", "SVID updated". Also matches audit log method names.
+       FIX: Lowered to level 3 correlation base with no_log — this fires frequently
+       under normal operation and is only useful as a trigger for rules 101005/101006. -->
+  <rule id="101004" level="3">
+    <decoded_as>nhi-spire-agent</decoded_as>
+    <match type="pcre2">Fetched\s+(JWT|X\.509)\s+SVID|SVID\s+(updated|rotated)|No identity issued|FetchX509SVID|FetchJWTSVID|FetchX509BundlesStream</match>
+    <description>NHI-SPIRE: SVID fetch/issuance event - PID $(id) identity $(url)</description>
+    <options>no_log</options>
+    <group>nhi_spire_svid_fetch,</group>
+  </rule>
+
+  <!-- Multiple SVID requests from same PID — potential harvesting or abuse
+       FIX: Increased frequency threshold from 5 to 10 to reduce false positives.
+       For precise detection see script-based rule 101008. -->
+  <rule id="101005" level="12" frequency="10" timeframe="120">
+    <if_matched_group>nhi_spire_svid_fetch</if_matched_group>
+    <same_field>id</same_field>
+    <description>NHI-SPIRE: Multiple SVID requests from same PID $(id) - potential harvesting (see 101008 for confirmed detection)</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_spire_pid_svid_burst,</group>
+  </rule>
+
+  <!-- Same PID obtained multiple SVIDs — selector spoofing / overlapping entries
+       FIX: Lowered level 14→10, increased frequency 2→3, reduced timeframe 300→120.
+       This is a TRIAGE rule — Wazuh cannot check distinct SPIFFE IDs.
+       For confirmed multi-identity detection see script-based rule 101007. -->
+  <rule id="101006" level="10" frequency="3" timeframe="120">
+    <if_matched_group>nhi_spire_svid_fetch</if_matched_group>
+    <same_field>id</same_field>
+    <description>NHI-SPIRE: TRIAGE - Same PID $(id) multiple SVID events - verify SPIFFE IDs differ (see 101007 for confirmed detection)</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1134</id>
+    </mitre>
+    <group>nhi_spire_multi_identity,</group>
+  </rule>
+
+  <!-- ===== Script-Based Detection (101007-101009) ===== -->
+  <!-- These rules match output from spire_identity_monitor.py which
+       implements detection logic Wazuh rules cannot express natively:
+       distinct SPIFFE ID counting per PID and burst detection. -->
+
+  <!-- CONFIRMED: Multiple distinct SPIFFE identities for same PID -->
+  <rule id="101007" level="14">
+    <decoded_as>nhi-spire-detect</decoded_as>
+    <match>type=multi_identity</match>
+    <description>NHI-SPIRE: PID $(id) has $(status) distinct SPIFFE identities - CONFIRMED selector spoofing [$(url)]</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1134</id>
+    </mitre>
+    <group>nhi_spire_confirmed_spoofing,</group>
+  </rule>
+
+  <!-- CONFIRMED: SVID request burst from single PID -->
+  <rule id="101008" level="12">
+    <decoded_as>nhi-spire-detect</decoded_as>
+    <match>type=svid_burst</match>
+    <description>NHI-SPIRE: PID $(id) made $(extra_data) SVID requests in 5 min - credential harvesting</description>
+    <mitre>
+      <id>T1552.007</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_spire_confirmed_burst,</group>
+  </rule>
+
+  <!-- ===== Registration Entry & Selector Anomalies (101020-101039) ===== -->
+
+  <!-- Registration entry created
+       Matches: SPIRE Server standard logs AND audit logs (audit_log_enabled=true)
+       Audit format: {"type":"audit","method":"CreateEntry","service":"entry.v1.Entry",...} -->
+  <rule id="101020" level="12">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">spire-server\s+entry\s+create|CreateEntry|BatchCreateEntry|"method":"entry\.v1\.Entry/BatchCreateEntry"|"method":"CreateEntry".*"service":"entry</match>
+    <description>NHI-SPIRE: Registration entry created - verify authorization</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1136</id>
+    </mitre>
+    <group>nhi_spire_entry_create,</group>
+  </rule>
+
+  <!-- Registration with weak/spoofable selectors -->
+  <rule id="101021" level="12">
+    <if_sid>101020</if_sid>
+    <match type="pcre2">k8s:node-name|unix:uid:0|docker:label:.*=|unix:gid:0|-selector\s+"?unix:uid:0</match>
+    <description>NHI-SPIRE: Registration with weak/spoofable selectors - impersonation risk</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_spire_weak_selector,</group>
+  </rule>
+
+  <!-- Registration entry modified or deleted -->
+  <rule id="101022" level="12">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">spire-server\s+entry\s+(update|delete)|UpdateEntry|DeleteEntry|BatchDeleteEntry|BatchUpdateEntry</match>
+    <description>NHI-SPIRE: Registration entry modified or deleted</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1531</id>
+    </mitre>
+    <group>nhi_spire_entry_modify,</group>
+  </rule>
+
+  <!-- ===== Agent & Trust Boundary Attacks (101040-101059) ===== -->
+
+  <!-- Agent re-attestation event (server-side audit log) -->
+  <rule id="101040" level="10">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">AttestAgent|"method":"agent\.v1\.Agent/AttestAgent"</match>
+    <description>NHI-SPIRE: Agent attestation/re-attestation event detected (server audit)</description>
+    <mitre>
+      <id>T1078</id>
+      <id>T1550</id>
+    </mitre>
+    <group>nhi_spire_agent_attest,</group>
+  </rule>
+
+  <!-- Agent attestation success (agent-side log) — validated against real SPIRE 1.11.2 logs:
+       {"msg":"Node attestation was successful","subsystem_name":"attestor",...} -->
+  <rule id="101044" level="10">
+    <decoded_as>nhi-spire-agent</decoded_as>
+    <match type="pcre2">attestation.*success|re-?attest</match>
+    <description>NHI-SPIRE: Agent attestation/re-attestation event detected (agent log)</description>
+    <mitre>
+      <id>T1078</id>
+      <id>T1550</id>
+    </mitre>
+    <group>nhi_spire_agent_attest,</group>
+  </rule>
+
+  <!-- Trust bundle modified -->
+  <rule id="101041" level="14">
+    <if_sid>550,554</if_sid>
+    <match type="pcre2">SetFederatedBundle|BatchSetFederatedBundle|AppendBundle|spire.*trust.*bundle.*modif</match>
+    <description>NHI-SPIRE: Trust bundle modified - potential trust boundary attack</description>
+    <mitre>
+      <id>T1553.004</id>
+      <id>T1556</id>
+    </mitre>
+    <group>nhi_spire_trust_bundle,</group>
+  </rule>
+
+  <!-- SPIRE configuration file modified -->
+  <rule id="101042" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">/opt/spire/conf/|/etc/spire/|spire[-_](server|agent)\.conf$|spire[-_](server|agent)\.hcl$</field>
+    <description>NHI-SPIRE: Configuration file modified - $(file)</description>
+    <mitre>
+      <id>T1562.001</id>
+      <id>T1556</id>
+    </mitre>
+    <group>nhi_spire_config_tamper,</group>
+  </rule>
+
+  <!-- skip_kubelet_verification enabled -->
+  <rule id="101043" level="12">
+    <if_sid>550,554,101042</if_sid>
+    <match type="pcre2">skip_kubelet_verification\s*[=:]\s*true|"skip_kubelet_verification"\s*:\s*true</match>
+    <description>NHI-SPIRE: Kubelet verification skip detected - weakened attestation</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>nhi_spire_weak_config,</group>
+  </rule>
+
+  <!-- ===== JWT-SVID & Delegated Identity Abuse (101060-101079) ===== -->
+
+  <!-- JWT-SVID token pattern in logs -->
+  <rule id="101060" level="12">
+    <if_sid>100907</if_sid>
+    <match type="pcre2">spiffe://|SPIFFE|svid|x-spiffe</match>
+    <description>NHI-SPIRE: JWT-SVID token detected in logs - replay risk</description>
+    <mitre>
+      <id>T1552.001</id>
+      <id>T1528</id>
+    </mitre>
+    <group>nhi_spire_jwt_leak,</group>
+  </rule>
+
+  <!-- Delegated Identity API — FIM/auditd-based detection (primary)
+       FIX: Changed from decoded_as to FIM rule IDs for high-confidence
+       detection of admin socket access. This fires on actual file access
+       events rather than relying on pattern matching in agent logs. -->
+  <rule id="101061" level="14">
+    <if_sid>550,554,80700,80790</if_sid>
+    <match type="pcre2">spire.*admin.*sock|spire.*private.*api\.sock|/opt/spire/.*admin|delegated.*identity.*sock</match>
+    <description>NHI-SPIRE: Delegated Identity API admin socket access - workload impersonation capability</description>
+    <mitre>
+      <id>T1134</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_spire_delegated_api,</group>
+  </rule>
+
+  <!-- Delegated Identity API — agent log-based detection (secondary) -->
+  <rule id="101062" level="12">
+    <decoded_as>nhi-spire-agent</decoded_as>
+    <match type="pcre2">DelegatedIdentity|FetchX509SVIDs|SubscribeToX509SVIDs|SubscribeToX509Bundles</match>
+    <description>NHI-SPIRE: Delegated Identity API method call detected in agent logs</description>
+    <mitre>
+      <id>T1134</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_spire_delegated_api,</group>
+  </rule>
+
+  <!-- ===== SPIFFE/SPIRE Correlation Rules (101080-101099) ===== -->
+
+  <!-- Container escape + SVID theft chain -->
+  <rule id="101080" level="15" timeframe="300">
+    <if_group>nhi_k8s_container_escape</if_group>
+    <if_matched_group>nhi_spire_socket</if_matched_group>
+    <description>NHI-SPIRE: Container escape chain leading to SVID theft - ACTIVE ATTACK</description>
+    <mitre>
+      <id>T1611</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_spire_escape_chain,nhi_correlation,</group>
+  </rule>
+
+  <!-- Registration tampering + SVID acquisition chain
+       FIX: Reduced timeframe 600→300s, lowered level 15→14. -->
+  <rule id="101081" level="14" timeframe="300">
+    <if_group>nhi_spire_entry_create,nhi_spire_entry_modify</if_group>
+    <if_matched_group>nhi_spire_socket</if_matched_group>
+    <description>NHI-SPIRE: Registration tampering + SVID acquisition - identity impersonation chain</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1552.007</id>
+    </mitre>
+    <group>nhi_spire_impersonation_chain,nhi_correlation,</group>
+  </rule>
+
+  <!-- Registration entry manipulation + PID identity spoofing chain
+       FIX: Reduced timeframe 600→300s, lowered level 15→12.
+       This is a TRIAGE rule — for confirmed detection see 101007. -->
+  <rule id="101082" level="12" timeframe="300">
+    <if_group>nhi_spire_entry_create,nhi_spire_entry_modify</if_group>
+    <if_matched_group>nhi_spire_multi_identity</if_matched_group>
+    <description>NHI-SPIRE: TRIAGE - Registration manipulation + PID multi-SVID events (see 101007 for confirmed selector spoofing)</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1134</id>
+    </mitre>
+    <group>nhi_spire_selector_spoofing_chain,nhi_correlation,</group>
   </rule>
 
 </group>

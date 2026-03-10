@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrypoint script for Vulnerable Application Agent
-# NHI Security Testbed - NDC Security 2026
+# NHI Security Testbed
 
 set -e
 

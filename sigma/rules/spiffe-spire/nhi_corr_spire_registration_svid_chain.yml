@@ -1,0 +1,38 @@
+title: "NHI-SPIRE: Registration Tampering + SVID Acquisition Chain"
+id: c5e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f9a
+related:
+    - id: "101081"
+      type: derived
+name: nhi_corr_spire_registration_svid_chain
+type: correlation
+status: test
+description: |
+    Detects registration entry manipulation (create/modify with potentially
+    weak selectors) followed by SVID fetch activity within 10 minutes. This
+    indicates an attacker first creating a rogue registration entry mapping
+    a target SPIFFE ID to their workload's selectors, then obtaining SVIDs
+    for the spoofed identity. This is the full selector spoofing chain.
+    Derived from Wazuh rule 101081 (timeframe=600s).
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1552/007/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_spire_registration_entry_created
+    - nhi_spire_weak_selectors
+    - nhi_spire_entry_modified_deleted
+    - nhi_spire_workload_api_socket_access
+group-by:
+    - SourceIP
+timespan: 10m
+condition:
+    gte: 2
+level: critical

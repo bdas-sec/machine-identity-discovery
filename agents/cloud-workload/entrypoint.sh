@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrypoint script for Cloud Workload Agent
-# NHI Security Testbed - NDC Security 2026
+# NHI Security Testbed
 
 set -e
 
@@ -68,6 +68,8 @@ if command -v auditd &>/dev/null; then
     auditctl -w /root/.aws -p rwxa -k nhi_aws_creds 2>/dev/null || true
     auditctl -w /root/.env -p rwxa -k nhi_env_file 2>/dev/null || true
     auditctl -w /proc -p r -k nhi_proc_read 2>/dev/null || true
+    # Monitor outbound network connections (required for IMDS detection via auditd)
+    auditctl -a always,exit -F arch=b64 -S connect -k nhi_network_connect 2>/dev/null || true
 fi
 
 # Start Wazuh agent

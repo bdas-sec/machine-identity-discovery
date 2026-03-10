@@ -1,0 +1,39 @@
+title: "NHI-SPIRE: JWT-SVID Token Detected in Logs"
+id: f2b3c4d5-e6f7-4a8b-9c0d-1e2f3a4b5c6d
+related:
+    - id: "101060"
+      type: derived
+status: test
+description: |
+    Detects JWT-SVID tokens appearing in application logs or process output.
+    JWT-SVIDs are bearer tokens - if leaked in logs, they can be replayed to
+    impersonate workloads. Even though SVIDs are short-lived (typically 5 min),
+    the replay window is sufficient for credential theft and lateral movement.
+    Derived from Wazuh rule 101060 (child of 100907 JWT pattern).
+references:
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://attack.mitre.org/techniques/T1528/
+    - https://github.com/spiffe/spiffe/blob/main/standards/JWT-SVID.md
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.001
+    - attack.t1528
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: linux
+detection:
+    selection_jwt:
+        message|contains: 'eyJ'
+    selection_spiffe:
+        message|contains:
+            - 'spiffe://'
+            - 'x-spiffe'
+            - 'svid'
+    condition: all of selection_*
+falsepositives:
+    - Debug logging that intentionally includes SVID details
+    - SPIRE audit logging that records SVID metadata (not key material)
+level: high

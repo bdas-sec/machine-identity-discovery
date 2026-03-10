@@ -1,0 +1,47 @@
+title: "NHI-SPIRE: Same PID Obtained Multiple Distinct SVID Identities"
+id: a9b0c1d2-e3f4-4a5b-6c7d-8e9f0a1b2c3d
+related:
+    - id: "101006"
+      type: derived
+name: nhi_spire_pid_multiple_identities
+type: correlation
+status: test
+description: |
+    Correlates multiple SVID fetch events from the same PID within 5 minutes.
+    A legitimate workload should have exactly one SPIFFE identity, fetched once
+    at startup and rotated on long intervals (hours). Three or more fetch events
+    from the same PID in 5 minutes indicates SVID harvesting or selector spoofing
+    — the core attack pattern from Eviatar Gerzi's "Spooffe" research where an
+    attacker creates a rogue registration entry whose selectors overlap a
+    legitimate workload, causing it to receive SVIDs for multiple identities.
+
+    NOTE: This is a TRIAGE rule. Sigma correlation cannot express
+    count(distinct spiffe_id), so this fires on fetch VOLUME per PID.
+    For confirmed distinct-identity detection, see the script-based rule
+    101007 (spire_identity_monitor.py).
+
+    Derived from Wazuh rule 101006 (frequency=2, timeframe=300).
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1134/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.privilege_escalation
+    - attack.t1134
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_spire_svid_fetch_event
+group-by:
+    - pid
+timespan: 5m
+condition:
+    gte: 3
+level: critical
+falsepositives:
+    - Workloads legitimately registered with multiple SPIFFE IDs (rare, review registration)
+    - SPIRE Agent process itself managing SVIDs for multiple workloads (PID 1 or agent PID)

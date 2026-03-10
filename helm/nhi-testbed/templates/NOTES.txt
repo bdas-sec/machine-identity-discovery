@@ -65,7 +65,7 @@ Vulnerable App:
 1. List all scenarios:
    curl http://localhost:{{ .Values.api.port }}/scenarios
 
-2. Run all 24 scenarios:
+2. Run all 29 scenarios:
    curl -X POST http://localhost:{{ .Values.api.port }}/scenarios/run?all=true
 
 3. Run a specific level (e.g. Level 2 - Credential Theft):

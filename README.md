@@ -8,9 +8,9 @@
 [![Wazuh 4.9.2](https://img.shields.io/badge/Wazuh-4.9.2-blue.svg)]()
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-Mapped-orange.svg)]()
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)]()
-[![Scenarios](https://img.shields.io/badge/Scenarios-24-green.svg)]()
-[![Detection Rules](https://img.shields.io/badge/Detection%20Rules-48-purple.svg)]()
-[![Sigma Rules](https://img.shields.io/badge/Sigma%20Rules-60%2B-yellow.svg)]()
+[![Scenarios](https://img.shields.io/badge/Scenarios-29-green.svg)]()
+[![Detection Rules](https://img.shields.io/badge/Detection%20Rules-71-purple.svg)]()
+[![Sigma Rules](https://img.shields.io/badge/Sigma%20Rules-71-yellow.svg)]()
 
 *Demonstrate, detect, and defend against the exploitation of service accounts,
 IAM roles, CI/CD tokens, and AI agent credentials.*
@@ -56,7 +56,7 @@ The testbed deploys in under 3 minutes. All credentials are fake.
 
 ## The Kill Chain
 
-Five-stage offensive methodology mapped to MITRE ATT&CK:
+Six-stage offensive methodology mapped to MITRE ATT&CK:
 
 | Stage | Technique | MITRE ATT&CK | What Happens |
 |-------|-----------|---------------|--------------|
@@ -65,6 +65,7 @@ Five-stage offensive methodology mapped to MITRE ATT&CK:
 | 3. Privilege Escalation | Over-permissioned IAM roles | T1078.004 | Discover admin access |
 | 4. Lateral Movement | Cloud to CI/CD pivot | T1528 | Compromise the pipeline |
 | 5. Persistence | Cloud-native API abuse | T1078 | Maintain access invisibly |
+| 6. Infrastructure | OAuth abuse, WIF, etcd access | T1550.001 | Attack the identity platform |
 
 **Zero malware. Zero exploits. Just default permissions on machine identities.**
 
@@ -89,7 +90,7 @@ Five-stage offensive methodology mapped to MITRE ATT&CK:
 ```
 
 Four isolated Docker networks simulate real cloud segmentation.
-48 detection rules fire in real time as you execute attacks.
+71 detection rules fire in real time as you execute attacks.
 
 | Component | Port | Description |
 |-----------|------|-------------|
@@ -105,7 +106,7 @@ Four isolated Docker networks simulate real cloud segmentation.
 
 ## Attack Scenarios
 
-24 scenarios across 5 progressive levels:
+29 scenarios across 6 progressive levels:
 
 | Level | Focus | Scenarios | Difficulty |
 |-------|-------|-----------|------------|
@@ -114,6 +115,7 @@ Four isolated Docker networks simulate real cloud segmentation.
 | 3 | CI/CD Pipeline Attacks | S3-01 to S3-05 | Intermediate |
 | 4 | Kubernetes Security | S4-01 to S4-05 | Advanced |
 | 5 | AI Agent Exploitation | S5-01 to S5-04 | Advanced |
+| 6 | Infrastructure | S6-01 to S6-05 | Advanced |
 
 ```bash
 # Run all scenarios
@@ -133,7 +135,7 @@ python .claude/skills/nhi-assistant/scripts/run_demo.py --list
 
 ## Detection Rules
 
-48 custom Wazuh rules with full MITRE ATT&CK coverage:
+71 custom Wazuh rules with full MITRE ATT&CK coverage:
 
 | Category | Rule IDs | What It Detects |
 |----------|----------|-----------------|
@@ -148,7 +150,7 @@ python .claude/skills/nhi-assistant/scripts/run_demo.py --list
 
 ### Sigma Rules
 
-60+ rules in [Sigma YAML format](sigma/rules/) for cross-SIEM deployment:
+71 rules in [Sigma YAML format](sigma/rules/) for cross-SIEM deployment:
 
 - **Splunk** SPL via pySigma
 - **Microsoft Sentinel** KQL
@@ -187,9 +189,9 @@ The testbed auto-detects Podman or Docker. For rootless Podman, port 8443 is use
 |----------|-------------|
 | [Handbook](docs/handbook/) | Complete setup, architecture, and scenario guides |
 | [Rule Reference](docs/handbook/03-wazuh-rules-reference.md) | Detection rule documentation |
-| [Scenario Catalog](docs/handbook/04-scenario-catalog.md) | All 24 attack scenarios |
+| [Scenario Catalog](docs/handbook/04-scenario-catalog.md) | All 29 attack scenarios |
 | [Troubleshooting](docs/handbook/08-troubleshooting.md) | Common issues and fixes |
-| [Sigma Rules](sigma/rules/) | 60+ cross-SIEM detection rules |
+| [Sigma Rules](sigma/rules/) | 71 cross-SIEM detection rules |
 
 ### NHI Assistant Skill
 
@@ -199,7 +201,7 @@ A Claude Code skill is included for testbed management:
 .claude/skills/nhi-assistant/
 ├── SKILL.md                    # Skill definition
 ├── scripts/
-│   ├── run_demo.py            # Demo scenario runner (24 scenarios)
+│   ├── run_demo.py            # Demo scenario runner (29 scenarios)
 │   └── health_check.py        # Health verification with auto-fix
 └── references/                # Architecture, scenarios, troubleshooting
 ```
@@ -224,7 +226,7 @@ machine-identity-discovery/
 │   ├── decoders/               # Custom decoders
 │   └── certs/                  # TLS certificates
 ├── sigma/                      # Sigma detection rules
-│   └── rules/                  # 60+ rules across 7 categories
+│   └── rules/                  # 71 rules across 7 categories
 ├── scenarios/                  # Attack scenario definitions
 ├── scripts/                    # start.sh, stop.sh utilities
 ├── api/                        # FastAPI backend
@@ -240,17 +242,10 @@ machine-identity-discovery/
 We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Priority areas:
-- New attack scenarios (especially Levels 4-5)
+- New attack scenarios (especially Levels 4-6)
 - Detection rules for additional NHI patterns
 - Sigma rule translations for cross-SIEM portability
 - Documentation improvements
-
----
-
-## Presented At
-
-- **CyberWiseCon Europe 2026** — "From Admin by Design to Breach by Default"
-- **NDC Security 2026** — "Who Gave the Agent Admin Rights?!"
 
 ---
 

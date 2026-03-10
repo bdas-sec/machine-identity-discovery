@@ -58,8 +58,10 @@ Thumbs.db
 # Private - not for public repo
 docs/phase1/
 docs/phase2/
+docs/phase3/
+docs/ndc-security-2026-talk/
 slides/
+scripts/talk/
 .claude/agents/
 .claude/plans/
 sigma/output/
-docs/phase3/

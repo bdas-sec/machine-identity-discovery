@@ -1,0 +1,43 @@
+title: "NHI-SPIRE: Registration Entry Creation + Multi-Identity PID Chain"
+id: b0c1d2e3-f4a5-4b6c-7d8e-9f0a1b2c3d4e
+related:
+    - id: "101006"
+      type: derived
+name: nhi_corr_spire_pid_identity_spoofing
+type: correlation
+status: test
+description: |
+    Detects the full identity spoofing attack chain: a registration entry
+    is created or modified (potentially with overlapping selectors), and
+    within 10 minutes a process obtains multiple distinct SVID identities.
+    This correlates the administrative action (creating the rogue entry)
+    with the resulting identity confusion at the workload level — the
+    complete "Spooffe" attack lifecycle.
+
+    NOTE: group-by is empty because entry creation happens on the SPIRE
+    Server while multi-identity PID events occur on the SPIRE Agent —
+    these are inherently cross-host events. Grouping by SourceIP would
+    prevent the correlation from ever firing.
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1134/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.privilege_escalation
+    - attack.t1134
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_spire_registration_entry_created
+    - nhi_spire_weak_selectors
+    - nhi_spire_entry_modified_deleted
+    - nhi_spire_pid_multiple_identities
+group-by: []
+timespan: 10m
+condition:
+    gte: 2
+level: critical

@@ -1,6 +1,6 @@
 # NHI Attack Scenarios Catalog
 
-This document catalogs all attack scenarios for the NDC Security 2026 demo. Each scenario demonstrates specific NHI security threats and their detection by Wazuh.
+This document catalogs all attack scenarios for the NHI Security Testbed. Each scenario demonstrates specific NHI security threats and their detection by Wazuh.
 
 ## Scenario Naming Convention
 

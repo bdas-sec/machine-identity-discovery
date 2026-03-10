@@ -1,6 +1,6 @@
 # NHI Security Testbed - Prometheus Metrics Exporter
 # Collects detection coverage, alert, and service health metrics
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM python:3.11-slim
 

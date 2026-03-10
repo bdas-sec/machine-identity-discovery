@@ -1,0 +1,42 @@
+title: "NHI-SPIRE: SVID Fetch/Issuance Event Detected"
+id: e7f8a9b0-c1d2-4e3f-5a6b-7c8d9e0f1a2b
+related:
+    - id: "101004"
+      type: derived
+status: test
+description: |
+    Detects SVID fetch or issuance events in SPIRE Agent logs. Each event
+    captures the requesting process PID and the SPIFFE ID being issued.
+    This is a low-severity base rule used for correlation — frequent SVID
+    fetches from the same PID or multiple different SPIFFE IDs for one PID
+    are escalated by downstream rules.
+    Derived from Wazuh rule 101004.
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://spiffe.io/docs/latest/spiffe-specs/spiffe_workload_endpoint/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_method:
+        method|contains:
+            - 'FetchX509SVID'
+            - 'FetchJWTSVID'
+    selection_log:
+        msg|contains:
+            - 'Fetched X.509 SVID'
+            - 'Fetched JWT SVID'
+            - 'SVID updated'
+            - 'No identity issued'
+    condition: 1 of selection_*
+falsepositives:
+    - Normal workload SVID fetches at startup and rotation intervals
+    - SPIRE Agent internal SVID management
+level: informational

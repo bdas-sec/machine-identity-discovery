@@ -1,6 +1,6 @@
 # Mock IMDS Service
 # Simulates AWS/Azure Instance Metadata Service for credential theft demos
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM python:3.11-slim
 

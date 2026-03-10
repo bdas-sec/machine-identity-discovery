@@ -1,0 +1,40 @@
+title: "NHI-SPIRE: Agent Attestation/Re-attestation Event"
+id: b8d9e0f1-a2b3-4c4d-5e6f-7a8b9c0d1e2f
+related:
+    - id: "101040"
+      type: derived
+status: test
+description: |
+    Detects SPIRE Agent attestation or re-attestation events. While periodic
+    re-attestation is normal, unexpected attestation could indicate an attacker
+    injecting a malicious agent using stolen attestation data (AWS IID, K8s SAT,
+    or join tokens).
+    Derived from Wazuh rule 101040.
+references:
+    - https://attack.mitre.org/techniques/T1078/
+    - https://attack.mitre.org/techniques/T1550/
+    - https://spiffe.io/docs/latest/spire-about/spire-concepts/#node-attestation
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.initial_access
+    - attack.t1078
+    - attack.credential_access
+    - attack.t1550
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection:
+        method|contains:
+            - 'AttestAgent'
+    selection_log:
+        msg|contains:
+            - 'attestation'
+            - 're-attest'
+    condition: 1 of selection_*
+falsepositives:
+    - Normal agent startup and periodic re-attestation
+    - Agent restarts during infrastructure maintenance
+level: medium

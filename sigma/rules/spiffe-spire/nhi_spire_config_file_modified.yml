@@ -1,0 +1,45 @@
+title: "NHI-SPIRE: Configuration File Modified"
+id: d0f1a2b3-c4d5-4e6f-7a8b-9c0d1e2f3a4b
+related:
+    - id: "101042"
+      type: derived
+status: test
+description: |
+    Detects modification of SPIRE Server or Agent configuration files.
+    Tampering can weaken attestation (e.g., enabling skip_kubelet_verification),
+    add rogue attestor plugins, or change the trust domain — all of which
+    undermine the SPIFFE identity model.
+    Derived from Wazuh rule 101042.
+references:
+    - https://attack.mitre.org/techniques/T1562/001/
+    - https://attack.mitre.org/techniques/T1556/
+    - https://spiffe.io/docs/latest/deploying/configuring/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.defense_evasion
+    - attack.t1562.001
+    - attack.credential_access
+    - attack.t1556
+    - nhi.spiffe_spire
+logsource:
+    category: file_change
+    product: linux
+detection:
+    selection:
+        TargetFilename|contains:
+            - '/opt/spire/conf/'
+            - '/etc/spire/'
+    selection_specific:
+        TargetFilename|endswith:
+            - 'spire-server.conf'
+            - 'spire-agent.conf'
+            - 'spire_server.conf'
+            - 'spire_agent.conf'
+            - 'spire-server.hcl'
+            - 'spire-agent.hcl'
+    condition: 1 of selection_*
+falsepositives:
+    - Configuration management tools (Ansible, Puppet, Chef) updating SPIRE config
+    - SPIRE upgrades
+level: high

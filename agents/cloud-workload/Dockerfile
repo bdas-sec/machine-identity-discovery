@@ -1,6 +1,6 @@
 # Cloud Workload Agent
 # Simulates an Ubuntu-based cloud workload with Wazuh agent
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM ubuntu:22.04
 

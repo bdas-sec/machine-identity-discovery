@@ -1,0 +1,60 @@
+title: "NHI-SPIRE: Workload API Access from Scripting Tool"
+id: b2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f
+related:
+    - id: "101001"
+      type: derived
+status: test
+description: |
+    Detects SPIRE Workload API access from tools commonly used in exploitation
+    (curl, wget, nc, grpcurl, python, ruby, perl) rather than legitimate workload
+    SDK calls. Attackers use these to manually interact with the gRPC Workload API
+    for SVID harvesting.
+
+    Tools are split into two tiers:
+    - Exploit tools (nc, ncat, socat): No legitimate SPIRE SDK use — always suspicious
+    - Scripting tools (curl, wget, grpcurl, python, ruby, perl): May be legitimate
+      SDK usage (pyspiffe, spiffe-helper). Known SDK command lines are filtered out.
+
+    Derived from Wazuh rule 101001 (child of 101000).
+references:
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://attack.mitre.org/techniques/T1059/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.007
+    - attack.execution
+    - attack.t1059
+    - nhi.spiffe_spire
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection_path:
+        TargetFilename|contains:
+            - 'spire-agent/public/api.sock'
+            - '/run/spire/sockets/agent.sock'
+    selection_exploit_tool:
+        ProcessName|contains:
+            - 'nc'
+            - 'ncat'
+            - 'socat'
+    selection_scripting_tool:
+        ProcessName|contains:
+            - 'curl'
+            - 'wget'
+            - 'grpcurl'
+            - 'python'
+            - 'ruby'
+            - 'perl'
+    filter_known_sdk:
+        CommandLine|contains:
+            - 'pyspiffe'
+            - 'spiffe-helper'
+            - 'ghostunnel'
+    condition: selection_path and (selection_exploit_tool or (selection_scripting_tool and not filter_known_sdk))
+falsepositives:
+    - Debugging SPIRE connectivity with curl/grpcurl by administrators
+    - Python-based SPIFFE SDK usage not matching the filter patterns
+level: high

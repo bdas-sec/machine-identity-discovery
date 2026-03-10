@@ -108,7 +108,7 @@ After completing this training, you will be able to:
 
 ---
 
-**NDC Security 2026**
+**NHI Security Testbed**
 "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
 
 *Presented by Bodhisattva Das*
@@ -2280,7 +2280,7 @@ services:
 #!/usr/bin/env python3
 """
 Mock Custom Service
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 """
 
 from flask import Flask, request, jsonify

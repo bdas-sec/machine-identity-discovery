@@ -1,6 +1,6 @@
 # Vulnerable Application Agent
 # Intentionally contains security vulnerabilities for demonstration
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 #
 # WARNING: This container has INTENTIONAL vulnerabilities
 # DO NOT use in production or expose to untrusted networks

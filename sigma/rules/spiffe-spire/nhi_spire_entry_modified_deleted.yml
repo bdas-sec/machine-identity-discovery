@@ -1,0 +1,42 @@
+title: "NHI-SPIRE: Registration Entry Modified or Deleted"
+id: a7c8d9e0-f1a2-4b3c-4d5e-6f7a8b9c0d1e
+related:
+    - id: "101022"
+      type: derived
+status: test
+description: |
+    Detects modification or deletion of SPIRE registration entries. An attacker
+    with server admin access may modify entries to redirect SVIDs to their
+    workloads, or delete entries to deny identity services to legitimate
+    workloads.
+    Derived from Wazuh rule 101022.
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1531/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.impact
+    - attack.t1531
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_cli:
+        CommandLine|contains:
+            - 'spire-server entry update'
+            - 'spire-server entry delete'
+    selection_api:
+        method|contains:
+            - 'UpdateEntry'
+            - 'DeleteEntry'
+            - 'BatchDeleteEntry'
+            - 'BatchUpdateEntry'
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate entry updates during service deployments
+    - Automated cleanup of stale registration entries
+level: high

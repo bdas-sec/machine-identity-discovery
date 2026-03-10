@@ -1,6 +1,6 @@
 # Mock GCP Metadata Service
 # Simulates GCP Compute Engine metadata + Workload Identity Federation
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM python:3.11-slim
 

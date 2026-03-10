@@ -8,7 +8,7 @@ Scheduler reference:
   Entry point: scripts/scheduler.py (or `nhi-schedule` CLI)
   Modes: single-run (default), --cron, --interval, --daemon
   Classes: ScenarioDef, ScenarioRunResult, SchedulerSession
-  24 built-in scenarios (s1-01 to s5-04), levels 1-5
+  29 built-in scenarios (s1-01 to s6-05), levels 1-6
   Config via env vars: CONTAINER_RUNTIME, WAZUH_API_URL, NHI_METRICS_URL
 """
 
@@ -133,7 +133,7 @@ class TestSchedulerCLI:
             "Scenario s2-01 not in --list output"
 
     def test_scheduler_list_shows_all_levels(self):
-        """--list shows scenarios from all 5 levels."""
+        """--list shows scenarios from all 6 levels."""
         result = subprocess.run(
             [sys.executable, str(SCHEDULER_PATH), "--list"],
             capture_output=True, text=True, timeout=15
@@ -141,12 +141,12 @@ class TestSchedulerCLI:
         if result.returncode != 0:
             pytest.skip(f"--list failed: {result.stderr}")
         output = result.stdout.lower()
-        for level in range(1, 6):
+        for level in range(1, 7):
             assert f"s{level}" in output, \
                 f"No level {level} scenarios in --list output"
 
-    def test_scheduler_list_shows_24_scenarios(self):
-        """--list shows all 24 scenarios."""
+    def test_scheduler_list_shows_29_scenarios(self):
+        """--list shows all 29 scenarios."""
         result = subprocess.run(
             [sys.executable, str(SCHEDULER_PATH), "--list"],
             capture_output=True, text=True, timeout=15
@@ -156,8 +156,8 @@ class TestSchedulerCLI:
         # Count scenario IDs (sN-NN pattern)
         ids = re.findall(r's\d-\d\d', result.stdout.lower())
         unique_ids = set(ids)
-        assert len(unique_ids) >= 24, \
-            f"Expected 24 scenarios, found {len(unique_ids)}: {sorted(unique_ids)}"
+        assert len(unique_ids) >= 29, \
+            f"Expected 29 scenarios, found {len(unique_ids)}: {sorted(unique_ids)}"
 
     def test_scheduler_accepts_scenario_flag(self):
         """scheduler.py accepts --scenario flag without crashing."""
@@ -248,10 +248,10 @@ class TestSchedulerScenarios:
         _skip_if_no_scheduler()
 
     def test_all_levels_represented(self):
-        """Scenarios cover all 5 levels."""
+        """Scenarios cover all 6 levels."""
         content = SCHEDULER_PATH.read_text()
-        for level in range(1, 6):
-            assert f"level={level}" in content or f"level: {level}" in content, \
+        for level in range(1, 7):
+            assert f"level={level}" in content or f"level: {level}" in content or f", {level}, " in content, \
                 f"Level {level} scenarios not found in scheduler"
 
     def test_scenarios_have_target_containers(self):

@@ -91,37 +91,42 @@
 
   "indicators_of_compromise": [
     {
-      "type": "AI Logs",
-      "description": "Prompt injection patterns detected",
-      "wazuh_rule": "100850"
-    },
-    {
-      "type": "AI Logs",
-      "description": "Credential-related terms in agent conversation",
-      "wazuh_rule": "100851"
-    },
-    {
-      "type": "File Access",
-      "description": "AI agent accessing credential files",
+      "type": "Web Logs",
+      "description": "Prompt injection patterns in HTTP request",
       "wazuh_rule": "100852"
+    },
+    {
+      "type": "AI Logs",
+      "description": "Prompt injection patterns in AI agent logs (decoder-based)",
+      "wazuh_rule": "100860"
+    },
+    {
+      "type": "Auditd",
+      "description": "AI agent process accessing credential/config files",
+      "wazuh_rule": "100851"
     }
   ],
 
   "expected_wazuh_alerts": [
     {
-      "rule_id": "100850",
+      "rule_id": "100852",
       "level": 10,
-      "description": "NHI: Prompt injection attempt detected"
+      "description": "NHI: Prompt injection attempt detected in web request"
+    },
+    {
+      "rule_id": "100860",
+      "level": 10,
+      "description": "NHI: Prompt injection attempt detected via AI agent logs"
     },
     {
       "rule_id": "100851",
       "level": 12,
-      "description": "NHI: AI agent credential disclosure request"
+      "description": "NHI: AI agent accessing credential/config file"
     },
     {
-      "rule_id": "100852",
+      "rule_id": "100856",
       "level": 14,
-      "description": "NHI: AI agent accessing sensitive files - CREDENTIAL THEFT"
+      "description": "NHI: Prompt injection targeting credential extraction - CRITICAL"
     }
   ],
 

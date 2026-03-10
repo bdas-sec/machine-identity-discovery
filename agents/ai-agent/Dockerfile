@@ -1,6 +1,6 @@
 # AI Agent Container
 # Demonstrates AI agent security vulnerabilities
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 #
 # Vulnerabilities demonstrated:
 # - Prompt injection leading to credential disclosure

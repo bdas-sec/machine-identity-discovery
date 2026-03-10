@@ -1,6 +1,6 @@
 # CI/CD Runner Agent
 # Simulates a GitHub Actions / GitLab CI runner with Wazuh agent
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM ubuntu:22.04
 

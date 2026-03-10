@@ -1,0 +1,131 @@
+{
+  "id": "S7-03",
+  "name": "Registration Entry Tampering",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Create, modify, and delete SPIRE registration entries to manipulate workload identity assignment",
+  "difficulty": "Hard",
+  "real_world_relevance": "Compromise of SPIRE Server admin access leading to arbitrary workload impersonation",
+
+  "mitre_attack": {
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1098", "name": "Account Manipulation"},
+      {"id": "T1556", "name": "Modify Authentication Process"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker with SPIRE Server access manipulates registration entries to impersonate workloads",
+    "diagram": [
+      "1. Attacker gains access to SPIRE Server admin socket",
+      "2. Creates rogue registration entry for target workload identity",
+      "3. Fetches SVID using the rogue entry",
+      "4. Uses stolen identity to access services as the target workload",
+      "5. Modifies/deletes entries to cover tracks"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Entry Creation",
+      "description": "Create rogue registration entry",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry create -parentID AGENT_ID -spiffeID spiffe://example.org/admin-service -selector unix:uid:0 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create entry impersonating admin-service with root selector"
+        }
+      ]
+    },
+    {
+      "name": "Entry Modification",
+      "description": "Modify existing entries to widen access",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry show -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List all entries to find modification targets"
+        }
+      ]
+    },
+    {
+      "name": "Track Covering",
+      "description": "Delete rogue entries to hide evidence",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry delete -entryID ENTRY_ID -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Delete rogue entry after obtaining SVID"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry created via BatchCreateEntry",
+      "wazuh_rule": "101020"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry modified or deleted",
+      "wazuh_rule": "101022"
+    },
+    {
+      "type": "Correlation",
+      "description": "Registration tampering followed by SVID acquisition",
+      "wazuh_rule": "101081"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101020",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry created"
+    },
+    {
+      "rule_id": "101022",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry modified or deleted"
+    },
+    {
+      "rule_id": "101081",
+      "level": 14,
+      "description": "NHI: Registration tampering + SVID acquisition chain"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Audit all registration entries for unauthorized changes",
+      "Revoke SVIDs issued to rogue entries",
+      "Rotate SPIRE Server admin credentials"
+    ],
+    "long_term": [
+      "Restrict SPIRE Server admin socket access",
+      "Implement registration entry approval workflows",
+      "Forward SPIRE Server audit logs to SIEM",
+      "Use OPA/Rego policies for entry validation"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIRE Server API Documentation",
+      "url": "https://spiffe.io/docs/latest/spire/using/server/"
+    }
+  ]
+}

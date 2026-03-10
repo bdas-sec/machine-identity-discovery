@@ -1,0 +1,129 @@
+{
+  "id": "S7-02",
+  "name": "SVID Credential Harvesting",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Rapidly harvest X.509 SVIDs via the SPIRE Workload API socket using scripting tools",
+  "difficulty": "Medium",
+  "real_world_relevance": "Container escape followed by SPIRE Agent socket access for bulk credential harvesting",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Collection"],
+    "techniques": [
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"},
+      {"id": "T1552.004", "name": "Unsecured Credentials: Private Keys"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker accesses the SPIRE Agent Workload API socket and makes rapid SVID fetch requests",
+    "diagram": [
+      "1. Attacker escapes container or gains node access",
+      "2. Discovers SPIRE Agent Workload API socket",
+      "3. Uses scripting tool (curl/grpcurl/python) to access socket",
+      "4. Makes 10+ rapid SVID fetch requests",
+      "5. Harvests X.509 certificates and private keys"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Socket Discovery",
+      "description": "Find the SPIRE Workload API socket",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "ls -la /opt/spire/sockets/workload_api.sock",
+          "description": "Verify Workload API socket is accessible"
+        }
+      ]
+    },
+    {
+      "name": "SVID Burst",
+      "description": "Rapid SVID fetch requests",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "for i in $(seq 1 12); do /opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -silent 2>/dev/null; done",
+          "description": "Burst of 12 SVID fetch requests"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "FIM/Auditd",
+      "description": "Workload API socket access detected",
+      "wazuh_rule": "101000"
+    },
+    {
+      "type": "FIM/Auditd",
+      "description": "Socket access from scripting tool (curl, python, grpcurl)",
+      "wazuh_rule": "101001"
+    },
+    {
+      "type": "Frequency",
+      "description": "Burst of 10+ SVID requests in 60 seconds",
+      "wazuh_rule": "101003"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "CONFIRMED SVID burst from single PID",
+      "wazuh_rule": "101008"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101000",
+      "level": 8,
+      "description": "NHI: SPIRE Workload API socket access detected"
+    },
+    {
+      "rule_id": "101001",
+      "level": 12,
+      "description": "NHI: Workload API access from scripting tool"
+    },
+    {
+      "rule_id": "101003",
+      "level": 12,
+      "description": "NHI: Burst of SVID requests — credential harvesting"
+    },
+    {
+      "rule_id": "101008",
+      "level": 12,
+      "description": "NHI: CONFIRMED SVID burst from single PID"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke harvested SVIDs",
+      "Investigate source of socket access",
+      "Check for container escape indicators"
+    ],
+    "long_term": [
+      "Restrict socket permissions (chmod 600)",
+      "Use network policies to isolate SPIRE Agent",
+      "Implement SVID request rate limiting",
+      "Monitor for container escape patterns"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIFFE/SPIRE Threat Model",
+      "url": "https://spiffe.io/docs/latest/spire/using/security/"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Machine Identity Security Testbed - Stop Script
-# NDC Security 2026
+# NHI Security Testbed
 #
 # Usage:
 #   ./scripts/stop.sh           # Stop all services (preserves data)

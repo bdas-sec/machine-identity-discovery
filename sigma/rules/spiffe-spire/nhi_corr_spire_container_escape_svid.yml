@@ -1,0 +1,43 @@
+title: "NHI-SPIRE: Container Escape to SVID Theft Chain"
+id: b4d5e6f7-a8b9-4c0d-1e2f-3a4b5c6d7e8f
+related:
+    - id: "101080"
+      type: derived
+name: nhi_corr_spire_container_escape_svid
+type: correlation
+status: test
+description: |
+    Detects container escape techniques followed by SPIRE Workload API socket
+    access within 5 minutes. This is the canonical "Spooffe" attack pattern
+    from Eviatar Gerzi's research: escape container, reach SPIRE Agent socket
+    on the host, harvest SVIDs for lateral movement. The combination of
+    privilege escalation and credential theft at this level indicates an
+    active, sophisticated attack.
+    Derived from Wazuh rule 101080 (timeframe=300s).
+references:
+    - https://attack.mitre.org/techniques/T1611/
+    - https://attack.mitre.org/techniques/T1552/007/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+    - attack.credential_access
+    - attack.t1552.007
+    - nhi.spiffe_spire
+    - nhi.correlation
+rules:
+    - nhi_k8s_container_escape_nsenter
+    - nhi_k8s_container_escape_chroot
+    - nhi_k8s_container_escape_unshare
+    - nhi_k8s_cgroup_escape
+    - nhi_k8s_cap_sys_admin_mount
+    - nhi_k8s_proc_1_root_access
+    - nhi_spire_workload_api_socket_access
+group-by:
+    - SourceIP
+timespan: 5m
+condition:
+    gte: 2
+level: critical

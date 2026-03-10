@@ -1,0 +1,40 @@
+title: "NHI-SPIRE: Registration Entry Created"
+id: e5a6b7c8-d9e0-4f1a-2b3c-4d5e6f7a8b9c
+related:
+    - id: "101020"
+      type: derived
+status: test
+description: |
+    Detects creation of new SPIRE registration entries. Each entry maps a
+    SPIFFE ID to a set of selectors. Unauthorized entry creation enables
+    workload impersonation by assigning arbitrary SPIFFE IDs to attacker-
+    controlled workloads. This is a key step in selector spoofing attacks.
+    Derived from Wazuh rule 101020.
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1136/
+    - https://spiffe.io/docs/latest/deploying/registering/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.t1136
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_cli:
+        CommandLine|contains:
+            - 'spire-server entry create'
+    selection_api:
+        method|contains:
+            - 'CreateEntry'
+            - 'BatchCreateEntry'
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate workload registration during deployment
+    - SPIRE Kubernetes Workload Registrar automatic registration
+    - CI/CD pipeline registering new services
+level: high

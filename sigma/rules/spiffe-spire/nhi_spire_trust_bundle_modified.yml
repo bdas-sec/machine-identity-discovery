@@ -1,0 +1,43 @@
+title: "NHI-SPIRE: Trust Bundle Modified"
+id: c9e0f1a2-b3c4-4d5e-6f7a-8b9c0d1e2f3a
+related:
+    - id: "101041"
+      type: derived
+status: test
+description: |
+    Detects modification of SPIRE trust bundles. In federated deployments,
+    trust bundles define which trust domains are accepted. Poisoning a trust
+    bundle allows an attacker to introduce rogue CAs and issue valid-looking
+    SVIDs for workload impersonation across trust domains.
+    Derived from Wazuh rule 101041.
+references:
+    - https://attack.mitre.org/techniques/T1553/004/
+    - https://attack.mitre.org/techniques/T1556/
+    - https://spiffe.io/docs/latest/architecture/federation/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.defense_evasion
+    - attack.t1553.004
+    - attack.credential_access
+    - attack.t1556
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_api:
+        method|contains:
+            - 'SetFederatedBundle'
+            - 'BatchSetFederatedBundle'
+            - 'AppendBundle'
+    selection_file:
+        TargetFilename|contains:
+            - 'bundle.json'
+        TargetFilename|contains:
+            - 'spire'
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate trust bundle rotation
+    - Adding new federated trust domains
+level: critical

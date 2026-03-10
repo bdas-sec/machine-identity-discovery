@@ -324,7 +324,7 @@ services:
 #!/usr/bin/env python3
 """
 Mock Custom Service
-NDC Security 2026 - NHI Security Testbed
+NHI Security Testbed
 """
 
 from flask import Flask, request, jsonify

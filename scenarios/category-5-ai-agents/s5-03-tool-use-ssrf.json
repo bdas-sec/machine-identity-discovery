@@ -92,37 +92,37 @@
 
   "indicators_of_compromise": [
     {
-      "type": "Network",
-      "description": "AI agent making requests to metadata service",
-      "wazuh_rule": "100856"
+      "type": "Auditd/Polling",
+      "description": "AI agent process making SSRF request to cloud metadata service",
+      "wazuh_rule": "100853"
     },
     {
-      "type": "Network",
-      "description": "AI agent accessing internal IPs",
+      "type": "Auditd",
+      "description": "AI agent SSRF escalated to credential theft endpoint",
       "wazuh_rule": "100857"
     },
     {
-      "type": "AI Logs",
-      "description": "SSRF-related URLs in agent requests",
-      "wazuh_rule": "100858"
+      "type": "Correlation",
+      "description": "AI agent SSRF combined with credential access - confirmed compromise",
+      "wazuh_rule": "100953"
     }
   ],
 
   "expected_wazuh_alerts": [
     {
-      "rule_id": "100856",
-      "level": 14,
-      "description": "NHI: AI agent SSRF to cloud metadata - CREDENTIAL THEFT"
+      "rule_id": "100853",
+      "level": 12,
+      "description": "NHI: AI agent SSRF - cloud metadata access"
     },
     {
       "rule_id": "100857",
-      "level": 12,
-      "description": "NHI: AI agent accessing internal network"
+      "level": 14,
+      "description": "NHI: AI agent SSRF escalated to credential theft endpoint - CRITICAL"
     },
     {
-      "rule_id": "100858",
-      "level": 10,
-      "description": "NHI: Suspicious URL pattern in AI agent request"
+      "rule_id": "100953",
+      "level": 15,
+      "description": "NHI: AI agent SSRF with credential access - agent compromise (correlation)"
     }
   ],
 

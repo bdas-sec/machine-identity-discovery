@@ -1,0 +1,41 @@
+title: "NHI-SPIRE: X.509 SVID Private Key Extraction Attempt"
+id: c3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a
+related:
+    - id: "101002"
+      type: derived
+status: test
+description: |
+    Detects attempts to extract or dump X.509 SVID private key material from
+    files or the Workload API response. SVID private keys enable direct workload
+    impersonation without needing the SPIRE Agent.
+    Derived from Wazuh rule 101002.
+references:
+    - https://attack.mitre.org/techniques/T1552/004/
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://spiffe.io/docs/latest/deploying/svids/
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.credential_access
+    - attack.t1552.004
+    - attack.t1552.001
+    - nhi.spiffe_spire
+logsource:
+    category: file_access
+    product: linux
+detection:
+    selection_svid_files:
+        TargetFilename|contains:
+            - 'svid.key'
+            - 'svid.pem'
+            - '/opt/spire/data/agent/'
+    selection_svid_ext:
+        TargetFilename|endswith:
+            - '.key'
+            - '.pem'
+        TargetFilename|contains: 'spire'
+    condition: 1 of selection_*
+falsepositives:
+    - SPIRE Agent performing normal SVID rotation
+    - Certificate management automation
+level: critical

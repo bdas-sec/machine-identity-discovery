@@ -1,0 +1,42 @@
+title: "NHI-SPIRE: CONFIRMED - Multiple Distinct SPIFFE Identities for Same PID"
+id: c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f
+related:
+    - id: "101007"
+      type: derived
+status: test
+description: |
+    Detects confirmed selector spoofing via the spire_identity_monitor.py
+    script output. The script tracks per-PID SPIFFE ID sets in a 5-minute
+    sliding window and fires when a single PID receives SVIDs for 2+ distinct
+    SPIFFE identities — the definitive indicator of overlapping registration
+    entries (Eviatar Gerzi's "Spooffe" attack).
+
+    This rule matches NHI_SPIRE_DETECT output with type=multi_identity,
+    providing HIGH-CONFIDENCE detection that Wazuh rules and standard Sigma
+    correlation cannot express (requires count(distinct field) semantics).
+
+    Derived from Wazuh rule 101007.
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1134/
+    - https://nullcon.net/goa-2026/speaker-The-Machine-with-Many-Faces-goa26
+author: Bodhisattva Das
+date: 2026-02-28
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.privilege_escalation
+    - attack.t1134
+    - nhi.spiffe_spire
+logsource:
+    category: application
+    product: wazuh
+detection:
+    selection:
+        message|contains:
+            - 'NHI_SPIRE_DETECT'
+            - 'type=multi_identity'
+    condition: selection
+falsepositives:
+    - SPIRE Agent process (PID 1) managing SVIDs for multiple workloads (excluded by script)
+level: critical

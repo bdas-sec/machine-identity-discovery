@@ -1,6 +1,6 @@
 # Kubernetes Node Agent
 # Simulates a Kubernetes worker node with Wazuh agent
-# For NHI Security Testbed - NDC Security 2026
+# For NHI Security Testbed
 
 FROM ubuntu:22.04
 
@@ -50,30 +50,32 @@ RUN echo "eyJhbGciOiJSUzI1NiIsImtpZCI6ImRlbW8ifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZ
 
 # Create namespace and CA cert
 RUN echo "default" > /var/run/secrets/kubernetes.io/serviceaccount/namespace
-RUN echo "-----BEGIN CERTIFICATE-----
-MIIDITCCAgmgAwIBAgIJANHDEMO0CERT0MA0GCSqGSIb3DQEBCwUAMCcxJTAjBgNV
-BAMMHGt1YmVybmV0ZXMtZGVtby1jYS5sb2NhbGhvc3QwHhcNMjQwMTAxMDAwMDAw
------END CERTIFICATE-----" > /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+RUN printf '%s\n' \
+    "-----BEGIN CERTIFICATE-----" \
+    "MIIDITCCAgmgAwIBAgIJANHDEMO0CERT0MA0GCSqGSIb3DQEBCwUAMCcxJTAjBgNV" \
+    "BAMMHGt1YmVybmV0ZXMtZGVtby1jYS5sb2NhbGhvc3QwHhcNMjQwMTAxMDAwMDAw" \
+    "-----END CERTIFICATE-----" > /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
 # Create fake kubeconfig
 RUN mkdir -p /root/.kube \
-    && echo 'apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: https://kubernetes.default.svc:443
-    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-  name: local
-contexts:
-- context:
-    cluster: local
-    user: default
-  name: default
-current-context: default
-users:
-- name: default
-  user:
-    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token' > /root/.kube/config
+    && printf '%s\n' \
+    'apiVersion: v1' \
+    'kind: Config' \
+    'clusters:' \
+    '- cluster:' \
+    '    server: https://kubernetes.default.svc:443' \
+    '    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt' \
+    '  name: local' \
+    'contexts:' \
+    '- context:' \
+    '    cluster: local' \
+    '    user: default' \
+    '  name: default' \
+    'current-context: default' \
+    'users:' \
+    '- name: default' \
+    '  user:' \
+    '    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token' > /root/.kube/config
 
 # Create fake secrets mount (simulating secret volume)
 RUN mkdir -p /var/run/secrets/app \

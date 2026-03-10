@@ -1,6 +1,6 @@
 ---
 name: nhi-assistant
-description: NHI (Non-Human Identity) Security Testbed assistant for the NDC Security 2026 demo. Use this skill when working with the machine-identity-discovery project, managing the Wazuh-based security testbed, running demo scenarios, troubleshooting container/agent issues, or executing attack simulations. Covers testbed lifecycle management, agent enrollment, Wazuh rules, and all 24 attack scenarios across 5 training levels.
+description: NHI (Non-Human Identity) Security Testbed assistant. Use this skill when working with the machine-identity-discovery project, managing the Wazuh-based security testbed, running demo scenarios, troubleshooting container/agent issues, or executing attack simulations. Covers testbed lifecycle management, agent enrollment, Wazuh rules, and all 29 attack scenarios across 6 training levels.
 ---
 
 # NHI Security Testbed Assistant
