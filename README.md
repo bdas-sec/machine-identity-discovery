@@ -8,12 +8,14 @@
 [![Wazuh 4.9.2](https://img.shields.io/badge/Wazuh-4.9.2-blue.svg)]()
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-Mapped-orange.svg)]()
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)]()
-[![Scenarios](https://img.shields.io/badge/Scenarios-29-green.svg)]()
-[![Detection Rules](https://img.shields.io/badge/Detection%20Rules-71-purple.svg)]()
-[![Sigma Rules](https://img.shields.io/badge/Sigma%20Rules-71-yellow.svg)]()
+[![Scenarios](https://img.shields.io/badge/Scenarios-54-green.svg)]()
+[![Detection Rules](https://img.shields.io/badge/Detection%20Rules-120+-purple.svg)]()
+[![Sigma Rules](https://img.shields.io/badge/Sigma%20Rules-100+-yellow.svg)]()
+[![Kubernetes](https://img.shields.io/badge/K8s-Kind%20%2B%20Helm-326CE5.svg)]()
+[![SPIFFE/SPIRE](https://img.shields.io/badge/SPIFFE%2FSPIRE-13%20Scenarios-00ADD8.svg)]()
 
 *Demonstrate, detect, and defend against the exploitation of service accounts,
-IAM roles, CI/CD tokens, and AI agent credentials.*
+IAM roles, CI/CD tokens, SPIFFE/SPIRE workload identities, and AI agent credentials.*
 
 [Quick Start](#quick-start) |
 [Kill Chain](#the-kill-chain) |
@@ -56,7 +58,7 @@ The testbed deploys in under 3 minutes. All credentials are fake.
 
 ## The Kill Chain
 
-Six-stage offensive methodology mapped to MITRE ATT&CK:
+Nine-category offensive methodology mapped to MITRE ATT&CK:
 
 | Stage | Technique | MITRE ATT&CK | What Happens |
 |-------|-----------|---------------|--------------|
@@ -64,8 +66,11 @@ Six-stage offensive methodology mapped to MITRE ATT&CK:
 | 2. Credential Theft | SSRF to IMDS, env var harvesting | T1552.005 | Steal the credentials |
 | 3. Privilege Escalation | Over-permissioned IAM roles | T1078.004 | Discover admin access |
 | 4. Lateral Movement | Cloud to CI/CD pivot | T1528 | Compromise the pipeline |
-| 5. Persistence | Cloud-native API abuse | T1078 | Maintain access invisibly |
+| 5. AI Agent Exploitation | Prompt injection, tool abuse, RAG poisoning | T1059 | Weaponize AI agents |
 | 6. Infrastructure | OAuth abuse, WIF, etcd access | T1550.001 | Attack the identity platform |
+| 7. SPIFFE/SPIRE | Selector spoofing, federation abuse, SVID theft | T1078 | Compromise workload identity |
+| 8. OAuth/OIDC | OIDC federation, audience confusion, token abuse | T1550.001 | Abuse token infrastructure |
+| 9. Supply Chain | PPE, dependency confusion, runner pivot | T1195.002 | Compromise the build pipeline |
 
 **Zero malware. Zero exploits. Just default permissions on machine identities.**
 
@@ -90,32 +95,38 @@ Six-stage offensive methodology mapped to MITRE ATT&CK:
 ```
 
 Four isolated Docker networks simulate real cloud segmentation.
-71 detection rules fire in real time as you execute attacks.
+120+ detection rules fire in real time as you execute attacks.
 
 | Component | Port | Description |
 |-----------|------|-------------|
 | Wazuh Dashboard | 8443 | SIEM visualization and alerts |
 | Wazuh API | 55000 | Management API |
 | Wazuh Indexer | 9200 | OpenSearch data storage |
+| NHI Dashboard | 3001 | Real-time attack visualization |
+| NHI API | 8000 | REST + WebSocket API |
 | Mock IMDS | 1338 | AWS/Azure metadata simulation |
 | HashiCorp Vault | 8200 | Secrets management |
 | Mock CI/CD | 8080 | GitHub/GitLab API simulation |
+| Mock STS Federation | 8091 | OAuth/OIDC token exchange |
 | Vulnerable App | 8888 | App with exposed secrets |
 
 ---
 
 ## Attack Scenarios
 
-29 scenarios across 6 progressive levels:
+54 scenarios across 9 progressive categories:
 
-| Level | Focus | Scenarios | Difficulty |
-|-------|-------|-----------|------------|
+| Category | Focus | Scenarios | Difficulty |
+|----------|-------|-----------|------------|
 | 1 | Credential Discovery | S1-01 to S1-05 | Beginner |
 | 2 | Cloud Credential Theft | S2-01 to S2-05 | Intermediate |
 | 3 | CI/CD Pipeline Attacks | S3-01 to S3-05 | Intermediate |
 | 4 | Kubernetes Security | S4-01 to S4-05 | Advanced |
-| 5 | AI Agent Exploitation | S5-01 to S5-04 | Advanced |
+| 5 | AI Agent Exploitation | S5-01 to S5-08 | Advanced |
 | 6 | Infrastructure | S6-01 to S6-05 | Advanced |
+| 7 | SPIFFE/SPIRE | S7-01 to S7-13 | Advanced / Expert |
+| 8 | OAuth/OIDC Token Abuse | S8-01 to S8-05 | Hard / Expert |
+| 9 | CI/CD Supply Chain | S9-01 to S9-06 | Hard / Expert |
 
 ```bash
 # Run all scenarios
@@ -135,7 +146,7 @@ python .claude/skills/nhi-assistant/scripts/run_demo.py --list
 
 ## Detection Rules
 
-71 custom Wazuh rules with full MITRE ATT&CK coverage:
+120+ custom Wazuh rules with full MITRE ATT&CK coverage:
 
 | Category | Rule IDs | What It Detects |
 |----------|----------|-----------------|
@@ -144,13 +155,17 @@ python .claude/skills/nhi-assistant/scripts/run_demo.py --list
 | Service Account Misuse | 100700-100749 | Service account anomalies, unusual API patterns |
 | Kubernetes | 100750-100756 | SA token theft, RBAC probing, etcd access, secrets enum |
 | CI/CD Pipeline | 100800-100805 | GitHub/GitLab tokens, runner creds, pipeline tampering |
-| AI Agent | 100850-100854 | Shell execution, SSRF, prompt injection, cred access |
+| AI Agent | 100850-100869 | Shell execution, SSRF, prompt injection, MCP relay, RAG poisoning |
 | Secret Patterns | 100900-100905 | AWS keys, GitHub tokens, OpenAI keys, private keys |
 | Correlation | 100950-100954 | Multi-stage attack chains, supply chain, AI compromise |
+| OAuth/OIDC | 100970-100979 | OIDC federation, consent escalation, audience confusion |
+| Supply Chain | 100980-100989 | PPE, dependency confusion, runner pivot, artifact injection |
+| SPIFFE/SPIRE | 101000-101099 | Selector spoofing, SVID theft, federation abuse, trust bundles |
+| Falco (K8s) | 102000-102019 | Runtime SPIRE socket access, key reads, container escape |
 
 ### Sigma Rules
 
-71 rules in [Sigma YAML format](sigma/rules/) for cross-SIEM deployment:
+100+ rules in [Sigma YAML format](sigma/rules/) for cross-SIEM deployment:
 
 - **Splunk** SPL via pySigma
 - **Microsoft Sentinel** KQL
@@ -189,9 +204,26 @@ The testbed auto-detects Podman or Docker. For rootless Podman, port 8443 is use
 |----------|-------------|
 | [Handbook](docs/handbook/) | Complete setup, architecture, and scenario guides |
 | [Rule Reference](docs/handbook/03-wazuh-rules-reference.md) | Detection rule documentation |
-| [Scenario Catalog](docs/handbook/04-scenario-catalog.md) | All 29 attack scenarios |
+| [Scenario Catalog](docs/handbook/04-scenario-catalog.md) | All 54 attack scenarios |
 | [Troubleshooting](docs/handbook/08-troubleshooting.md) | Common issues and fixes |
-| [Sigma Rules](sigma/rules/) | 71 cross-SIEM detection rules |
+| [Sigma Rules](sigma/rules/) | 100+ cross-SIEM detection rules |
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| [nhi-recon](tools/nhi-recon/) | Offensive NHI reconnaissance and attack chain CLI |
+| [spiffe-security-bench](tools/spiffe-security-bench/) | Security benchmark for SPIFFE/SPIRE deployments |
+| [NHI Dashboard](dashboard/) | Real-time React attack visualization dashboard |
+
+### Kubernetes
+
+| Resource | Description |
+|----------|-------------|
+| [Kind Setup](k8s/) | Local K8s cluster with SPIRE and audit logging |
+| [Helm Chart](helm/nhi-testbed/) | K8s-native deployment with SPIRE subchart |
+| [CRD Operator](k8s/operator/) | NHIScenario + NHIScenarioRun custom resources |
+| [Falco Rules](k8s/falco/) | Runtime SPIFFE/SPIRE detection rules |
 
 ### NHI Assistant Skill
 

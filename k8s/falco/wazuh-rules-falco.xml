@@ -1,0 +1,202 @@
+<!--
+  Wazuh Rules for Falco NHI Events (IDs 102000-102019)
+
+  These rules ingest Falco alerts forwarded by Falcosidekick and correlate
+  them with the broader NHI detection rule set (100600-100999).
+
+  Installation:
+    Copy to /var/ossec/etc/rules/ on the Wazuh manager, then restart:
+      systemctl restart wazuh-manager
+
+  Prerequisites:
+    - Falcosidekick configured to send JSON webhooks to Wazuh
+    - Events decoded as JSON with a "source" field set to "falco"
+    - The "rule" field in the JSON payload carries the Falco rule name
+-->
+<group name="nhi,falco,">
+
+  <!-- ================================================================== -->
+  <!-- Parent: catch all Falco NHI events                                  -->
+  <!-- ================================================================== -->
+  <rule id="102000" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="source">falco</field>
+    <description>Falco NHI event received.</description>
+  </rule>
+
+  <!-- ================================================================== -->
+  <!-- SPIFFE / SPIRE Rules                                                -->
+  <!-- ================================================================== -->
+
+  <!-- 102001 — SPIRE Agent Socket Access by Unexpected Process -->
+  <rule id="102001" level="12">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">SPIRE.*Socket.*Access.*Unexpected</field>
+    <description>NHI-Falco: SPIRE agent socket accessed by unexpected process.</description>
+    <mitre>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi,falco,spiffe,socket_access,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102002 — SVID Private Key Read -->
+  <rule id="102002" level="14">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">SVID.*Private.*Key.*Read</field>
+    <description>NHI-Falco: SVID private key read detected — potential identity theft.</description>
+    <mitre>
+      <id>T1552.004</id>
+    </mitre>
+    <group>nhi,falco,spiffe,credential_theft,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102003 — SPIRE Server Admin Socket Access -->
+  <rule id="102003" level="14">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">SPIRE.*Server.*Admin.*Socket</field>
+    <description>NHI-Falco: SPIRE server admin socket accessed — arbitrary SVID minting possible.</description>
+    <mitre>
+      <id>T1078.003</id>
+    </mitre>
+    <group>nhi,falco,spiffe,admin_access,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102004 — Container Escape Attempt Near SPIRE -->
+  <rule id="102004" level="15">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">Container.*Escape.*SPIRE</field>
+    <description>NHI-Falco: Container escape attempt near SPIRE sockets — host compromise risk.</description>
+    <mitre>
+      <id>T1611</id>
+    </mitre>
+    <group>nhi,falco,spiffe,container_escape,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- ================================================================== -->
+  <!-- Kubernetes Rules                                                    -->
+  <!-- ================================================================== -->
+
+  <!-- 102005 — K8s SA Token Read from Non-Standard Process -->
+  <rule id="102005" level="10">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">(?:Kubernetes|K8s).*SA.*Token.*Read</field>
+    <description>NHI-Falco: K8s service account token read by non-standard process.</description>
+    <mitre>
+      <id>T1528</id>
+    </mitre>
+    <group>nhi,falco,kubernetes,sa_token,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102006 — SPIRE Registration Entry Manipulation -->
+  <rule id="102006" level="12">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">SPIRE.*Registration.*Entry.*Manipulation</field>
+    <description>NHI-Falco: SPIRE registration entry created, updated, or deleted.</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+    <group>nhi,falco,spiffe,registration,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102007 — Trust Bundle Export -->
+  <rule id="102007" level="8">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">Trust.*Bundle.*Export</field>
+    <description>NHI-Falco: SPIRE trust bundle exported — potential federation poisoning vector.</description>
+    <mitre>
+      <id>T1553</id>
+    </mitre>
+    <group>nhi,falco,spiffe,trust_bundle,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- ================================================================== -->
+  <!-- Cloud / IMDS Rules                                                  -->
+  <!-- ================================================================== -->
+
+  <!-- 102008 — IMDS Access from Container -->
+  <rule id="102008" level="12">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">IMDS.*Access.*Container</field>
+    <description>NHI-Falco: IMDS access from container — cloud credential theft attempt.</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>nhi,falco,cloud,imds,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- ================================================================== -->
+  <!-- Credential Access Rules                                             -->
+  <!-- ================================================================== -->
+
+  <!-- 102009 — Credential File Access in Container -->
+  <rule id="102009" level="10">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">Credential.*File.*Access</field>
+    <description>NHI-Falco: Credential file accessed inside container.</description>
+    <mitre>
+      <id>T1552.001</id>
+    </mitre>
+    <group>nhi,falco,credential_access,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102010 — Vault Token Discovery -->
+  <rule id="102010" level="10">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">Vault.*Token.*Discovery</field>
+    <description>NHI-Falco: HashiCorp Vault token access detected.</description>
+    <mitre>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi,falco,vault,credential_access,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- ================================================================== -->
+  <!-- Attack Chain / Correlation Rules                                    -->
+  <!-- ================================================================== -->
+
+  <!-- 102011 — Multi-Stage NHI Attack Pattern -->
+  <rule id="102011" level="12">
+    <if_sid>102000</if_sid>
+    <field name="rule" type="pcre2">NHI.*Multi-Stage.*Attack</field>
+    <description>NHI-Falco: Multi-stage NHI attack pattern — curl/wget to sensitive endpoint from container.</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi,falco,attack_chain,</group>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- 102012 — Correlation: Multiple Falco NHI alerts from same source -->
+  <rule id="102012" level="14" frequency="3" timeframe="120">
+    <if_matched_group>nhi,falco,</if_matched_group>
+    <same_source_ip />
+    <description>NHI-Falco: 3+ Falco NHI alerts from same source within 2 minutes — probable attack chain.</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi,falco,correlation,attack_chain,</group>
+  </rule>
+
+  <!-- 102013 — Correlation: SPIRE socket access followed by credential file read -->
+  <rule id="102013" level="15" frequency="2" timeframe="60">
+    <if_matched_group>nhi,falco,spiffe,</if_matched_group>
+    <same_source_ip />
+    <description>NHI-Falco: SPIRE access + credential theft from same source — confirmed identity compromise.</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1078.003</id>
+    </mitre>
+    <group>nhi,falco,correlation,spiffe,identity_compromise,</group>
+  </rule>
+
+</group>

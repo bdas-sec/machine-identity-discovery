@@ -183,15 +183,18 @@ python -m pytest tests/ -v
 - [docs/handbook/](docs/handbook/) - Comprehensive documentation
 - [.claude/skills/nhi-assistant/](/.claude/skills/nhi-assistant/) - NHI Assistant skill with troubleshooting guides
 
-## Key Numbers (as of Phase 3)
+## Key Numbers (as of Phase 5)
 
 | Metric | Value |
 |--------|-------|
-| Wazuh detection rules | 71 (100600-100954) |
-| Sigma rules | 71 (7 categories) |
-| Attack scenarios | 29 (6 levels) |
-| Decoders | 45 |
-| E2E detection coverage | 96.6% |
+| Wazuh detection rules | 120+ (100600-102019) |
+| Sigma rules | 100+ (10 categories) |
+| Attack scenarios | 54 (9 categories) |
+| SPIFFE/SPIRE scenarios | 13 (100% vector coverage) |
+| Decoders | 60+ |
 | Supported SIEMs | 5 (Wazuh, Splunk, Sentinel, Elastic, Chronicle) |
-| Mock services | 5 |
+| Mock services | 7 (IMDS, GCP, CI/CD, OAuth, Vault, SPIRE, STS) |
+| Tools | nhi-recon, spiffe-security-bench |
+| Dashboard | React real-time attack visualization |
+| K8s support | Kind + Helm + CRD operator + Falco |
 

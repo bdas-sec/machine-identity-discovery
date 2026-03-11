@@ -1,0 +1,318 @@
+# Falco Configuration for NHI Security Testbed
+# Runtime security detection for Non-Human Identity threats in Kubernetes
+#
+# Install:
+#   helm repo add falcosecurity https://falcosecurity.github.io/charts
+#   helm install falco falcosecurity/falco -n falco --create-namespace \
+#     -f k8s/falco/values.yaml
+#
+# Integrates with Wazuh via Falcosidekick webhook for cross-source correlation.
+# Wazuh ingestion rules: wazuh-rules-falco.xml (IDs 102000-102019)
+
+falco:
+  rules_file:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+    - /etc/falco/rules.d
+
+  # JSON output required for Falcosidekick and Wazuh ingestion
+  json_output: true
+  json_include_output_property: true
+  json_include_tags_property: true
+
+  log_stderr: true
+  log_syslog: false
+
+  # notice = rules with priority >= NOTICE fire
+  priority: notice
+
+  # Modern eBPF driver — no kernel headers needed, works on most K8s distros
+  driver:
+    kind: modern_ebpf
+
+# ---------------------------------------------------------------------------
+# Custom NHI Rules
+# ---------------------------------------------------------------------------
+customRules:
+  # ------------------------------------------
+  # SPIFFE / SPIRE runtime rules
+  # ------------------------------------------
+  nhi-spiffe-rules.yaml: |-
+    # NHI Security Testbed — SPIFFE/SPIRE Falco Rules
+    # These rules detect unauthorized access to SPIRE sockets, SVID keys,
+    # and trust bundle manipulation at the kernel syscall level.
+    #
+    # MITRE ATT&CK mappings noted in comments; Wazuh correlation rules
+    # in wazuh-rules-falco.xml carry the formal <mitre> tags.
+
+    #
+    # 1. SPIRE Agent Workload API Socket — unexpected reader
+    #    ATT&CK: T1552 (Unsecured Credentials)
+    #
+    - rule: SPIRE Agent Socket Access by Unexpected Process
+      desc: >
+        A non-SPIRE process opened the Workload API socket for reading.
+        Legitimate consumers should be allow-listed in the condition below.
+      condition: >
+        open_read and
+        (fd.name startswith "/tmp/spire-agent/" or
+         fd.name startswith "/opt/spire/sockets/" or
+         fd.name startswith "/run/spire/sockets/") and
+        not proc.name in (spire-agent, spire-server, workload-registrar, opa, envoy, ghostunnel)
+      output: >
+        SPIRE socket access by unexpected process
+        (user=%user.name process=%proc.name file=%fd.name
+         container=%container.name image=%container.image.repository
+         pid=%proc.pid ppid=%proc.ppid)
+      priority: WARNING
+      tags: [nhi, spiffe, socket_access, T1552]
+
+    #
+    # 2. SVID Private Key Read
+    #    ATT&CK: T1552.004 (Private Keys)
+    #
+    - rule: SVID Private Key Read
+      desc: >
+        Process reading a SPIFFE SVID private key file.
+        Only the SPIRE agent should perform this operation.
+      condition: >
+        open_read and
+        fd.name contains "svid" and
+        (fd.name endswith ".key" or fd.name endswith ".pem") and
+        not proc.name in (spire-agent)
+      output: >
+        SVID private key read
+        (user=%user.name process=%proc.name file=%fd.name
+         container=%container.name image=%container.image.repository
+         pid=%proc.pid)
+      priority: CRITICAL
+      tags: [nhi, spiffe, key_theft, T1552.004]
+
+    #
+    # 3. SPIRE Server Admin API Socket
+    #    ATT&CK: T1078.003 (Valid Accounts: Local Accounts)
+    #
+    - rule: SPIRE Server Admin Socket Access
+      desc: >
+        Access to the SPIRE server registration (admin) API socket.
+        An attacker with this socket can mint arbitrary SVIDs.
+      condition: >
+        open_read and
+        (fd.name contains "spire-server/private/api.sock" or
+         fd.name contains "spire-registration.sock") and
+        not proc.name in (spire-server)
+      output: >
+        SPIRE server admin socket accessed
+        (user=%user.name process=%proc.name
+         container=%container.name image=%container.image.repository
+         pid=%proc.pid)
+      priority: CRITICAL
+      tags: [nhi, spiffe, admin_socket, T1078.003]
+
+    #
+    # 4. Container Escape Attempt Near SPIRE Resources
+    #    ATT&CK: T1611 (Escape to Host)
+    #
+    - rule: Container Escape Attempt Near SPIRE
+      desc: >
+        Suspicious host-namespace tooling that could expose the
+        SPIRE agent socket from a compromised container.
+      condition: >
+        spawned_process and
+        container and
+        (proc.name in (nsenter, unshare) or
+         (proc.name = "mount" and proc.cmdline contains "proc") or
+         proc.cmdline contains "/proc/1/root" or
+         proc.cmdline contains "/.dockerenv" or
+         proc.cmdline contains "/var/run/docker.sock")
+      output: >
+        Potential container escape near SPIRE sockets
+        (user=%user.name process=%proc.name cmdline=%proc.cmdline
+         container=%container.name image=%container.image.repository)
+      priority: CRITICAL
+      tags: [nhi, spiffe, container_escape, T1611]
+
+    #
+    # 5. K8s Service Account Token Read from Non-Standard Process
+    #    ATT&CK: T1528 (Steal Application Access Token)
+    #
+    - rule: Kubernetes SA Token Read from Non-Standard Process
+      desc: >
+        Reading the projected service account token from the standard
+        mount path. Legitimate readers should be allow-listed.
+      condition: >
+        open_read and
+        (fd.name contains "serviceaccount/token" or
+         fd.name contains "serviceaccount/ca.crt") and
+        not proc.name in (kubelet, kube-proxy, coredns, containerd, runc)
+      output: >
+        K8s SA token read by non-standard process
+        (user=%user.name process=%proc.name file=%fd.name
+         container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [nhi, kubernetes, sa_token, T1528]
+
+    #
+    # 6. SPIRE Registration Entry Manipulation via CLI
+    #    ATT&CK: T1098 (Account Manipulation)
+    #
+    - rule: SPIRE Registration Entry Manipulation
+      desc: >
+        SPIRE CLI used to create, update, or delete registration entries.
+        This is a high-privilege operation that controls workload identity issuance.
+      condition: >
+        spawned_process and
+        (proc.name = "spire-server" or proc.name = "spire") and
+        (proc.cmdline contains "entry create" or
+         proc.cmdline contains "entry update" or
+         proc.cmdline contains "entry delete")
+      output: >
+        SPIRE registration entry manipulation
+        (user=%user.name cmdline=%proc.cmdline
+         container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [nhi, spiffe, registration, T1098]
+
+    #
+    # 7. Trust Bundle Export — potential theft for federation poisoning
+    #    ATT&CK: T1553 (Subvert Trust Controls)
+    #
+    - rule: Trust Bundle Export
+      desc: >
+        SPIRE trust bundle exported via CLI. An attacker may steal the
+        bundle to craft a rogue federation or poison an existing one.
+      condition: >
+        spawned_process and
+        (proc.name = "spire-server" or proc.name = "spire") and
+        (proc.cmdline contains "bundle show" or
+         proc.cmdline contains "bundle list")
+      output: >
+        SPIRE trust bundle exported
+        (user=%user.name cmdline=%proc.cmdline
+         container=%container.name image=%container.image.repository)
+      priority: NOTICE
+      tags: [nhi, spiffe, trust_bundle, T1553]
+
+  # ------------------------------------------
+  # Cloud credential and infrastructure rules
+  # ------------------------------------------
+  nhi-cloud-credential-rules.yaml: |-
+    # NHI Security Testbed — Cloud Credential & IMDS Falco Rules
+
+    #
+    # 8. IMDS Access from Container
+    #    ATT&CK: T1552.005 (Cloud Instance Metadata API)
+    #
+    - rule: IMDS Access from Container
+      desc: >
+        Container-initiated connection to the cloud instance metadata
+        service at 169.254.169.254. Often the first step in cloud
+        credential theft.
+      condition: >
+        outbound and
+        fd.sip = "169.254.169.254" and
+        container
+      output: >
+        IMDS access from container
+        (user=%user.name process=%proc.name
+         container=%container.name image=%container.image.repository
+         connection=%fd.name pid=%proc.pid)
+      priority: WARNING
+      tags: [nhi, cloud, imds, T1552.005]
+
+    #
+    # 9. Credential File Access in Container
+    #    ATT&CK: T1552.001 (Credentials In Files)
+    #
+    - rule: Credential File Access in Container
+      desc: >
+        Container reading common credential files such as .env,
+        AWS credentials, SSH keys, or TLS private keys.
+      condition: >
+        open_read and
+        container and
+        (fd.name endswith "/.env" or
+         fd.name contains "aws/credentials" or
+         fd.name contains "gcloud/application_default_credentials.json" or
+         fd.name contains ".azure/accessTokens.json" or
+         fd.name endswith "id_rsa" or
+         fd.name endswith "id_ed25519" or
+         fd.name endswith ".kube/config")
+      output: >
+        Credential file access in container
+        (user=%user.name process=%proc.name file=%fd.name
+         container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [nhi, credential_access, T1552.001]
+
+    #
+    # 10. HashiCorp Vault Token Discovery
+    #     ATT&CK: T1552 (Unsecured Credentials)
+    #
+    - rule: Vault Token Discovery
+      desc: >
+        Process accessing HashiCorp Vault token files or querying
+        the VAULT_TOKEN environment variable.
+      condition: >
+        (open_read and
+         (fd.name contains ".vault-token" or
+          fd.name contains "vault/token")) or
+        (spawned_process and
+         proc.cmdline contains "VAULT_TOKEN")
+      output: >
+        Vault token discovery
+        (user=%user.name process=%proc.name
+         container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [nhi, vault, credential_access, T1552]
+
+  # ------------------------------------------
+  # Cross-source correlation rules
+  # ------------------------------------------
+  nhi-correlation-rules.yaml: |-
+    # NHI Security Testbed — Correlation / Attack-Chain Rules
+
+    #
+    # 11. NHI Multi-Stage Attack Pattern
+    #     Detects curl/wget to sensitive NHI endpoints from a container.
+    #     ATT&CK: T1078 (Valid Accounts — initial vector in attack chain)
+    #
+    - rule: NHI Multi-Stage Attack Pattern
+      desc: >
+        A container process uses curl or wget to reach IMDS, Vault,
+        or SPIRE endpoints, indicating a possible multi-stage
+        NHI credential theft chain.
+      condition: >
+        spawned_process and
+        container and
+        (proc.name in (curl, wget, python, python3, node) and
+         (proc.cmdline contains "169.254" or
+          proc.cmdline contains "metadata.google" or
+          proc.cmdline contains "metadata.azure" or
+          proc.cmdline contains ":8200" or
+          proc.cmdline contains "spire"))
+      output: >
+        Potential NHI attack chain step
+        (user=%user.name process=%proc.name cmdline=%proc.cmdline
+         container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [nhi, attack_chain, T1078]
+
+# ---------------------------------------------------------------------------
+# Falcosidekick — forward alerts to Wazuh
+# ---------------------------------------------------------------------------
+falcosidekick:
+  enabled: true
+  config:
+    webhook:
+      # Wazuh manager API or syslog receiver.
+      # Adjust to match your Wazuh deployment (docker-compose or K8s).
+      address: "http://wazuh-manager:514/syslog"
+      minimumpriority: "notice"
+    customfields:
+      source: "falco"
+      environment: "nhi-testbed"
+      testbed_version: "3.0"
+
+# eBPF needs privileged — required for syscall tracing
+tty: true

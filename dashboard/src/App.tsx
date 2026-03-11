@@ -4,6 +4,7 @@ import DemoPage from './pages/DemoPage';
 import InteractivePage from './pages/InteractivePage';
 import ScenariosPage from './pages/ScenariosPage';
 import MitrePage from './pages/MitrePage';
+import CtfPage from './pages/CtfPage';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/interactive" element={<InteractivePage />} />
         <Route path="/scenarios" element={<ScenariosPage />} />
         <Route path="/mitre" element={<MitrePage />} />
+        <Route path="/ctf" element={<CtfPage />} />
       </Route>
     </Routes>
   );

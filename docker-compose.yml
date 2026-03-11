@@ -646,6 +646,45 @@ services:
       retries: 3
       start_period: 15s
 
+  # NHI Attack Dashboard (React)
+  nhi-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    image: nhi-testbed/dashboard:latest
+    container_name: nhi-dashboard
+    hostname: nhi-dashboard
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    networks:
+      mgmt_net:
+        ipv4_address: 172.40.0.21
+    depends_on:
+      nhi-api:
+        condition: service_healthy
+    labels:
+      - "nhi.service=dashboard"
+      - "nhi.role=management"
+
+  # Mock STS Federation Service (OAuth/OIDC)
+  mock-sts-federation:
+    build:
+      context: ./mock-services/sts-federation
+      dockerfile: Dockerfile
+    image: nhi-testbed/mock-sts-federation:latest
+    container_name: mock-sts-federation
+    hostname: mock-sts-federation
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    networks:
+      cloud_net:
+        ipv4_address: 172.41.0.40
+    labels:
+      - "nhi.service=sts-federation"
+      - "nhi.role=mock-service"
+
   # Mock CI/CD Server (GitHub Actions / GitLab CI / Azure DevOps + GitHub App)
   mock-cicd:
     build:

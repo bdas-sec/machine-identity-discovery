@@ -5,6 +5,7 @@ import {
   Terminal,
   Grid3x3,
   Monitor,
+  Trophy,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/interactive', icon: Activity, label: 'Interactive' },
   { to: '/scenarios', icon: Terminal, label: 'Scenarios' },
   { to: '/mitre', icon: Grid3x3, label: 'MITRE Map' },
+  { to: '/ctf', icon: Trophy, label: 'CTF' },
 ];
 
 export default function Layout() {

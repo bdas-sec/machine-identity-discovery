@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.config import settings
-from api.routes import alerts, dashboard, health, rules, scenarios, websocket
+from api.routes import alerts, ctf, dashboard, health, rules, scenarios, websocket
 from api.services.scenario_loader import scenario_loader
 from api.services.wazuh_client import wazuh_client
 
@@ -38,6 +38,7 @@ app.include_router(rules.router)
 app.include_router(alerts.router)
 app.include_router(dashboard.router)
 app.include_router(websocket.router)
+app.include_router(ctf.router)
 
 
 @app.get("/", tags=["root"])
@@ -54,5 +55,6 @@ async def root():
             "alerts": "/alerts",
             "dashboard": "/dashboard",
             "ws": "/ws/alerts",
+            "ctf": "/ctf",
         },
     }
