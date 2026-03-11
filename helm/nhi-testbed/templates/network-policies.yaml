@@ -233,4 +233,57 @@ spec:
           port: 1514
         - protocol: TCP
           port: 1515
+
+{{- if .Values.spire.enabled }}
+---
+# ==============================================================================
+# SPIRE: Allow agent-to-server communication
+# SPIRE agents need to reach the SPIRE server on port 8081 for attestation
+# and SVID issuance. When using an external server, egress targets a different
+# namespace.
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-spire-agent-egress
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.spire.serverNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8081
+
+---
+# SPIRE: Allow workloads to reach the SPIRE agent socket (for SVID requests)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-spire-workload-to-agent
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: spire-agent
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8081
+{{- end }}
 {{- end }}

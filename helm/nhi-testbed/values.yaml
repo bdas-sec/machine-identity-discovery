@@ -1,5 +1,5 @@
 # NHI Security Testbed - Helm Values
-# Default values for nhi-testbed chart (v0.1.0)
+# Default values for nhi-testbed chart (v0.2.0)
 
 # -- Global settings
 global:
@@ -375,3 +375,53 @@ profiles:
 # ==============================================================================
 networkPolicies:
   enabled: true
+
+# ==============================================================================
+# Deployment Mode
+# ==============================================================================
+# Controls how the testbed is deployed:
+#   compose  — Docker Compose (default, for local dev)
+#   kind     — kind (Kubernetes IN Docker)
+#   k3d      — k3d (lightweight K3s in Docker)
+#   generic  — generic Kubernetes cluster
+deployment:
+  mode: "compose"
+
+# ==============================================================================
+# SPIRE Integration
+# ==============================================================================
+# When enabled, deploys SPIRE agent sidecar mounts and creates registration
+# entries for testbed workloads. Requires a SPIRE server to be reachable.
+spire:
+  enabled: false
+  # Use an external SPIRE server (set true if SPIRE server is deployed separately)
+  externalServer: false
+  # Namespace where the SPIRE server is deployed
+  serverNamespace: "spire-system"
+  # Trust domain for SPIFFE IDs
+  trustDomain: "example.org"
+  agent:
+    logLevel: "DEBUG"
+    socketPath: "/run/spire/sockets/agent.sock"
+  # Enable the SPIFFE CSI driver for volume-projected SVID delivery
+  csiDriver:
+    enabled: false
+
+# ==============================================================================
+# Wazuh Agent DaemonSet
+# ==============================================================================
+# Deploy Wazuh agents as a DaemonSet across all (or selected) nodes.
+# This is separate from the per-scenario agent containers above.
+wazuhAgent:
+  enabled: true
+  daemonset: true
+  image:
+    repository: wazuh/wazuh-agent
+    tag: "4.9.2"
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

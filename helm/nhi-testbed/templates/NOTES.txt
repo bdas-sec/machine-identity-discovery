@@ -102,7 +102,23 @@ Optional Profiles:
   [{{ if .Values.profiles.k8sSimulation.enabled }}x{{ else }} {{ end }}] Kubernetes Simulation
   [{{ if .Values.profiles.aiAgent.enabled }}x{{ else }} {{ end }}] AI Agent Simulation
 
+{{- if and .Values.wazuhAgent.enabled .Values.wazuhAgent.daemonset }}
+Wazuh Agent DaemonSet:
+  [x] Deployed on all nodes (wazuh-agent:{{ .Values.wazuhAgent.image.tag }})
+{{- end }}
+
+{{- if .Values.spire.enabled }}
+
+SPIRE Integration:
+  [x] Trust Domain: {{ .Values.spire.trustDomain }}
+  [x] Server Namespace: {{ .Values.spire.serverNamespace }}
+  [{{ if .Values.spire.externalServer }}x{{ else }} {{ end }}] External Server
+  [{{ if .Values.spire.csiDriver.enabled }}x{{ else }} {{ end }}] CSI Driver
+  Post-install hook will register workload entries automatically.
+{{- end }}
+
 Network Policies: {{ if .Values.networkPolicies.enabled }}ENABLED{{ else }}DISABLED{{ end }}
+Deployment Mode: {{ .Values.deployment.mode }}
 
 --- Quick Health Check ---
 

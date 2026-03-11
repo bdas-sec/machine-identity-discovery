@@ -4,11 +4,12 @@
 # NHI Security Testbed
 #
 # Usage:
-#   ./scripts/start.sh              # Start core services
+#   ./scripts/start.sh              # Start core services (Docker Compose)
 #   ./scripts/start.sh --all        # Start all services including K8s and AI
 #   ./scripts/start.sh --k8s        # Include Kubernetes simulation
 #   ./scripts/start.sh --ai         # Include AI agent
 #   ./scripts/start.sh --build      # Force rebuild images
+#   ./scripts/start.sh --mode kind  # Deploy via Kind (Kubernetes IN Docker)
 #
 
 set -e
@@ -49,6 +50,7 @@ echo -e "${NC}"
 # Parse arguments
 PROFILE=""
 BUILD_FLAG=""
+DEPLOY_MODE="compose"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -68,12 +70,26 @@ while [[ $# -gt 0 ]]; do
             BUILD_FLAG="--build"
             shift
             ;;
+        --mode)
+            DEPLOY_MODE="${2:-}"
+            if [ -z "$DEPLOY_MODE" ]; then
+                echo -e "${RED}--mode requires a value (compose or kind)${NC}"
+                exit 1
+            fi
+            shift 2
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
             exit 1
             ;;
     esac
 done
+
+# If Kind mode requested, delegate to Kind setup script and exit
+if [ "$DEPLOY_MODE" = "kind" ]; then
+    echo -e "${BLUE}Deploying via Kind (Kubernetes IN Docker)...${NC}"
+    exec "$PROJECT_DIR/k8s/setup-kind.sh"
+fi
 
 # Check prerequisites
 check_prerequisites() {

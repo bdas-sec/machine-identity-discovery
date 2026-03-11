@@ -1,0 +1,118 @@
+{{- if .Values.spire.enabled }}
+# ==============================================================================
+# SPIRE Registration Entries — Post-Install Hook
+#
+# Creates SPIFFE registration entries for each testbed workload after the
+# Helm release is installed or upgraded. Each entry maps a Kubernetes
+# service account to a SPIFFE ID under the configured trust domain.
+# ==============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-spire-register
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: spire-register
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: spire-register
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: register
+          image: ghcr.io/spiffe/spire-server:1.11.2
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              TRUST_DOMAIN="{{ .Values.spire.trustDomain }}"
+              NAMESPACE="{{ include "nhi-testbed.namespace" . }}"
+              PARENT_ID="spiffe://${TRUST_DOMAIN}/spire/agent/k8s_psat/nhi-testbed"
+
+              {{- if .Values.spire.externalServer }}
+              # External SPIRE server — connect via TCP
+              SERVER_ADDR="{{ include "nhi-testbed.fullname" . }}-spire-server.{{ .Values.spire.serverNamespace }}.svc:8081"
+              CONN_FLAG="-serverAddr ${SERVER_ADDR}"
+              {{- else }}
+              # In-cluster SPIRE server — connect via Unix socket
+              SOCKET="/tmp/spire-server/private/api.sock"
+              CONN_FLAG="-socketPath ${SOCKET}"
+
+              # Wait for SPIRE server socket to be available
+              echo "Waiting for SPIRE server..."
+              for i in $(seq 1 30); do
+                if [ -S "$SOCKET" ]; then
+                  echo "SPIRE server socket ready"
+                  break
+                fi
+                echo "  attempt $i/30 — socket not yet available"
+                sleep 2
+              done
+              {{- end }}
+
+              echo "Registering workload entries for trust domain: ${TRUST_DOMAIN}"
+
+              # Cloud workload
+              echo "  -> cloud-workload"
+              /opt/spire/bin/spire-server entry create \
+                -spiffeID "spiffe://${TRUST_DOMAIN}/cloud-workload" \
+                -parentID "${PARENT_ID}" \
+                -selector "k8s:ns:${NAMESPACE}" \
+                -selector "k8s:sa:cloud-workload" \
+                ${CONN_FLAG} || true
+
+              # CI/CD runner
+              echo "  -> cicd-runner"
+              /opt/spire/bin/spire-server entry create \
+                -spiffeID "spiffe://${TRUST_DOMAIN}/cicd-runner" \
+                -parentID "${PARENT_ID}" \
+                -selector "k8s:ns:${NAMESPACE}" \
+                -selector "k8s:sa:cicd-runner" \
+                ${CONN_FLAG} || true
+
+              # Vulnerable app
+              echo "  -> vulnerable-app"
+              /opt/spire/bin/spire-server entry create \
+                -spiffeID "spiffe://${TRUST_DOMAIN}/vulnerable-app" \
+                -parentID "${PARENT_ID}" \
+                -selector "k8s:ns:${NAMESPACE}" \
+                -selector "k8s:sa:vulnerable-app" \
+                ${CONN_FLAG} || true
+
+              # Wazuh agent (DaemonSet)
+              echo "  -> wazuh-agent"
+              /opt/spire/bin/spire-server entry create \
+                -spiffeID "spiffe://${TRUST_DOMAIN}/wazuh-agent" \
+                -parentID "${PARENT_ID}" \
+                -selector "k8s:ns:${NAMESPACE}" \
+                -selector "k8s:sa:default" \
+                ${CONN_FLAG} || true
+
+              # NHI API
+              echo "  -> nhi-api"
+              /opt/spire/bin/spire-server entry create \
+                -spiffeID "spiffe://${TRUST_DOMAIN}/nhi-api" \
+                -parentID "${PARENT_ID}" \
+                -selector "k8s:ns:${NAMESPACE}" \
+                -selector "k8s:sa:nhi-api" \
+                ${CONN_FLAG} || true
+
+              echo ""
+              echo "Registration entries created successfully"
+{{- end }}

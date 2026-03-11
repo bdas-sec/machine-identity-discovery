@@ -1,0 +1,95 @@
+{{- if and .Values.wazuhAgent.enabled .Values.wazuhAgent.daemonset }}
+# ==============================================================================
+# Wazuh Agent DaemonSet
+#
+# Deploys a Wazuh agent on every node in the cluster, enabling host-level
+# log collection, file integrity monitoring, and NHI threat detection.
+# When SPIRE is enabled, the agent mounts the SPIRE agent socket to allow
+# SVID-based workload identity monitoring.
+# ==============================================================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "nhi-testbed.fullname" . }}-wazuh-agent
+  namespace: {{ include "nhi-testbed.namespace" . }}
+  labels:
+    {{- include "nhi-testbed.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wazuh-agent
+    nhi.network/tier: mgmt
+spec:
+  selector:
+    matchLabels:
+      {{- include "nhi-testbed.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wazuh-agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        {{- include "nhi-testbed.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wazuh-agent
+        nhi.network/tier: mgmt
+    spec:
+      hostPID: true
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: wazuh-agent
+          image: {{ include "nhi-testbed.image" (dict "image" .Values.wazuhAgent.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          resources:
+            {{- toYaml .Values.wazuhAgent.resources | nindent 12 }}
+          env:
+            - name: WAZUH_MANAGER
+              value: {{ include "nhi-testbed.componentName" (list . "wazuh-manager") }}
+            - name: WAZUH_AGENT_GROUP
+              value: "kubernetes,node,daemonset"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: host-root
+              mountPath: /host
+              readOnly: true
+            - name: host-var-log
+              mountPath: /var/log/host
+              readOnly: true
+            {{- if .Values.spire.enabled }}
+            - name: spire-agent-socket
+              mountPath: {{ dir .Values.spire.agent.socketPath }}
+              readOnly: true
+            {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - /var/ossec/bin/wazuh-control
+                - status
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+        - name: host-var-log
+          hostPath:
+            path: /var/log
+        {{- if .Values.spire.enabled }}
+        - name: spire-agent-socket
+          {{- if .Values.spire.csiDriver.enabled }}
+          csi:
+            driver: "csi.spiffe.io"
+            readOnly: true
+          {{- else }}
+          hostPath:
+            path: {{ dir .Values.spire.agent.socketPath }}
+            type: DirectoryOrCreate
+          {{- end }}
+        {{- end }}
+{{- end }}

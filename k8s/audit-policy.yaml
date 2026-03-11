@@ -1,0 +1,30 @@
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  # Log all Secret access at RequestResponse level
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["secrets"]
+  # Log ServiceAccount token creation
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["serviceaccounts/token"]
+  # Log RBAC changes
+  - level: RequestResponse
+    resources:
+      - group: "rbac.authorization.k8s.io"
+        resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  # Log pod exec/attach (container escape indicators)
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach"]
+  # Log namespace and node events
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["namespaces", "nodes"]
+  # Default: log metadata for everything else
+  - level: Metadata
