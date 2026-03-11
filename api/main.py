@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.config import settings
-from api.routes import alerts, health, rules, scenarios
+from api.routes import alerts, dashboard, health, rules, scenarios, websocket
 from api.services.scenario_loader import scenario_loader
 from api.services.wazuh_client import wazuh_client
 
@@ -14,6 +14,7 @@ from api.services.wazuh_client import wazuh_client
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     scenario_loader.load_all()
+    websocket.start_polling()
     yield
     await wazuh_client.close()
 
@@ -35,6 +36,8 @@ app.include_router(health.router)
 app.include_router(scenarios.router)
 app.include_router(rules.router)
 app.include_router(alerts.router)
+app.include_router(dashboard.router)
+app.include_router(websocket.router)
 
 
 @app.get("/", tags=["root"])
@@ -49,5 +52,7 @@ async def root():
             "scenarios": "/scenarios",
             "rules": "/rules",
             "alerts": "/alerts",
+            "dashboard": "/dashboard",
+            "ws": "/ws/alerts",
         },
     }

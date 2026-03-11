@@ -90,6 +90,14 @@ class WazuhClient:
             "alerts": alerts,
         }
 
+    async def get_recent_alerts(self, since: str = "", limit: int = 10) -> list[dict]:
+        """Get alerts newer than `since` timestamp. Optimized for polling."""
+        result = await self.get_alerts(limit=limit)
+        alerts = result.get("alerts", [])
+        if since:
+            alerts = [a for a in alerts if a.get("timestamp", "") > since]
+        return alerts
+
     async def get_rules(self, limit: int = 500) -> list[dict]:
         """Get loaded Wazuh rules."""
         data = await self._get("/rules", {"limit": limit})

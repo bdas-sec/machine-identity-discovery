@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-nhi: #7c3aed;
+  }
+
+  body {
+    @apply bg-gray-900 text-gray-100 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-lg;
+  }
+
+  .card-header {
+    @apply px-4 py-3 border-b border-gray-700/50 flex items-center justify-between;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-nhi-500 hover:bg-nhi-600 text-white rounded-lg
+           font-medium transition-colors duration-200 disabled:opacity-50
+           disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply px-3 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50
+           rounded-lg font-medium transition-colors duration-200;
+  }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full inline-block;
+  }
+
+  .glow-nhi {
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-nhi-400 to-purple-400;
+  }
+
+  .border-glow {
+    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3), 0 0 15px rgba(124, 58, 237, 0.1);
+  }
+}
