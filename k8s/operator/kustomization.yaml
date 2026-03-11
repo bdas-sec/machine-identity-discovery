@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nhi-system
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: nhi-testbed
+      app.kubernetes.io/managed-by: kustomize
+
+resources:
+  # CustomResourceDefinitions
+  - crds/nhiscenario.yaml
+  - crds/nhiscenariorun.yaml
+  # Operator deployment, RBAC, and configuration
+  - deploy.yaml
+
+images:
+  - name: ghcr.io/nhi-testbed/operator
+    newTag: latest

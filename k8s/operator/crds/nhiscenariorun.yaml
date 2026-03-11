@@ -1,0 +1,151 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nhiscenarioruns.nhi.security
+  labels:
+    app.kubernetes.io/name: nhi-operator
+    app.kubernetes.io/part-of: nhi-testbed
+  annotations:
+    description: >-
+      NHIScenarioRun represents a single execution of an NHIScenario.
+      The operator creates Jobs for each attack phase, monitors Wazuh
+      for expected alerts, and reports detection rate and latency.
+spec:
+  group: nhi.security
+  names:
+    kind: NHIScenarioRun
+    listKind: NHIScenarioRunList
+    plural: nhiscenarioruns
+    singular: nhiscenariorun
+    shortNames:
+      - nhirun
+      - run
+    categories:
+      - nhi
+      - security
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: SCENARIO
+          type: string
+          jsonPath: .spec.scenarioRef
+        - name: PHASE
+          type: string
+          jsonPath: .status.phase
+        - name: DETECTION
+          type: string
+          jsonPath: .status.detectionRate
+        - name: LATENCY
+          type: string
+          jsonPath: .status.detectionLatency
+        - name: AGE
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            NHIScenarioRun triggers execution of an NHIScenario and tracks
+            attack phase progress, detection results, and timing metrics.
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - scenarioRef
+              properties:
+                scenarioRef:
+                  type: string
+                  description: >-
+                    Name of the NHIScenario resource to execute. Must exist
+                    in the same namespace as this NHIScenarioRun.
+                targetNamespace:
+                  type: string
+                  description: >-
+                    Namespace where attack Jobs will be created. Defaults to
+                    the namespace of this NHIScenarioRun.
+                timeout:
+                  type: integer
+                  description: >-
+                    Maximum time in seconds to wait for the entire scenario
+                    run to complete (all phases + detection). Defaults to 300.
+                  default: 300
+                  minimum: 30
+                  maximum: 3600
+                dryRun:
+                  type: boolean
+                  description: >-
+                    If true, validate the scenario and log planned actions
+                    without executing any attack commands.
+                  default: false
+            status:
+              type: object
+              description: Observed state of the scenario run, managed by the operator.
+              properties:
+                phase:
+                  type: string
+                  description: Current lifecycle phase of this run.
+                  enum:
+                    - Pending
+                    - Running
+                    - Detecting
+                    - Completed
+                    - Failed
+                startTime:
+                  type: string
+                  format: date-time
+                  description: Timestamp when the run began executing.
+                completionTime:
+                  type: string
+                  format: date-time
+                  description: Timestamp when the run reached a terminal state.
+                currentPhase:
+                  type: integer
+                  description: Zero-based index of the attack phase currently executing.
+                totalPhases:
+                  type: integer
+                  description: Total number of attack phases in the referenced scenario.
+                detectedAlerts:
+                  type: array
+                  description: Wazuh alerts matched during the detection window.
+                  items:
+                    type: object
+                    properties:
+                      ruleId:
+                        type: string
+                        description: Wazuh rule ID that fired.
+                      level:
+                        type: integer
+                        description: Alert severity level.
+                      description:
+                        type: string
+                        description: Alert description from Wazuh.
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: When Wazuh generated the alert.
+                detectionRate:
+                  type: string
+                  description: >-
+                    Fraction of expected alerts that were detected
+                    (e.g., "3/4 (75%)").
+                detectionLatency:
+                  type: string
+                  description: >-
+                    Average time between attack execution and alert generation
+                    (e.g., "4.2s").
+                message:
+                  type: string
+                  description: Human-readable status message or error description.
+      subresources:
+        status: {}
