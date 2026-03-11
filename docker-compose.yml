@@ -91,6 +91,8 @@ volumes:
   spire_server_logs:
   spire_agent_sockets:
   spire_agent_logs:
+  spire_evil_server_data:
+  spire_evil_server_logs:
 
 # ============================================
 # Services
@@ -479,6 +481,35 @@ services:
       - "nhi.role=workload-identity"
     healthcheck:
       test: ["CMD", "/opt/spire/bin/spire-agent", "healthcheck", "-socketPath", "/opt/spire/sockets/workload_api.sock"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # SPIFFE/SPIRE - Evil Federation Server (attack simulation)
+  spire-server-evil:
+    profiles: ["federation", "all"]
+    image: ghcr.io/spiffe/spire-server:1.11.2
+    container_name: spire-server-evil
+    hostname: spire-server-evil
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - ./spire/server-evil/server.conf:/opt/spire/conf/server/server.conf:ro
+      - ./spire/server-evil/dummy_upstream_ca.crt:/opt/spire/conf/server/dummy_upstream_ca.crt:ro
+      - ./spire/server-evil/dummy_upstream_ca.key:/opt/spire/conf/server/dummy_upstream_ca.key:ro
+      - spire_evil_server_data:/opt/spire/data
+      - spire_evil_server_logs:/var/log/spire
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+    networks:
+      k8s_net:
+        ipv4_address: 172.43.0.35
+    labels:
+      - "nhi.component=spire-server-evil"
+      - "nhi.trust_domain=evil.org"
+      - "nhi.role=attack-simulation"
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-server", "healthcheck", "-socketPath", "/tmp/spire-server/private/api.sock"]
       interval: 30s
       timeout: 10s
       retries: 5

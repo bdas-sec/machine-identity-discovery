@@ -1,0 +1,43 @@
+title: "NHI-SPIRE: Cross-Domain Registration Entry Manipulation"
+id: e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b
+related:
+    - id: "101092"
+      type: derived
+status: experimental
+description: |
+    Detects registration entry creation on a SPIRE Server where the caller
+    identity belongs to a federated (non-local) trust domain. In a properly
+    configured deployment, only local administrators should create registration
+    entries. A federated identity creating entries means an external entity is
+    defining workload-to-SPIFFE-ID mappings in your infrastructure, which
+    enables workload impersonation from across trust domain boundaries.
+    This is a critical step in cross-domain privilege escalation.
+    Derived from Wazuh rule 101092.
+references:
+    - https://attack.mitre.org/techniques/T1098/
+    - https://attack.mitre.org/techniques/T1199/
+    - https://spiffe.io/docs/latest/deploying/registering/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.persistence
+    - attack.t1098
+    - attack.initial_access
+    - attack.t1199
+    - nhi.spiffe_spire
+    - nhi.federation
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_method:
+        method|contains:
+            - 'CreateEntry'
+            - 'BatchCreateEntry'
+    filter_local_caller:
+        caller_id|startswith: 'spiffe://example.org'
+    condition: selection_method and not filter_local_caller
+falsepositives:
+    - Legitimate cross-domain administration in multi-organization deployments
+    - Federated CI/CD systems with authorized cross-domain entry creation
+level: critical

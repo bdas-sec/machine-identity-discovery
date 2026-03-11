@@ -11,7 +11,8 @@
     100850-100899: AI Agent Anomalies
     100900-100949: Secret Pattern Detection
     100950-100999: Correlation Rules
-    101000-101099: SPIFFE/SPIRE Workload Identity
+    101000-101089: SPIFFE/SPIRE Workload Identity
+    101090-101099: SPIRE Federation & WIF Detection
 
   Copyright (C) 2026, Bodhisattva Das
 -->
@@ -1255,7 +1256,7 @@
     <group>nhi_spire_delegated_api,</group>
   </rule>
 
-  <!-- ===== SPIFFE/SPIRE Correlation Rules (101080-101099) ===== -->
+  <!-- ===== SPIFFE/SPIRE Correlation Rules (101080-101089) ===== -->
 
   <!-- Container escape + SVID theft chain -->
   <rule id="101080" level="15" timeframe="300">
@@ -1294,6 +1295,117 @@
       <id>T1134</id>
     </mitre>
     <group>nhi_spire_selector_spoofing_chain,nhi_correlation,</group>
+  </rule>
+
+  <!-- ============================================ -->
+  <!-- SPIRE Federation & WIF Detection             -->
+  <!-- Rule IDs: 101090-101099                      -->
+  <!-- ============================================ -->
+
+  <!-- Federation bundle imported — a new trust domain has been added.
+       This indicates cross-organizational trust establishment. An attacker
+       who controls a rogue SPIRE server can import a malicious bundle to
+       get their SVIDs accepted by the target trust domain.
+       Matches SPIRE Server audit logs for bundle set operations. -->
+  <rule id="101090" level="12">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">Bundle\s+set|BatchSetFederatedBundle|"method":"bundle\.v1\.Bundle/BatchSetFederatedBundle"</match>
+    <description>NHI-SPIRE: Federation bundle imported - new trust domain added</description>
+    <mitre>
+      <id>T1199</id>
+    </mitre>
+    <group>nhi_spire_federation,</group>
+  </rule>
+
+  <!-- Cross-domain SVID fetch — workload obtained an SVID from a federated
+       (non-local) trust domain. Normal in federated deployments, but high
+       value for correlation: if preceded by rogue bundle import or entry
+       manipulation, this confirms the pivot succeeded.
+       Matches SPIRE Agent logs where the SPIFFE ID belongs to a foreign domain.
+       NOTE: The regex excludes example.org (testbed default). Adjust the
+       exclusion pattern to match your production trust domain. -->
+  <rule id="101091" level="12">
+    <decoded_as>nhi-spire-agent</decoded_as>
+    <match type="pcre2">Fetched\s+(JWT|X\.509)\s+SVID|FetchX509SVID|FetchJWTSVID</match>
+    <field name="url" type="pcre2">spiffe://(?!example\.org)</field>
+    <description>NHI-SPIRE: Cross-domain SVID fetched from federated trust domain - $(url)</description>
+    <mitre>
+      <id>T1199</id>
+      <id>T1550</id>
+    </mitre>
+    <group>nhi_spire_federation,nhi_spire_cross_domain,</group>
+  </rule>
+
+  <!-- Cross-domain entry manipulation — a federated (external) identity
+       created a registration entry on the local SPIRE Server. This is a
+       high-severity event: it means an identity from another trust domain
+       is defining workload-to-SPIFFE-ID mappings in your infrastructure.
+       Matches SPIRE Server audit logs where the caller SPIFFE ID does not
+       belong to the local trust domain. -->
+  <rule id="101092" level="14">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">CreateEntry|BatchCreateEntry|"method":"entry\.v1\.Entry/BatchCreateEntry"</match>
+    <field name="caller_id" type="pcre2">spiffe://(?!example\.org)</field>
+    <description>NHI-SPIRE: Registration entry created by federated identity $(caller_id) - cross-domain manipulation</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1199</id>
+    </mitre>
+    <group>nhi_spire_federation,nhi_spire_cross_domain_admin,</group>
+  </rule>
+
+  <!-- Federation bundle endpoint accessed — informational baseline.
+       The bundle endpoint (https://spire-server:8443) serves the trust
+       bundle to federated peers. Access is expected, but useful for
+       correlation and audit trails. -->
+  <rule id="101093" level="8">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">FetchBundle|GetBundle|"method":"bundle\.v1\.Bundle/GetBundle"|bundle\s+endpoint\s+request</match>
+    <description>NHI-SPIRE: Federation bundle endpoint accessed</description>
+    <group>nhi_spire_federation,nhi_spire_bundle_access,</group>
+  </rule>
+
+  <!-- Federation trust domain removed — a previously trusted domain's
+       bundle has been deleted. This could be legitimate decommissioning
+       or an attacker removing trust to cause denial of service for
+       cross-domain workloads. -->
+  <rule id="101094" level="12">
+    <decoded_as>nhi-spire-server</decoded_as>
+    <match type="pcre2">Bundle\s+deleted|DeleteFederatedBundle|"method":"bundle\.v1\.Bundle/BatchDeleteFederatedBundle"|BatchDeleteFederatedBundle</match>
+    <description>NHI-SPIRE: Federated trust domain bundle removed</description>
+    <mitre>
+      <id>T1562</id>
+    </mitre>
+    <group>nhi_spire_federation,</group>
+  </rule>
+
+  <!-- WIF token exchange using SPIRE JWT-SVID — a workload exchanged a
+       SPIRE-issued JWT-SVID for a cloud provider token (GCP, AWS, Azure)
+       via Workload Identity Federation. This is a cross-cloud pivot:
+       the attacker uses a stolen or forged SVID to obtain cloud IAM
+       credentials without needing cloud-native secrets.
+       Matches GCP STS / metadata endpoint logs showing SPIFFE references. -->
+  <rule id="101095" level="14">
+    <decoded_as>nhi-gcp-metadata</decoded_as>
+    <match type="pcre2">spiffe://.*token\s+exchange|SPIRE\s+JWT-SVID\s+to\s+(GCP|AWS|Azure)\s+token|/v1/token.*spiffe://|sts\.googleapis\.com.*spiffe://</match>
+    <description>NHI-SPIRE: Workload Identity Federation token exchange using SPIRE JWT-SVID - cross-cloud pivot</description>
+    <mitre>
+      <id>T1550.001</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_spire_wif,nhi_spire_federation,</group>
+  </rule>
+
+  <!-- Correlation: Federation abuse chain — multiple federation events
+       within a 5-minute window indicate systematic abuse of SPIRE
+       federation (bundle import + cross-domain SVID + entry manipulation). -->
+  <rule id="101096" level="15" frequency="2" timeframe="300">
+    <if_matched_group>nhi_spire_federation</if_matched_group>
+    <description>NHI-SPIRE: Federation abuse chain - multiple federation events detected within 5 minutes</description>
+    <mitre>
+      <id>T1199</id>
+    </mitre>
+    <group>nhi_spire_federation,nhi_spire_federation_chain,nhi_correlation,</group>
   </rule>
 
 </group>

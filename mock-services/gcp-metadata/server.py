@@ -49,6 +49,27 @@ def log_access(endpoint: str, source_ip: str):
     logger.warning(f"GCP-METADATA ACCESS: {source_ip} -> {endpoint}")
 
 
+def _extract_spiffe_id(token: str) -> str | None:
+    """
+    Attempt to decode a JWT and extract a SPIFFE ID from the 'sub' claim.
+    SPIRE JWT-SVIDs have a 'sub' claim in the form 'spiffe://<trust_domain>/<path>'.
+    Returns the SPIFFE ID string if found, None otherwise.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        # Add padding for base64 decoding
+        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        sub = payload.get("sub", "")
+        if sub.startswith("spiffe://"):
+            return sub
+    except Exception:
+        pass
+    return None
+
+
 def require_metadata_flavor(f):
     """
     Decorator to enforce Metadata-Flavor: Google header.
@@ -291,6 +312,14 @@ def sts_token_exchange():
             "error_description": "subject_token is required"
         }), 400
 
+    # Detect SPIRE JWT-SVID tokens and log federation attack details
+    spiffe_id = _extract_spiffe_id(subject_token)
+    if spiffe_id:
+        logger.warning(
+            f"[CRITICAL ATTACK] SPIRE JWT-SVID to GCP token exchange from {request.remote_addr} - "
+            f"SPIFFE ID: {spiffe_id}, token_type={subject_token_type}"
+        )
+
     # Return federated access token
     federated_token = f"ya29.c.DEMO_FEDERATED_{uuid.uuid4().hex[:16]}"
     return jsonify({
@@ -298,7 +327,9 @@ def sts_token_exchange():
         "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
         "token_type": "Bearer",
         "expires_in": 3600,
-        "scope": requested_scope
+        "scope": requested_scope,
+        # Include source identity info when SPIRE SVID detected
+        **({"federated_identity": spiffe_id} if spiffe_id else {})
     })
 
 

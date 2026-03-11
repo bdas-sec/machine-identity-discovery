@@ -1,0 +1,46 @@
+title: "NHI-SPIRE: Cross-Domain SVID Fetched via Federation"
+id: b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e
+related:
+    - id: "101091"
+      type: derived
+status: experimental
+description: |
+    Detects a workload fetching an SVID belonging to a federated (non-local)
+    trust domain. In normal operation, workloads receive SVIDs from their own
+    trust domain. A cross-domain SVID fetch indicates either legitimate
+    federated communication or an attacker who has imported a rogue trust
+    bundle and is now obtaining SVIDs to impersonate workloads in the target
+    domain. High value for correlation with bundle import events.
+    Derived from Wazuh rule 101091.
+references:
+    - https://attack.mitre.org/techniques/T1199/
+    - https://attack.mitre.org/techniques/T1550/
+    - https://spiffe.io/docs/latest/architecture/federation/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.t1199
+    - attack.credential_access
+    - attack.t1550
+    - nhi.spiffe_spire
+    - nhi.federation
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_method:
+        method|contains:
+            - 'FetchX509SVID'
+            - 'FetchJWTSVID'
+    selection_log:
+        msg|contains:
+            - 'Fetched X.509 SVID'
+            - 'Fetched JWT SVID'
+    filter_local_domain:
+        spiffe_id|startswith: 'spiffe://example.org'
+    condition: 1 of selection_* and not filter_local_domain
+falsepositives:
+    - Legitimate cross-domain service mesh communication
+    - Multi-cluster deployments with federated SPIRE servers
+level: high

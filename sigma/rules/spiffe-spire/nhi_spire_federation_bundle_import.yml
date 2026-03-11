@@ -1,0 +1,41 @@
+title: "NHI-SPIRE: Federation Bundle Imported"
+id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+related:
+    - id: "101090"
+      type: derived
+status: experimental
+description: |
+    Detects import of a federation bundle into a SPIRE Server. A federation
+    bundle establishes cross-domain trust by adding another trust domain's
+    root certificates. An attacker who controls a rogue SPIRE Server can
+    import a malicious bundle to get their forged SVIDs accepted by the
+    target infrastructure. This is the first step in a federation abuse chain.
+    Derived from Wazuh rule 101090.
+references:
+    - https://attack.mitre.org/techniques/T1199/
+    - https://spiffe.io/docs/latest/architecture/federation/
+    - https://spiffe.io/docs/latest/microservices/envoy-x509/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.t1199
+    - nhi.spiffe_spire
+    - nhi.federation
+logsource:
+    category: application
+    product: spire
+detection:
+    selection_api:
+        method|contains:
+            - 'BatchSetFederatedBundle'
+            - 'SetFederatedBundle'
+    selection_log:
+        msg|contains:
+            - 'Bundle set'
+            - 'Federated bundle imported'
+    condition: 1 of selection_*
+falsepositives:
+    - Legitimate federation onboarding with a new partner trust domain
+    - Automated trust bundle rotation in multi-cluster deployments
+level: high

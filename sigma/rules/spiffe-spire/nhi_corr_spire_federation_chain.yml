@@ -1,0 +1,39 @@
+title: "NHI-SPIRE: Federation Abuse Chain"
+id: d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a
+related:
+    - id: "101096"
+      type: derived
+name: nhi_corr_spire_federation_chain
+type: correlation
+status: experimental
+description: |
+    Detects a federation abuse chain where multiple SPIRE federation events
+    occur within a short window. The attack sequence is: (1) import a rogue
+    federation bundle to establish trust, (2) create registration entries
+    using a federated identity, (3) fetch cross-domain SVIDs to impersonate
+    workloads, and optionally (4) exchange SVIDs for cloud tokens via WIF.
+    Two or more of these events within 5 minutes indicate systematic abuse
+    of SPIRE federation rather than normal operational activity.
+    Derived from Wazuh rule 101096 (frequency=2, timeframe=300s).
+references:
+    - https://attack.mitre.org/techniques/T1199/
+    - https://spiffe.io/docs/latest/architecture/federation/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.t1199
+    - nhi.spiffe_spire
+    - nhi.federation
+    - nhi.correlation
+rules:
+    - nhi_spire_federation_bundle_import
+    - nhi_spire_cross_domain_svid
+    - nhi_spire_cross_domain_entry_manipulation
+    - nhi_spire_wif_token_exchange
+group-by:
+    - SourceIP
+timespan: 5m
+condition:
+    gte: 2
+level: critical

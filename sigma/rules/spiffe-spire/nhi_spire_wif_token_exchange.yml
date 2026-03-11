@@ -1,0 +1,48 @@
+title: "NHI-SPIRE: SVID to Cloud Token Exchange (WIF)"
+id: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
+related:
+    - id: "101095"
+      type: derived
+status: experimental
+description: |
+    Detects Workload Identity Federation (WIF) token exchange where a SPIRE
+    JWT-SVID is exchanged for a cloud provider IAM token (GCP, AWS, Azure).
+    This is a cross-cloud pivot technique: an attacker who has stolen or forged
+    a SPIRE JWT-SVID can exchange it for cloud credentials without needing any
+    cloud-native secrets. The WIF trust relationship treats the SPIFFE trust
+    domain as an identity provider, so a compromised SVID grants cloud access.
+    Derived from Wazuh rule 101095.
+references:
+    - https://attack.mitre.org/techniques/T1550/001/
+    - https://attack.mitre.org/techniques/T1078/004/
+    - https://cloud.google.com/iam/docs/workload-identity-federation
+    - https://spiffe.io/docs/latest/keyless/oidc-federation-aws/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.credential_access
+    - attack.t1550.001
+    - attack.defense_evasion
+    - attack.t1078.004
+    - nhi.spiffe_spire
+    - nhi.federation
+    - nhi.wif
+logsource:
+    category: application
+    product: cloud_metadata
+detection:
+    selection_sts:
+        url|contains:
+            - '/v1/token'
+            - 'sts.googleapis.com'
+            - 'sts.amazonaws.com'
+    selection_spiffe:
+        msg|contains:
+            - 'spiffe://'
+            - 'SPIRE JWT-SVID'
+            - 'token exchange'
+    condition: selection_sts and selection_spiffe
+falsepositives:
+    - Legitimate workloads using WIF for authorized cloud access
+    - Automated CI/CD pipelines exchanging SPIRE SVIDs for cloud tokens
+level: critical
