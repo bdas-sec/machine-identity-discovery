@@ -1,0 +1,57 @@
+title: "NHI-Supply Chain: Poisoned Pipeline Execution Detected"
+id: b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e
+related:
+    - id: "100980"
+      type: derived
+    - id: "100981"
+      type: derived
+status: test
+description: |
+    Detects modification of CI/CD pipeline configuration files (GitHub Actions
+    workflows, GitLab CI, Jenkinsfile, etc.) in pull request context, followed
+    by execution of commands from untrusted sources. This is a Poisoned Pipeline
+    Execution (PPE) attack where an attacker submits a PR with malicious CI
+    config that executes in the pipeline's elevated security context.
+    Real-world: Codecov (2021), SolarWinds Orion build compromise.
+    Derived from Wazuh rules 100980/100981.
+references:
+    - https://attack.mitre.org/techniques/T1195/002/
+    - https://cycode.com/blog/poisoned-pipeline-execution/
+    - https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.execution
+    - attack.t1195.002
+    - attack.t1059
+    - nhi.supply_chain
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_config_modification:
+        CommandLine|contains:
+            - '.github/workflows'
+            - '.gitlab-ci.yml'
+            - 'Jenkinsfile'
+            - '.circleci/config'
+            - '.azure-pipelines'
+            - 'bitbucket-pipelines'
+    selection_untrusted_execution:
+        CommandLine|contains:
+            - 'curl'
+            - 'wget'
+            - 'config_override'
+        CommandLine|contains:
+            - 'http://'
+            - 'https://'
+            - 'attacker'
+            - 'exfil'
+            - 'payload'
+    condition: selection_config_modification or selection_untrusted_execution
+falsepositives:
+    - Legitimate CI/CD configuration updates by authorized developers
+    - Automated dependency update bots (Dependabot, Renovate) modifying workflows
+    - Infrastructure-as-code tools updating pipeline definitions
+level: high

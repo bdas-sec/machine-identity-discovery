@@ -1,0 +1,50 @@
+title: "NHI: OIDC Federation Token Exchange via STS"
+id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+related:
+    - id: "100970"
+      type: derived
+    - id: "100971"
+      type: derived
+status: experimental
+description: |
+    Detects OIDC token exchange via STS federation endpoints, including
+    GitHub Actions OIDC to AWS/GCP federation. An attacker who compromises
+    a CI/CD pipeline can extract the OIDC token and exchange it for cloud
+    provider credentials via STS AssumeRoleWithWebIdentity or equivalent,
+    pivoting from CI/CD to cloud infrastructure without static credentials.
+    This is a key technique in supply chain attacks targeting CI/CD-to-cloud
+    trust relationships. Derived from Wazuh rules 100970-100971.
+references:
+    - https://attack.mitre.org/techniques/T1078/004/
+    - https://attack.mitre.org/techniques/T1550/001/
+    - https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
+    - https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.credential_access
+    - attack.t1078.004
+    - attack.defense_evasion
+    - attack.t1550.001
+    - nhi.oauth_oidc
+    - nhi.federation
+logsource:
+    category: application
+    product: sts_federation
+detection:
+    selection_sts:
+        msg|contains:
+            - 'STS_FEDERATION'
+            - 'AssumeRoleWithWebIdentity'
+            - 'TOKEN_EXCHANGE'
+    selection_oidc:
+        msg|contains:
+            - 'jwt-bearer'
+            - 'token-exchange'
+            - 'actions.githubusercontent.com'
+            - 'GITHUB_ACTIONS_OIDC'
+    condition: selection_sts or (selection_sts and selection_oidc)
+falsepositives:
+    - Legitimate CI/CD pipelines using OIDC federation for cloud deployment
+    - Authorized workload identity federation token exchanges
+level: high

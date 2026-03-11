@@ -1,0 +1,58 @@
+title: "NHI-AI Agent: RAG Poisoning Credential Extraction"
+id: c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f
+related:
+    - id: "100867"
+      type: derived
+    - id: "100868"
+      type: derived
+status: test
+description: |
+    Detects modifications to RAG (Retrieval-Augmented Generation) knowledge
+    bases (vector databases: Chroma, FAISS, Pinecone, Weaviate, Qdrant) that
+    may indicate poisoning, and subsequent credential patterns appearing in
+    RAG-retrieved context. Attackers inject documents containing hidden prompt
+    injection payloads that cause credential disclosure when retrieved.
+    Real-world: RAG poisoning attacks at DEF CON 31, Bing Chat data
+    exfiltration via poisoned web content, enterprise RAG credential exposure.
+    Derived from Wazuh rules 100867/100868.
+references:
+    - https://attack.mitre.org/techniques/T1565/001/
+    - https://arxiv.org/abs/2302.12173
+    - https://arxiv.org/abs/2310.13828
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.credential_access
+    - attack.t1565.001
+    - attack.t1552
+    - nhi.ai_agent
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_rag_modification:
+        CommandLine|contains:
+            - 'ingest'
+            - 'index'
+            - 'embed'
+            - 'upsert'
+            - 'add_document'
+        CommandLine|contains:
+            - 'knowledge'
+            - 'corpus'
+            - 'vector'
+            - 'rag'
+            - 'chroma'
+            - 'faiss'
+            - 'pinecone'
+            - 'weaviate'
+            - 'qdrant'
+    selection_cred_extraction:
+        CommandLine|re: '(?i)(AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{48}|eyJ[a-zA-Z0-9_-]+\.eyJ)'
+    condition: selection_rag_modification or selection_cred_extraction
+falsepositives:
+    - Legitimate knowledge base update operations
+    - Vector database maintenance and re-indexing
+    - Secret scanning tools checking RAG content
+level: high

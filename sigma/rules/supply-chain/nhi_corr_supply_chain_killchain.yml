@@ -1,0 +1,62 @@
+title: "NHI-Supply Chain: Full Supply Chain Kill Chain Correlation"
+id: f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c
+related:
+    - id: "100988"
+      type: derived
+status: test
+description: |
+    Correlation rule detecting a full supply chain attack kill chain.
+    Triggers when multiple supply chain attack indicators (PPE, dependency
+    confusion, artifact injection, runner lateral movement, GitHub App
+    token escalation) are observed within a 10-minute window, suggesting
+    a coordinated multi-stage supply chain compromise.
+    Real-world: Combines techniques from SolarWinds, Codecov, CircleCI,
+    ua-parser-js, and 3CX supply chain attacks.
+    Derived from Wazuh rule 100988.
+references:
+    - https://attack.mitre.org/techniques/T1195/
+    - https://slsa.dev/
+    - https://openssf.org/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.execution
+    - attack.credential_access
+    - attack.t1195
+    - attack.t1059
+    - attack.t1552
+    - nhi.supply_chain
+    - nhi.correlation
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_ppe:
+        CommandLine|contains:
+            - '.github/workflows'
+            - '.gitlab-ci.yml'
+            - 'Jenkinsfile'
+            - 'config_override'
+    selection_dependency:
+        CommandLine|contains:
+            - 'pip install'
+            - 'npm install'
+        CommandLine|contains:
+            - 'TOKEN'
+            - 'SECRET'
+    selection_artifact:
+        CommandLine|re: '(?i)(build|artifact).{0,40}(AKIA|ghp_|password\s*=|secret\s*=)'
+    selection_runner:
+        CommandLine|contains:
+            - 'runner_token'
+            - '.credentials'
+            - 'fleet_token'
+    selection_ghapp:
+        CommandLine|contains: '/app/installations/'
+    condition: 2 of selection_*
+    timeframe: 10m
+falsepositives:
+    - Extremely unlikely in normal CI/CD operations
+    - Purple team exercises running multiple supply chain scenarios
+level: critical

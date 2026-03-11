@@ -1,0 +1,130 @@
+{
+  "id": "S9-03",
+  "name": "Build Artifact Credential Injection",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Attacker injects credentials or backdoor code into build artifacts during the CI/CD build process, which then get deployed to production environments",
+  "difficulty": "Medium",
+  "real_world_relevance": "SolarWinds SUNBURST build injection, 3CX supply chain attack (2023), PyPI malicious package uploads embedding credentials in wheels",
+
+  "mitre_attack": {
+    "tactics": ["Persistence", "Defense Evasion"],
+    "techniques": [
+      {"id": "T1195.002", "name": "Supply Chain Compromise: Compromise Software Supply Chain"},
+      {"id": "T1027", "name": "Obfuscated Files or Information"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cloud_net",
+    "profile": "cicd"
+  },
+
+  "attack_flow": {
+    "description": "Attacker modifies build process to embed credentials in build outputs that survive into production deployments",
+    "diagram": [
+      "1. Attacker gains access to CI/CD build environment",
+      "2. Modifies build scripts to inject credentials into artifacts",
+      "3. Build produces Docker images or packages with embedded secrets",
+      "4. Artifacts pass through deployment pipeline to production",
+      "5. Embedded credentials provide persistent backdoor access"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Build Process Reconnaissance",
+      "description": "Understand the build pipeline and artifact generation",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "find /runner/_work -name 'Dockerfile' -o -name 'Makefile' -o -name 'build.sh' 2>/dev/null | head -10 || echo 'No build files found'",
+          "description": "Locate build configuration files"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "ls -la /runner/_work/_temp/ 2>/dev/null || echo 'No build temp directory'",
+          "description": "Check build temporary directory for artifacts"
+        }
+      ]
+    },
+    {
+      "name": "Credential Injection into Artifacts",
+      "description": "Inject credentials into build artifacts",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "mkdir -p /tmp/build-artifacts && echo 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE' > /tmp/build-artifacts/.env && echo 'Credentials injected into build artifact'",
+          "description": "Simulate credential injection into build output"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "echo 'FROM ubuntu:22.04' > /tmp/build-artifacts/Dockerfile && echo 'ENV AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' >> /tmp/build-artifacts/Dockerfile && echo 'Backdoored Dockerfile created'",
+          "description": "Create Docker image with embedded credentials"
+        }
+      ]
+    },
+    {
+      "name": "Artifact Scanning Detection",
+      "description": "Verify that credential patterns in artifacts are detected",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "grep -rn 'AKIA\\|SECRET_ACCESS_KEY\\|password=' /tmp/build-artifacts/ 2>/dev/null || echo 'No credentials found in artifacts'",
+          "description": "Scan build artifacts for credential patterns"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "CI/CD Logs",
+      "description": "Credentials detected in build artifacts",
+      "wazuh_rule": "100983"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100983",
+      "level": 12,
+      "description": "NHI: Credentials detected in build artifacts"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Quarantine and rescan all build artifacts from the compromised pipeline",
+      "Rotate any credentials found embedded in artifacts",
+      "Rebuild and redeploy from verified clean source"
+    ],
+    "long_term": [
+      "Implement build artifact scanning (Trivy, Grype, Snyk Container)",
+      "Use multi-stage Docker builds to prevent secret leakage into final images",
+      "Sign build artifacts with Sigstore/cosign for provenance verification",
+      "Implement SLSA framework for build integrity",
+      "Use ephemeral build environments that are destroyed after each build"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SLSA Supply Chain Levels for Software Artifacts",
+      "url": "https://slsa.dev/"
+    },
+    {
+      "title": "Sigstore - Software Supply Chain Security",
+      "url": "https://www.sigstore.dev/"
+    }
+  ]
+}

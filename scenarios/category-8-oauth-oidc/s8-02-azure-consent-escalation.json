@@ -1,0 +1,144 @@
+{
+  "id": "S8-02",
+  "name": "Azure AD Application Consent Abuse",
+  "category": "OAuth/OIDC",
+  "version": "1.0",
+  "description": "Attacker creates a malicious OAuth application registration requesting excessive API permissions, then tricks an admin into granting consent to gain persistent access to Azure AD resources",
+  "difficulty": "Hard",
+  "real_world_relevance": "Nobelium (SolarWinds) abused OAuth app registrations for persistence, Microsoft Midnight Blizzard attack used OAuth apps, common in BEC attacks targeting M365 tenants",
+
+  "mitre_attack": {
+    "tactics": ["Persistence", "Credential Access", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1098.003", "name": "Account Manipulation: Additional Cloud Roles"},
+      {"id": "T1528", "name": "Steal Application Access Token"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cloud-workload", "mock-sts-federation"],
+    "network": "cloud_net",
+    "profile": "oauth-oidc"
+  },
+
+  "attack_flow": {
+    "description": "Attacker registers a malicious OAuth app with excessive permission requests, obtains admin consent, then uses the granted permissions to access sensitive Azure AD and Graph API resources",
+    "diagram": [
+      "1. Attacker registers OAuth application in Azure AD",
+      "2. Configure app to request high-privilege API permissions (Directory.ReadWrite.All, Mail.Read)",
+      "3. Craft consent phishing URL and send to tenant admin",
+      "4. Admin grants consent, application receives delegated permissions",
+      "5. Use application credentials to access Graph API and exfiltrate data"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "OAuth Application Registration",
+      "description": "Register a malicious OAuth app with excessive permission requests",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/authorize -H 'Content-Type: application/json' -d '{\"client_id\":\"malicious-app-001\",\"scope\":\"https://graph.microsoft.com/.default Directory.ReadWrite.All Mail.Read User.Read.All\",\"redirect_uri\":\"https://attacker.example.com/callback\",\"response_type\":\"code\",\"prompt\":\"admin_consent\"}' 2>/dev/null | python3 -m json.tool || echo 'OAuth app registration failed'",
+          "description": "Register OAuth app requesting admin-level Graph API permissions"
+        }
+      ]
+    },
+    {
+      "name": "Admin Consent Acquisition",
+      "description": "Simulate admin granting consent to the malicious application",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=malicious-app-001&client_secret=attacker-secret-value&scope=https://graph.microsoft.com/.default&tenant=victim-tenant-id' 2>/dev/null | python3 -m json.tool || echo 'Token request failed'",
+          "description": "Exchange client credentials for access token after consent granted"
+        }
+      ]
+    },
+    {
+      "name": "Graph API Access",
+      "description": "Use granted permissions to access Azure AD resources",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s -X POST http://mock-sts-federation:8091/oauth2/v2.0/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=malicious-app-001&client_secret=attacker-secret-value&scope=Directory.ReadWrite.All Mail.Read' 2>/dev/null | python3 -m json.tool || echo 'Privileged token request failed'",
+          "description": "Request token with Directory.ReadWrite.All permissions for data exfiltration"
+        }
+      ]
+    },
+    {
+      "name": "Data Exfiltration",
+      "description": "Exfiltrate sensitive data via Graph API",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "echo '[SIMULATED] Using Graph API token to enumerate users, read mail, and download directory data'",
+          "description": "Simulate data exfiltration via Graph API with elevated permissions"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "STS Federation Logs",
+      "description": "OAuth application consent request with high privileges",
+      "wazuh_rule": "100972"
+    },
+    {
+      "type": "STS Federation Logs",
+      "description": "Azure AD admin consent granted to new application",
+      "wazuh_rule": "100973"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100972",
+      "level": 12,
+      "description": "NHI: OAuth application consent request with high privileges"
+    },
+    {
+      "rule_id": "100973",
+      "level": 14,
+      "description": "NHI: Azure AD admin consent granted to new application"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke consent for suspicious applications in Azure AD Enterprise Applications",
+      "Disable the malicious application registration",
+      "Audit sign-in logs for the compromised application client ID"
+    ],
+    "long_term": [
+      "Restrict user consent to verified publishers only (Azure AD Consent Settings)",
+      "Implement admin consent workflow requiring approval for new applications",
+      "Monitor for new app registrations with high-privilege API permissions",
+      "Configure Conditional Access policies for application access"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Microsoft - Application consent grant investigation",
+      "url": "https://learn.microsoft.com/en-us/security/operations/incident-response-playbook-app-consent"
+    },
+    {
+      "title": "MITRE ATT&CK T1098.003 - Additional Cloud Roles",
+      "url": "https://attack.mitre.org/techniques/T1098/003/"
+    },
+    {
+      "title": "Midnight Blizzard OAuth App Abuse",
+      "url": "https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/"
+    }
+  ]
+}

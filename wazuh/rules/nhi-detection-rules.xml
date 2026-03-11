@@ -657,6 +657,126 @@
     <group>nhi_ai_external_request,</group>
   </rule>
 
+  <!-- ===== Extended AI Agent Rules (100861-100870) ===== -->
+
+  <!-- MCP credential access: MCP tool reading credential files/env -->
+  <rule id="100861" level="12">
+    <if_sid>100858</if_sid>
+    <match type="pcre2">(?i)(read_file|file_read|get_file|cat|read).{0,40}(credentials|\.aws/|\.env|\.vault-token|\.kube/config|id_rsa|service.account|\.pem|\.key)</match>
+    <description>NHI: MCP server tool invoking credential access</description>
+    <mitre>
+      <id>T1552.001</id>
+      <id>T1071</id>
+    </mitre>
+    <group>nhi_ai_mcp_cred_access,</group>
+  </rule>
+
+  <!-- MCP credential relay to external endpoint -->
+  <rule id="100862" level="14">
+    <if_sid>100861</if_sid>
+    <match type="pcre2">(?i)(http_request|fetch|post|webhook|send).{0,60}https?://(?!localhost|127\.0\.0\.1|10\.|172\.|192\.168\.)</match>
+    <description>NHI: MCP credential relay to external endpoint - CRITICAL</description>
+    <mitre>
+      <id>T1041</id>
+      <id>T1071.001</id>
+    </mitre>
+    <group>nhi_ai_mcp_cred_relay,</group>
+  </rule>
+
+  <!-- Agent-to-agent credential passing -->
+  <rule id="100863" level="12">
+    <decoded_as>nhi-ai-agent</decoded_as>
+    <match type="pcre2">(?i)(delegat|shar|pass|forward|relay|transfer).{0,30}(credential|token|secret|key|password).{0,30}(agent|worker|task|crew|swarm)</match>
+    <description>NHI: Agent credential passed to another agent</description>
+    <mitre>
+      <id>T1550</id>
+      <id>T1098</id>
+    </mitre>
+    <group>nhi_ai_cred_delegation,</group>
+  </rule>
+
+  <!-- Unauthorized agent-to-agent credential delegation with elevated privileges -->
+  <rule id="100864" level="14">
+    <if_sid>100863</if_sid>
+    <match type="pcre2">(?i)(admin|root|elevated|privileged|cluster-admin|owner|superuser|write|deploy)</match>
+    <description>NHI: Unauthorized agent-to-agent credential delegation with elevated privileges - CRITICAL</description>
+    <mitre>
+      <id>T1550</id>
+      <id>T1098</id>
+    </mitre>
+    <group>nhi_ai_cred_delegation_escalated,</group>
+  </rule>
+
+  <!-- Agent tool invoked with elevated privileges -->
+  <rule id="100865" level="13">
+    <if_sid>100858</if_sid>
+    <match type="pcre2">(?i)(role|privilege|permission|scope|level)\s*[=:]\s*(admin|root|elevated|write|deploy|cluster-admin|owner|superuser)</match>
+    <description>NHI: Agent tool invoked with elevated privileges</description>
+    <mitre>
+      <id>T1548</id>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_ai_tool_escalation,</group>
+  </rule>
+
+  <!-- Agent privilege escalation via tool use -->
+  <rule id="100866" level="14">
+    <if_sid>100865</if_sid>
+    <match type="pcre2">(?i)(exec|run|execute|invoke|call).{0,40}(sudo|su\s|nsenter|chroot|kubectl\s+exec|docker\s+exec|setuid|chmod\s+[4u])</match>
+    <description>NHI: Agent privilege escalation via tool use - CRITICAL</description>
+    <mitre>
+      <id>T1548</id>
+      <id>T1059.004</id>
+    </mitre>
+    <group>nhi_ai_tool_privesc,</group>
+  </rule>
+
+  <!-- RAG knowledge base modification detected -->
+  <rule id="100867" level="12">
+    <decoded_as>nhi-ai-agent</decoded_as>
+    <match type="pcre2">(?i)(ingest|index|embed|upsert|insert|add_document|upload).{0,40}(knowledge|corpus|vector|rag|chroma|faiss|pinecone|weaviate|qdrant)</match>
+    <description>NHI: RAG knowledge base modification detected</description>
+    <mitre>
+      <id>T1565.001</id>
+    </mitre>
+    <group>nhi_ai_rag_modification,</group>
+  </rule>
+
+  <!-- Credential extraction from poisoned RAG context -->
+  <rule id="100868" level="14">
+    <if_sid>100867,100860</if_sid>
+    <match type="pcre2">(?i)(AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{48}|eyJ[a-zA-Z0-9_-]+\.eyJ|password\s*[=:]\s*\S+|secret\s*[=:]\s*\S+)</match>
+    <description>NHI: Credential extraction from poisoned RAG context - CRITICAL</description>
+    <mitre>
+      <id>T1565.001</id>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi_ai_rag_cred_extraction,</group>
+  </rule>
+
+  <!-- AI agent multi-vector attack correlation -->
+  <rule id="100869" level="15" frequency="3" timeframe="300">
+    <if_matched_group>nhi_ai_mcp_cred_access,nhi_ai_cred_delegation,nhi_ai_tool_escalation,nhi_ai_rag_modification</if_matched_group>
+    <same_source_ip />
+    <description>NHI: AI agent multi-vector attack - multiple AI attack vectors from same source within 5 minutes</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi_ai_multi_vector,nhi_correlation,</group>
+  </rule>
+
+  <!-- AI agent monitoring heartbeat -->
+  <rule id="100870" level="8">
+    <decoded_as>nhi-ai-agent</decoded_as>
+    <match type="pcre2">(?i)(heartbeat|health_check|status|monitor).{0,20}(agent|mcp|tool|rag)</match>
+    <description>NHI: AI agent monitoring heartbeat</description>
+    <mitre>
+      <id>T1082</id>
+    </mitre>
+    <group>nhi_ai_monitoring,</group>
+  </rule>
+
 </group>
 
 <!-- ================================================= -->
@@ -1406,6 +1526,290 @@
       <id>T1199</id>
     </mitre>
     <group>nhi_spire_federation,nhi_spire_federation_chain,nhi_correlation,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 9: OAUTH/OIDC TOKEN ABUSE                   -->
+<!-- Rule IDs: 100970-100979                           -->
+<!-- Covers: OIDC federation, consent abuse, refresh   -->
+<!--   token theft, audience confusion, SP rotation    -->
+<!-- Source: mock-services/sts-federation/server.py    -->
+<!-- ================================================= -->
+<group name="nhi,oauth_oidc,">
+
+  <!-- OIDC token exchange via STS federation endpoint.
+       Fires on any token exchange through the STS federation service.
+       Baseline rule for OIDC federation activity — useful for audit
+       and as a parent for higher-severity child rules. -->
+  <rule id="100970" level="12">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">TOKEN_EXCHANGE|STS_ASSUME_ROLE|AssumeRoleWithWebIdentity</match>
+    <description>NHI: OIDC token exchange via STS federation endpoint</description>
+    <mitre>
+      <id>T1550.001</id>
+    </mitre>
+    <group>nhi_oidc_federation,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- GitHub Actions OIDC federation to cloud provider.
+       Detects CI/CD-to-cloud pivot where a GitHub Actions OIDC token
+       is exchanged for AWS/GCP/Azure credentials. This is a high-value
+       attack: the adversary uses the CI/CD trust relationship to obtain
+       cloud IAM credentials without static secrets.
+       Real-world: CircleCI breach (2023), Codecov supply chain attack. -->
+  <rule id="100971" level="14">
+    <if_sid>100970</if_sid>
+    <match type="pcre2">GITHUB_ACTIONS_OIDC|GITHUB_OIDC_TO_AWS|actions\.githubusercontent|github_actions_oidc_federation|repo:</match>
+    <description>NHI: GitHub Actions OIDC federation to cloud provider - CI/CD to cloud pivot</description>
+    <mitre>
+      <id>T1078.004</id>
+      <id>T1550.001</id>
+    </mitre>
+    <group>nhi_oidc_federation,nhi_github_oidc,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- OAuth application consent request with high privileges.
+       Detects consent requests for scopes like Directory.ReadWrite.All,
+       Mail.Read, Application.ReadWrite.All. Attackers register malicious
+       apps and trick admins into granting consent.
+       Real-world: Nobelium (SolarWinds), Midnight Blizzard. -->
+  <rule id="100972" level="12">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">HIGH_PRIV_CONSENT|AZURE_HIGH_PRIV_CONSENT|consent_escalation|excessive_consent</match>
+    <description>NHI: OAuth application consent request with high privileges</description>
+    <mitre>
+      <id>T1098.003</id>
+    </mitre>
+    <group>nhi_oauth_consent,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- Azure AD admin consent granted to new application.
+       Critical escalation: an admin has granted tenant-wide consent
+       to an application, giving it persistent access to all users'
+       data via the granted scopes. -->
+  <rule id="100973" level="14">
+    <if_sid>100972</if_sid>
+    <match type="pcre2">ADMIN_CONSENT|admin_consent_abuse|admin_consent.*granted</match>
+    <description>NHI: Azure AD admin consent granted to new application - CRITICAL</description>
+    <mitre>
+      <id>T1098.003</id>
+      <id>T1528</id>
+    </mitre>
+    <group>nhi_oauth_consent,nhi_admin_consent,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- OAuth refresh token used from new location/IP.
+       Detects refresh token exchanges which may indicate a stolen
+       refresh token being used for persistent access. Refresh tokens
+       have long lifetimes and survive access token expiration.
+       Real-world: Storm-0558, Golden SAML attacks. -->
+  <rule id="100974" level="12">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">REFRESH_TOKEN_USE|AZURE_REFRESH_TOKEN|refresh_token_abuse|grant_type.*refresh_token</match>
+    <description>NHI: OAuth refresh token used from new location/IP</description>
+    <mitre>
+      <id>T1528</id>
+      <id>T1078</id>
+    </mitre>
+    <group>nhi_oauth_refresh,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- OIDC audience mismatch detected in token exchange.
+       Critical: a JWT intended for one service was presented to a
+       different service. This audience confusion bypasses authorization
+       when services share an IdP but don't validate the aud claim.
+       Real-world: CVE-2021-42306 (Azure AD). -->
+  <rule id="100975" level="14">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">AUDIENCE_MISMATCH|audience_confusion|audience mismatch</match>
+    <description>NHI: OIDC audience mismatch detected in token exchange - CRITICAL</description>
+    <mitre>
+      <id>T1550.001</id>
+      <id>T1556</id>
+    </mitre>
+    <group>nhi_oidc_audience,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- JWT presented with unexpected audience claim.
+       Lower-severity version: detects token exchange requests where
+       the audience field suggests cross-service usage. -->
+  <rule id="100976" level="12">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">token-exchange.*audience|audience.*service-[a-z].*service-[a-z]|requested_audience</match>
+    <description>NHI: JWT presented with unexpected audience claim</description>
+    <mitre>
+      <id>T1550.001</id>
+    </mitre>
+    <group>nhi_oidc_audience,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- Service principal credential created during rotation window.
+       Detects addPassword or credential creation on service principals
+       during an active rotation, indicating an attacker is creating
+       backup credentials for persistence before the old one is revoked.
+       Real-world: APT29 OAuth token abuse. -->
+  <rule id="100977" level="13">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">SP_CREDENTIAL_ROTATION|sp_rotation_race|addPassword|credential creation during rotation</match>
+    <description>NHI: Service principal credential created during rotation window</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1078.004</id>
+    </mitre>
+    <group>nhi_sp_rotation,nhi_oauth_oidc,</group>
+  </rule>
+
+  <!-- OAuth/OIDC attack chain correlation.
+       Fires when 3 or more OAuth/OIDC attack indicators are detected
+       within a 5-minute window, suggesting a coordinated attack. -->
+  <rule id="100978" level="15" frequency="3" timeframe="300">
+    <if_matched_group>nhi_oauth_oidc</if_matched_group>
+    <description>NHI: OAuth/OIDC attack chain detected - multiple indicators within 5 minutes</description>
+    <mitre>
+      <id>T1078.004</id>
+      <id>T1098.003</id>
+      <id>T1528</id>
+    </mitre>
+    <group>nhi_oauth_chain,nhi_oauth_oidc,nhi_correlation,</group>
+  </rule>
+
+  <!-- STS federation endpoint health check accessed.
+       Informational baseline rule for health check access. -->
+  <rule id="100979" level="8">
+    <decoded_as>nhi-sts-federation</decoded_as>
+    <match type="pcre2">HEALTH_CHECK</match>
+    <description>NHI: STS federation endpoint health check accessed</description>
+    <group>nhi_oauth_health,nhi_oauth_oidc,</group>
+  </rule>
+
+</group>
+
+<!-- ================================================= -->
+<!-- GROUP 10: CI/CD SUPPLY CHAIN ATTACKS              -->
+<!-- Rule IDs: 100980-100989                           -->
+<!-- Covers: PPE, dependency confusion, artifact       -->
+<!--   injection, runner lateral movement, GitHub App  -->
+<!--   token escalation, full kill chain correlation   -->
+<!-- ================================================= -->
+<group name="nhi,supply_chain,">
+
+  <!-- Pipeline configuration modified in pull request context -->
+  <rule id="100980" level="12">
+    <if_sid>80700,80790,530,531</if_sid>
+    <match type="pcre2">(?i)(\.github/workflows|\.gitlab-ci\.yml|Jenkinsfile|\.circleci/config|\.azure-pipelines|bitbucket-pipelines).*modif|pipeline.*config.*(chang|modif|updat|overwrit)</match>
+    <description>NHI: Pipeline configuration modified in pull request</description>
+    <mitre>
+      <id>T1195.002</id>
+      <id>T1059</id>
+    </mitre>
+    <group>nhi_supply_chain_ppe,</group>
+  </rule>
+
+  <!-- Pipeline executing commands from untrusted source (elevated from 100980) -->
+  <rule id="100981" level="14">
+    <if_sid>100980</if_sid>
+    <match type="pcre2">(?i)(curl|wget|bash|sh)\s+.*(http|attacker|evil|exfil|c2|payload)|config_override.*true|untrusted.*source|fork.*trigger</match>
+    <description>NHI: Pipeline executing commands from untrusted source - CRITICAL</description>
+    <mitre>
+      <id>T1195.002</id>
+      <id>T1059.004</id>
+    </mitre>
+    <group>nhi_supply_chain_ppe_exec,</group>
+  </rule>
+
+  <!-- Dependency installation with credential access patterns -->
+  <rule id="100982" level="13">
+    <if_sid>80700,80790,530,531</if_sid>
+    <match type="pcre2">(?i)(pip\s+install|npm\s+install|yarn\s+add|gem\s+install|go\s+get).{0,80}(postinstall|preinstall|setup\.py|install_requires)</match>
+    <match type="pcre2">(?i)(TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL)</match>
+    <description>NHI: Dependency installation with credential access</description>
+    <mitre>
+      <id>T1195.001</id>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi_supply_chain_dep_confusion,</group>
+  </rule>
+
+  <!-- Credentials detected in build artifacts -->
+  <rule id="100983" level="12">
+    <if_sid>80700,530,531</if_sid>
+    <match type="pcre2">(?i)(build|artifact|dist|output|release|package).{0,40}(AKIA[0-9A-Z]|ghp_|ghs_|sk-|password\s*=|secret\s*=|AWS_SECRET|PRIVATE.KEY)</match>
+    <description>NHI: Credentials detected in build artifacts</description>
+    <mitre>
+      <id>T1195.002</id>
+      <id>T1027</id>
+    </mitre>
+    <group>nhi_supply_chain_artifact_cred,</group>
+  </rule>
+
+  <!-- Unusual inter-runner network communication -->
+  <rule id="100984" level="12">
+    <if_sid>80700,530,531</if_sid>
+    <match type="pcre2">(?i)(runner|agent|worker|executor).{0,30}(connect|ssh|curl|wget|nc\s).{0,30}(runner|agent|worker|172\.\d+\.\d+\.\d+)</match>
+    <description>NHI: Unusual inter-runner network communication</description>
+    <mitre>
+      <id>T1021</id>
+      <id>T1046</id>
+    </mitre>
+    <group>nhi_supply_chain_runner_lateral,</group>
+  </rule>
+
+  <!-- Shared secret accessed by unexpected runner -->
+  <rule id="100985" level="14">
+    <if_sid>100984</if_sid>
+    <match type="pcre2">(?i)(\.credentials|runner_token|registration.*token|shared.*secret|fleet.*token)</match>
+    <description>NHI: Shared secret accessed by unexpected runner - CRITICAL</description>
+    <mitre>
+      <id>T1552.001</id>
+      <id>T1021</id>
+    </mitre>
+    <group>nhi_supply_chain_runner_secret,</group>
+  </rule>
+
+  <!-- GitHub App token scope escalation attempt -->
+  <rule id="100986" level="13">
+    <if_sid>80700,530,531</if_sid>
+    <match type="pcre2">(?i)github.*app.*(installation|access).*token.*(generat|creat|request|escalat)|/app/installations/\d+/access_tokens</match>
+    <description>NHI: GitHub App token scope escalation attempt</description>
+    <mitre>
+      <id>T1528</id>
+      <id>T1098</id>
+    </mitre>
+    <group>nhi_supply_chain_ghapp_escalation,</group>
+  </rule>
+
+  <!-- GitHub App accessing repos beyond installation scope -->
+  <rule id="100987" level="14">
+    <if_sid>100986</if_sid>
+    <match type="pcre2">(?i)(private.*repo|org/.*repo|beyond.*scope|unauthorized.*access|repos.*not.*in.*installation)</match>
+    <description>NHI: GitHub App accessing repos beyond installation scope - CRITICAL</description>
+    <mitre>
+      <id>T1528</id>
+      <id>T1098</id>
+    </mitre>
+    <group>nhi_supply_chain_ghapp_scope_abuse,</group>
+  </rule>
+
+  <!-- Full supply chain attack correlation: 4+ supply chain events in 10 minutes -->
+  <rule id="100988" level="15" frequency="4" timeframe="600">
+    <if_matched_group>nhi_supply_chain_ppe,nhi_supply_chain_dep_confusion,nhi_supply_chain_artifact_cred,nhi_supply_chain_runner_lateral,nhi_supply_chain_ghapp_escalation</if_matched_group>
+    <description>NHI: Full supply chain attack correlation - multiple supply chain indicators within 10 minutes</description>
+    <mitre>
+      <id>T1195</id>
+      <id>T1059</id>
+      <id>T1552</id>
+    </mitre>
+    <group>nhi_supply_chain_killchain,nhi_correlation,</group>
+  </rule>
+
+  <!-- CI/CD pipeline health monitoring event -->
+  <rule id="100989" level="8">
+    <if_sid>530,531</if_sid>
+    <match type="pcre2">(?i)(pipeline|cicd|runner|build).{0,20}(health|status|heartbeat|monitor)</match>
+    <description>NHI: CI/CD pipeline health monitoring event</description>
+    <group>nhi_supply_chain_monitoring,</group>
   </rule>
 
 </group>

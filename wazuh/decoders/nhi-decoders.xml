@@ -568,3 +568,62 @@
   <regex type="pcre2">type=(\S+)\s+pid=(\d+)\s+distinct_count=(\d+)\s+request_count=(\d+)\s+spiffe_ids="([^"]+)".*?severity=(\S+)</regex>
   <order>action,id,status,extra_data,url,protocol</order>
 </decoder>
+
+<!-- ================================================= -->
+<!-- DECODER 15: STS Federation Service Log            -->
+<!-- Logger: mock-sts-federation                       -->
+<!-- Format: "STS_FEDERATION EVENT_TYPE: grant_type    -->
+<!--   from IP {json_details}"                         -->
+<!-- Attack: "[ATTACK] description from IP"            -->
+<!-- Attack: "[CRITICAL ATTACK] description from IP"   -->
+<!-- ================================================= -->
+<decoder name="nhi-sts-federation">
+  <prematch>STS_FEDERATION|mock-sts-federation|AssumeRoleWithWebIdentity|AUDIENCE_MISMATCH|GITHUB_ACTIONS_OIDC|ADMIN_CONSENT|SP_CREDENTIAL_ROTATION|REFRESH_TOKEN</prematch>
+</decoder>
+
+<decoder name="nhi-sts-federation-json">
+  <parent>nhi-sts-federation</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- Standard event format: STS_FEDERATION EVENT_TYPE: grant_type from IP {...} -->
+<decoder name="nhi-sts-federation-event">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">STS_FEDERATION\s+(\S+):\s+(\S+)\s+from\s+(\S+)\s+(\{.+\})</regex>
+  <order>action,id,srcip,extra_data</order>
+</decoder>
+
+<!-- Attack marker format: [ATTACK] description from IP -->
+<decoder name="nhi-sts-federation-attack">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">\[(?:CRITICAL\s+)?ATTACK\]\s+(.*?)\s+from\s+(\S+)</regex>
+  <order>extra_data,srcip</order>
+</decoder>
+
+<!-- Client ID extraction from JSON payload -->
+<decoder name="nhi-sts-federation-client">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">"client_id":"([^"]+)"</regex>
+  <order>user</order>
+</decoder>
+
+<!-- Scope extraction from JSON payload -->
+<decoder name="nhi-sts-federation-scope">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">"scope":"([^"]+)"</regex>
+  <order>url</order>
+</decoder>
+
+<!-- Role ARN extraction for STS AssumeRole -->
+<decoder name="nhi-sts-federation-role">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">"role_arn":"([^"]+)"</regex>
+  <order>url</order>
+</decoder>
+
+<!-- Attack type extraction from JSON payload -->
+<decoder name="nhi-sts-federation-attack-type">
+  <parent>nhi-sts-federation</parent>
+  <regex type="pcre2">"attack":"([^"]+)"</regex>
+  <order>status</order>
+</decoder>

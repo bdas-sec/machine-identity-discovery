@@ -1,0 +1,51 @@
+title: "NHI-Supply Chain: Dependency Confusion Token Theft"
+id: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
+related:
+    - id: "100982"
+      type: derived
+status: test
+description: |
+    Detects package installation commands (pip, npm, yarn, gem, go) that
+    coincide with credential access patterns, indicating a possible dependency
+    confusion attack where a malicious package steals CI/CD tokens during
+    the install lifecycle (postinstall/preinstall scripts, setup.py execution).
+    Real-world: Alex Birsan dependency confusion (2021) affecting Apple,
+    Microsoft, PayPal; ua-parser-js npm hijack (2021).
+    Derived from Wazuh rule 100982.
+references:
+    - https://attack.mitre.org/techniques/T1195/001/
+    - https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610
+    - https://docs.npmjs.com/packages-and-modules/introduction-to-packages-and-scopes
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.initial_access
+    - attack.credential_access
+    - attack.t1195.001
+    - attack.t1552
+    - nhi.supply_chain
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_install:
+        CommandLine|contains:
+            - 'pip install'
+            - 'npm install'
+            - 'yarn add'
+            - 'gem install'
+            - 'go get'
+    selection_cred_access:
+        CommandLine|contains:
+            - 'TOKEN'
+            - 'SECRET'
+            - 'KEY'
+            - 'PASSWORD'
+            - 'CREDENTIAL'
+            - 'postinstall'
+            - 'preinstall'
+    condition: selection_install and selection_cred_access
+falsepositives:
+    - Legitimate packages that reference token/secret in their names
+    - Package managers printing environment variable warnings during install
+level: high

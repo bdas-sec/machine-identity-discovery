@@ -1,0 +1,51 @@
+title: "NHI: OAuth Application Consent Escalation"
+id: b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e
+related:
+    - id: "100972"
+      type: derived
+    - id: "100973"
+      type: derived
+status: experimental
+description: |
+    Detects OAuth application consent requests with high-privilege API
+    permissions, particularly admin consent grants. Attackers register
+    malicious OAuth apps requesting Directory.ReadWrite.All, Mail.Read,
+    or similar high-privilege scopes to gain persistent access to Azure AD
+    or other identity provider resources. This technique was used by
+    Nobelium (SolarWinds) and Midnight Blizzard for persistence and data
+    exfiltration. Derived from Wazuh rules 100972-100973.
+references:
+    - https://attack.mitre.org/techniques/T1098/003/
+    - https://attack.mitre.org/techniques/T1528/
+    - https://learn.microsoft.com/en-us/security/operations/incident-response-playbook-app-consent
+    - https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.persistence
+    - attack.t1098.003
+    - attack.credential_access
+    - attack.t1528
+    - nhi.oauth_oidc
+    - nhi.consent_abuse
+logsource:
+    category: application
+    product: sts_federation
+detection:
+    selection_consent:
+        msg|contains:
+            - 'CONSENT'
+            - 'admin_consent'
+            - 'HIGH_PRIV_CONSENT'
+    selection_high_priv:
+        msg|contains:
+            - 'Directory.ReadWrite.All'
+            - 'Mail.Read'
+            - 'Application.ReadWrite.All'
+            - 'RoleManagement.ReadWrite.Directory'
+            - 'User.ReadWrite.All'
+    condition: selection_consent and selection_high_priv
+falsepositives:
+    - Legitimate admin consent grants for authorized enterprise applications
+    - First-party Microsoft application consent flows
+level: high

@@ -1,0 +1,44 @@
+title: "NHI: OIDC Audience Confusion Attack"
+id: d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a
+related:
+    - id: "100975"
+      type: derived
+    - id: "100976"
+      type: derived
+status: experimental
+description: |
+    Detects OIDC audience mismatch in token exchange, where a JWT intended
+    for one service is presented to a different service. This audience
+    confusion attack exploits services that share the same identity provider
+    but fail to validate the audience (aud) claim in JWT tokens. Attackers
+    obtain a token for a low-privilege service and present it to a
+    high-privilege service, bypassing authorization. CVE-2021-42306 in
+    Azure AD was a notable example. Derived from Wazuh rules 100975-100976.
+references:
+    - https://attack.mitre.org/techniques/T1550/001/
+    - https://attack.mitre.org/techniques/T1556/
+    - https://datatracker.ietf.org/doc/html/rfc8693
+    - https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42306
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.credential_access
+    - attack.t1550.001
+    - attack.defense_evasion
+    - attack.t1556
+    - nhi.oauth_oidc
+    - nhi.audience_confusion
+logsource:
+    category: application
+    product: sts_federation
+detection:
+    selection:
+        msg|contains:
+            - 'AUDIENCE_MISMATCH'
+            - 'audience_confusion'
+            - 'audience mismatch'
+    condition: selection
+falsepositives:
+    - Misconfigured applications with legitimate audience mismatch
+    - Token exchange flows where audience translation is expected
+level: critical

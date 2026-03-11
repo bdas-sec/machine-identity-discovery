@@ -1,0 +1,55 @@
+title: "NHI-Supply Chain: CI/CD Runner Lateral Movement"
+id: e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b
+related:
+    - id: "100984"
+      type: derived
+    - id: "100985"
+      type: derived
+status: test
+description: |
+    Detects network communication patterns indicating lateral movement between
+    CI/CD runners, including SSH connections, HTTP requests to runner IPs, and
+    access to shared runner credentials. Compromised runners can pivot to other
+    runners in the fleet via shared secrets and network adjacency.
+    Real-world: CircleCI breach (January 2023), Jenkins agent lateral movement.
+    Derived from Wazuh rules 100984/100985.
+references:
+    - https://attack.mitre.org/techniques/T1021/
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://circleci.com/blog/jan-4-2023-incident-report/
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.lateral_movement
+    - attack.credential_access
+    - attack.t1021
+    - attack.t1552.001
+    - nhi.supply_chain
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_runner_network:
+        CommandLine|contains:
+            - 'runner'
+            - 'agent'
+            - 'worker'
+            - 'executor'
+        CommandLine|contains:
+            - 'ssh'
+            - 'curl'
+            - 'wget'
+            - 'nc '
+    selection_shared_secret:
+        CommandLine|contains:
+            - '.credentials'
+            - 'runner_token'
+            - 'registration_token'
+            - 'shared_secret'
+            - 'fleet_token'
+    condition: selection_runner_network or selection_shared_secret
+falsepositives:
+    - Runner orchestration systems performing health checks
+    - Legitimate runner registration workflows
+    - CI/CD platform control plane communication
+level: high

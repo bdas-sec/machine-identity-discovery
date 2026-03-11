@@ -1,0 +1,44 @@
+title: "NHI: OAuth Refresh Token Abuse"
+id: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7a
+related:
+    - id: "100974"
+      type: derived
+status: experimental
+description: |
+    Detects OAuth refresh token exchange events that may indicate stolen
+    refresh token abuse. Attackers who obtain refresh tokens from
+    compromised workloads, token caches, or browser stores can use them
+    for persistent access to cloud resources without re-authentication.
+    Refresh tokens typically have long lifetimes (days to months) and
+    survive access token expiration. This technique was observed in
+    Storm-0558 and Golden SAML attacks. Derived from Wazuh rule 100974.
+references:
+    - https://attack.mitre.org/techniques/T1528/
+    - https://attack.mitre.org/techniques/T1078/
+    - https://learn.microsoft.com/en-us/security/operations/token-theft-playbook
+    - https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics
+author: Bodhisattva Das
+date: 2026-03-11
+tags:
+    - attack.credential_access
+    - attack.t1528
+    - attack.persistence
+    - attack.t1078
+    - nhi.oauth_oidc
+    - nhi.refresh_token
+logsource:
+    category: application
+    product: sts_federation
+detection:
+    selection:
+        msg|contains:
+            - 'refresh_token'
+            - 'REFRESH_TOKEN'
+    filter_health:
+        msg|contains:
+            - 'HEALTH_CHECK'
+    condition: selection and not filter_health
+falsepositives:
+    - Legitimate token refresh by authorized applications
+    - Automated token rotation by identity middleware
+level: high

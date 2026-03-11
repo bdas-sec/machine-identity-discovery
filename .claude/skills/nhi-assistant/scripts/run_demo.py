@@ -590,6 +590,147 @@ SCENARIOS = {
         description="Exchange SPIRE JWT-SVID for cloud provider tokens via workload identity federation",
         detection_rules=["101060", "101095", "100651"],
     ),
+
+    # Level 8: OAuth/OIDC Token Abuse
+    "s8-01": Scenario(
+        id="s8-01",
+        name="GitHub Actions OIDC Federation",
+        level=8,
+        target="cicd-runner",
+        commands=[],
+        description="Abuse GitHub Actions OIDC token to assume AWS IAM role via STS",
+        detection_rules=["100970", "100971"],
+    ),
+    "s8-02": Scenario(
+        id="s8-02",
+        name="Azure AD Consent Escalation",
+        level=8,
+        target="cloud-workload",
+        commands=[],
+        description="Create malicious OAuth app with excessive API permissions",
+        detection_rules=["100972", "100973"],
+    ),
+    "s8-03": Scenario(
+        id="s8-03",
+        name="Stolen Refresh Token Persistence",
+        level=8,
+        target="cloud-workload",
+        commands=[],
+        description="Steal OAuth refresh token for persistent cloud access",
+        detection_rules=["100974"],
+    ),
+    "s8-04": Scenario(
+        id="s8-04",
+        name="OIDC Audience Confusion",
+        level=8,
+        target="cicd-runner",
+        commands=[],
+        description="Present JWT with mismatched audience to bypass authorization",
+        detection_rules=["100975", "100976"],
+    ),
+    "s8-05": Scenario(
+        id="s8-05",
+        name="Service Principal Rotation Race",
+        level=8,
+        target="cloud-workload",
+        commands=[],
+        description="Exploit timing window during SP credential rotation",
+        detection_rules=["100977"],
+    ),
+
+    # Level 9: CI/CD Supply Chain
+    "s9-01": Scenario(
+        id="s9-01",
+        name="Poisoned Pipeline Execution",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Modify CI config in PR to execute malicious code in pipeline",
+        detection_rules=["100980", "100981"],
+    ),
+    "s9-02": Scenario(
+        id="s9-02",
+        name="Dependency Confusion Token Theft",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Publish malicious package that steals CI/CD tokens during install",
+        detection_rules=["100982"],
+    ),
+    "s9-03": Scenario(
+        id="s9-03",
+        name="Build Artifact Credential Injection",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Inject credentials into build artifacts deployed to production",
+        detection_rules=["100983"],
+    ),
+    "s9-04": Scenario(
+        id="s9-04",
+        name="Runner-to-Runner Lateral Movement",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Pivot from compromised runner to other runners via shared secrets",
+        detection_rules=["100984", "100985"],
+    ),
+    "s9-05": Scenario(
+        id="s9-05",
+        name="GitHub App Token Escalation",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Escalate GitHub App installation token beyond intended scope",
+        detection_rules=["100986", "100987"],
+    ),
+    "s9-06": Scenario(
+        id="s9-06",
+        name="Full Supply Chain Kill Chain",
+        level=9,
+        target="cicd-runner",
+        commands=[],
+        description="Complete 8-stage supply chain attack from repo to exfiltration",
+        detection_rules=["100988", "100989"],
+    ),
+
+    # Level 5 expansion: AI Agent
+    "s5-05": Scenario(
+        id="s5-05",
+        name="MCP Server Credential Relay",
+        level=5,
+        target="ai-agent",
+        commands=[],
+        description="Use MCP server tools to relay credentials to external service",
+        detection_rules=["100860", "100861"],
+    ),
+    "s5-06": Scenario(
+        id="s5-06",
+        name="Agent-to-Agent Credential Flow",
+        level=5,
+        target="ai-agent",
+        commands=[],
+        description="Cause one AI agent to pass credentials to another agent",
+        detection_rules=["100862", "100863"],
+    ),
+    "s5-07": Scenario(
+        id="s5-07",
+        name="Tool-Use Privilege Escalation",
+        level=5,
+        target="ai-agent",
+        commands=[],
+        description="Craft prompts causing agent to use tools with higher privileges",
+        detection_rules=["100864", "100865"],
+    ),
+    "s5-08": Scenario(
+        id="s5-08",
+        name="RAG Poisoning Credential Extraction",
+        level=5,
+        target="ai-agent",
+        commands=[],
+        description="Poison RAG knowledge base to trigger credential disclosure",
+        detection_rules=["100866", "100867"],
+    ),
 }
 
 
@@ -766,6 +907,8 @@ def list_scenarios():
                 5: "Persistence",
                 6: "Infrastructure",
                 7: "SPIFFE/SPIRE",
+                8: "OAuth/OIDC Token Abuse",
+                9: "CI/CD Supply Chain",
             }
             print(f"\n--- Level {current_level}: {level_names.get(current_level, 'Unknown')} ---")
 
@@ -812,7 +955,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--all", action="store_true", help="Run all scenarios")
-    parser.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6, 7], help="Run scenarios for specific level")
+    parser.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6, 7, 8, 9], help="Run scenarios for specific level")
     parser.add_argument("--scenario", type=str, help="Run specific scenario (e.g., s2-01)")
     parser.add_argument("--list", action="store_true", help="List all scenarios")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show command output")

