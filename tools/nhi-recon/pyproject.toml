@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nhi-recon"
+version = "0.1.0"
+description = "Non-Human Identity reconnaissance and attack chain tool"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "httpx>=0.27.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+]
+
+[project.scripts]
+nhi-recon = "nhi_recon.cli:cli"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]

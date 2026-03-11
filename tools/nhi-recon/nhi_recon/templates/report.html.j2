@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ meta.title }}</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --critical: #f85149;
+    --high: #da3633;
+    --medium: #d29922;
+    --low: #3fb950;
+    --info: #8b949e;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  header h1 {
+    font-size: 1.8rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  header .meta {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+  }
+  .brand {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+  }
+  .brand strong { color: var(--accent); }
+
+  /* Executive Summary */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    text-align: center;
+  }
+  .card .number {
+    font-size: 2.4rem;
+    font-weight: bold;
+    display: block;
+  }
+  .card .label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .risk-critical .number { color: var(--critical); }
+  .risk-high .number { color: var(--high); }
+  .risk-medium .number { color: var(--medium); }
+  .risk-low .number { color: var(--low); }
+
+  /* Severity counts bar */
+  .severity-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  .severity-bar .seg-critical { background: var(--critical); }
+  .severity-bar .seg-high { background: var(--high); }
+  .severity-bar .seg-medium { background: var(--medium); }
+  .severity-bar .seg-low { background: var(--low); }
+  .severity-bar .seg-info { background: var(--info); }
+
+  /* Findings table */
+  h2 {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+  }
+  th, td {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+  }
+  tr:hover { background: rgba(88, 166, 255, 0.04); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-critical { background: var(--critical); color: #fff; }
+  .badge-high { background: var(--high); color: #fff; }
+  .badge-medium { background: var(--medium); color: #000; }
+  .badge-low { background: var(--low); color: #000; }
+  .badge-info { background: var(--info); color: #000; }
+
+  .evidence {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-width: 400px;
+  }
+
+  /* Remediation section */
+  .remediation-list {
+    list-style: none;
+    padding: 0;
+  }
+  .remediation-list li {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .remediation-list li strong {
+    color: var(--accent);
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+    margin-top: 2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>{{ meta.title }}</h1>
+  <div class="meta">
+    Generated: {{ meta.generated_at }} | Tool: {{ meta.tool }} v{{ meta.tool_version }}
+  </div>
+  <div class="brand">
+    <strong>NHI Security Testbed</strong> &mdash; Purple Team Framework for Non-Human Identity Security
+  </div>
+</header>
+
+<!-- Executive Summary -->
+<section class="summary">
+  <div class="card risk-{{ meta.risk_label | lower }}">
+    <span class="number">{{ meta.risk_label }}</span>
+    <span class="label">Overall Risk</span>
+  </div>
+  <div class="card">
+    <span class="number">{{ meta.total_findings }}</span>
+    <span class="label">Total Findings</span>
+  </div>
+  <div class="card risk-critical">
+    <span class="number">{{ meta.severity_counts.get('critical', 0) }}</span>
+    <span class="label">Critical</span>
+  </div>
+  <div class="card risk-high">
+    <span class="number">{{ meta.severity_counts.get('high', 0) }}</span>
+    <span class="label">High</span>
+  </div>
+  <div class="card risk-medium">
+    <span class="number">{{ meta.severity_counts.get('medium', 0) }}</span>
+    <span class="label">Medium</span>
+  </div>
+</section>
+
+<!-- Severity bar -->
+{% set total = meta.total_findings if meta.total_findings > 0 else 1 %}
+<div class="severity-bar">
+  {% if meta.severity_counts.get('critical', 0) > 0 %}
+  <div class="seg-critical" style="flex: {{ meta.severity_counts.get('critical', 0) }};"></div>
+  {% endif %}
+  {% if meta.severity_counts.get('high', 0) > 0 %}
+  <div class="seg-high" style="flex: {{ meta.severity_counts.get('high', 0) }};"></div>
+  {% endif %}
+  {% if meta.severity_counts.get('medium', 0) > 0 %}
+  <div class="seg-medium" style="flex: {{ meta.severity_counts.get('medium', 0) }};"></div>
+  {% endif %}
+  {% if meta.severity_counts.get('low', 0) > 0 %}
+  <div class="seg-low" style="flex: {{ meta.severity_counts.get('low', 0) }};"></div>
+  {% endif %}
+  {% if meta.severity_counts.get('info', 0) > 0 %}
+  <div class="seg-info" style="flex: {{ meta.severity_counts.get('info', 0) }};"></div>
+  {% endif %}
+</div>
+
+<!-- Findings -->
+<h2>Findings</h2>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Severity</th>
+      <th>Title</th>
+      <th>Details</th>
+      <th>Evidence</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for f in findings %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span></td>
+      <td>{{ f.title }}</td>
+      <td>{{ f.details }}</td>
+      <td><div class="evidence">{{ f.evidence[:120] }}</div></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- Remediation -->
+<h2>Remediation Recommendations</h2>
+<ul class="remediation-list">
+{% set ns = namespace(seen=set()) %}
+{% for f in findings if f.remediation and f.remediation not in ns.seen %}
+  {% if ns.seen.add(f.remediation) %}{% endif %}
+  <li>
+    <strong>{{ f.title }}:</strong> {{ f.remediation }}
+  </li>
+{% endfor %}
+</ul>
+
+<!-- Attack Chain Visualization -->
+<h2>Attack Chain Summary</h2>
+<div class="card" style="text-align: left; font-family: monospace; white-space: pre; font-size: 0.85rem; overflow-x: auto;">
+Recon          Discover         Steal            Escalate         Persist
+  |               |               |                |               |
+  v               v               v                v               v
+[Services] --> [Creds/Tokens] --> [Theft] --> [Priv Esc] --> [Backdoor]
+  |               |               |                |               |
+  +--- IMDS       +--- AWS Keys   +--- SSRF        +--- IAM        +--- New IAM User
+  +--- Vault      +--- GCP SA     +--- Direct      +--- K8s RBAC   +--- Rogue Runner
+  +--- CI/CD      +--- K8s SA     +--- Env Vars    +--- Vault      +--- Orphan Token
+  +--- K8s API    +--- SPIFFE     +--- /proc        +--- SPIFFE     +--- Fed Identity
+</div>
+
+<footer>
+  NHI Security Testbed &mdash; nhi-recon v{{ meta.tool_version }} &mdash; {{ meta.generated_at }}
+</footer>
+
+</div>
+</body>
+</html>
