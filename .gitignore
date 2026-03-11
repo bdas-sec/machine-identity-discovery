@@ -43,9 +43,13 @@ htmlcov/
 *.log
 docs/demo-results-*.md
 
-# Certificates (generated)
+# Certificates and private keys (generated at runtime)
 wazuh/certs/*.pem
 wazuh/certs/*.key
+spire/server/dummy_upstream_ca.key
+spire/server/dummy_upstream_ca.crt
+spire/server-evil/dummy_upstream_ca.key
+spire/server-evil/dummy_upstream_ca.crt
 
 # Backup files
 .testbed-backup/

@@ -625,6 +625,11 @@ main() {
     setup_env
     fix_cert_permissions
     generate_certs
+
+    # Generate SPIRE test CA certificates if not present
+    if [ -f "$PROJECT_DIR/spire/generate-test-certs.sh" ]; then
+        bash "$PROJECT_DIR/spire/generate-test-certs.sh"
+    fi
     build_images
     start_services
     initialize_indexer_security
