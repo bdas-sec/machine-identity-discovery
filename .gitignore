@@ -64,8 +64,10 @@ docs/phase1/
 docs/phase2/
 docs/phase3/
 docs/ndc-security-2026-talk/
+docs/cfp/
 slides/
 scripts/talk/
 .claude/agents/
 .claude/plans/
+.claude/agent-memory/
 sigma/output/

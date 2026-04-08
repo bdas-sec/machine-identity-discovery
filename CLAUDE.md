@@ -62,7 +62,7 @@ machine-identity-discovery/
 ├── scripts/                     # start.sh, stop.sh utilities
 ├── docs/                        # Documentation
 │   └── handbook/                # Comprehensive setup guide
-├── sigma/                       # 71 Sigma rules + pySigma pipeline
+├── sigma/                       # 92 Sigma rules + pySigma pipeline
 │   ├── rules/                   # Sigma YAML rules (7 categories)
 │   └── output/                  # Pre-converted: Splunk, Sentinel, Elastic, Chronicle
 ├── api/                         # FastAPI REST API

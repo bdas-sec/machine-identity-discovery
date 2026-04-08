@@ -192,13 +192,6 @@
     ]
   },
 
-  "demo_script": {
-    "container": "spire-server",
-    "commands": [
-      "scripts/talk/demo-spiffe-federation-abuse.sh"
-    ]
-  },
-
   "references": [
     {
       "title": "SPIFFE Federation Specification",

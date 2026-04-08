@@ -258,7 +258,7 @@ machine-identity-discovery/
 │   ├── decoders/               # Custom decoders
 │   └── certs/                  # TLS certificates
 ├── sigma/                      # Sigma detection rules
-│   └── rules/                  # 71 rules across 7 categories
+│   └── rules/                  # 92 rules across 10 categories
 ├── scenarios/                  # Attack scenario definitions
 ├── scripts/                    # start.sh, stop.sh utilities
 ├── api/                        # FastAPI backend
@@ -287,6 +287,10 @@ Priority areas:
 - GitHub: [@bdas-sec](https://github.com/bdas-sec)
 - LinkedIn: [bdas1201](https://linkedin.com/in/bdas1201)
 - Twitter: [@bdas1201](https://twitter.com/bdas1201)
+
+## Acknowledgments
+
+**[RUDRA Cybersecurity](https://rudra.io)** — for their contribution and support in building and validating the detection capabilities in this testbed.
 
 ---
 

@@ -128,13 +128,6 @@
     ]
   },
 
-  "demo_script": {
-    "container": "spire-server",
-    "commands": [
-      "scripts/talk/demo-4-spiffe-spoofing.sh"
-    ]
-  },
-
   "references": [
     {
       "title": "The Machine with Many Faces — Eviatar Gerzi (CyberArk)",

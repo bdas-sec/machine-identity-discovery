@@ -170,13 +170,6 @@
     ]
   },
 
-  "demo_script": {
-    "container": "k8s-node-1",
-    "commands": [
-      "scripts/talk/demo-5-container-escape-svid.sh"
-    ]
-  },
-
   "references": [
     {
       "title": "The Machine with Many Faces — Eviatar Gerzi (CyberArk) - Spooffe Attack Chain",

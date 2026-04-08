@@ -224,13 +224,6 @@
     ]
   },
 
-  "demo_script": {
-    "container": "spire-server",
-    "commands": [
-      "scripts/talk/demo-spiffe-nested-pivot.sh"
-    ]
-  },
-
   "references": [
     {
       "title": "SPIFFE Federation Specification",

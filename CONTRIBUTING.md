@@ -383,7 +383,7 @@ Tests run automatically via GitHub Actions (`.github/workflows/test.yml`):
 | `scripts/` | Lifecycle scripts and Sigma converter |
 | `tests/` | Test suite (smoke, unit, integration, E2E) |
 | `wazuh/` | Wazuh rules, decoders, and certificates |
-| `docs/` | Handbook, architecture docs, conference materials |
+| `docs/` | Handbook, architecture docs |
 
 ---
 
@@ -414,6 +414,6 @@ Tests run automatically via GitHub Actions (`.github/workflows/test.yml`):
 
 ## License
 
-This project is released under a Non-Commercial Use License. Contributions are welcome for personal learning, academic research, security training, and conference demonstrations. See `LICENSE` for details.
+This project is released under a Non-Commercial Use License. Contributions are welcome for personal learning, academic research, security training, and security research. See `LICENSE` for details.
 
 By contributing, you agree that your contributions will be licensed under the same terms.
